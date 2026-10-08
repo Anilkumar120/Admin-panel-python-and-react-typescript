@@ -10,7 +10,6 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
 from database.connection import users_collection
-
 load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
