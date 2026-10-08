@@ -13,7 +13,7 @@ from fastapi import (
 
 from pydantic import BaseModel, Field
 
-from backend.database.connection import (
+from database.connection import (
     header_footer_collection,
     menus_collection,
     media_collection

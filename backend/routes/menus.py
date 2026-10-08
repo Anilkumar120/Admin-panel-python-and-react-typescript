@@ -8,7 +8,7 @@ from bson import ObjectId
 
 from datetime import datetime, timezone
 
-from backend.database.connection import (
+from database.connection import (
     menus_collection,
     products_collection,
     content_collection,

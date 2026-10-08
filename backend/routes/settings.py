@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Form, HTTPException, Depends
 from bson import ObjectId
 
-from backend.database.connection import content_collection, settings_collection
+from database.connection import content_collection, settings_collection
 
 from backend.utils.permissions import require_permission
 

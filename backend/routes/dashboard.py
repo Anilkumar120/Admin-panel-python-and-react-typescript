@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from backend.database.connection import (
+from database.connection import (
     users_collection,
     products_collection
 )

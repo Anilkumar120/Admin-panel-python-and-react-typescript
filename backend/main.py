@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.database.connection import client
+from database.connection import client
 
 from backend.routes.products import router as product_router
 from backend.routes.auth import router as auth_router

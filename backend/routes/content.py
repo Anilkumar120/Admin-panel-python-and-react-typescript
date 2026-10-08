@@ -15,7 +15,7 @@ from bson import ObjectId
 
 from datetime import datetime, timezone
 
-from backend.database.connection import (
+from database.connection import (
     db,
     media_collection
 )
