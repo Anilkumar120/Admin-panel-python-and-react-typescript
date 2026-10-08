@@ -2,7 +2,7 @@ from bson import ObjectId
 
 from fastapi import APIRouter, Depends, HTTPException, Form
 
-from database.connection import users_collection
+from backend.database.connection import users_collection
 
 from backend.utils.auth import hash_password
 

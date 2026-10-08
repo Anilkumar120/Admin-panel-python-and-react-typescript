@@ -5,7 +5,7 @@ from bson import ObjectId
 
 from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
 
-from database.connection import users_collection, media_collection
+from backend.database.connection import users_collection, media_collection
 
 from backend.utils.auth import (
     get_current_user,
