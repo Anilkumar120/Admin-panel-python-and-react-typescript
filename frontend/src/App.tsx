@@ -36,6 +36,7 @@ import CreateHeaderFooter from "./pages/Appearance/HeaderFooter/CreateHeaderFoot
 import EditHeaderFooter from "./pages/Appearance/HeaderFooter/EditHeaderFooter";
 import MediaLibrary from "./pages/Media/MediaLibrary";
 import MediaTrash from "./pages/Media/MediaTrash";
+import PageBuilder from "./pages/admin/PageBuilder";
 
 const App = () => {
   return (
@@ -127,7 +128,7 @@ const App = () => {
             />
             <Route path="media" element={<MediaLibrary />} />
             <Route path="media/trash" element={<MediaTrash />} />
-
+            <Route path="appearance/page-builder" element={<PageBuilder />} />
           </Route>
 
           <Route path="/" element={<Navigate to="/login" replace />} />

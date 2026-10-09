@@ -31,3 +31,4 @@ menus_collection = db["menus"]
 header_footer_collection = db["header_footer"]
 
 media_collection = db["media"]
+pages_collection = db["pages"]
