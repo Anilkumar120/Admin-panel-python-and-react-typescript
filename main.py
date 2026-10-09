@@ -1,82 +1,83 @@
-def update_product(products):
+import os
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+from backend.database.connection import client
+
+from backend.routes.products import router as product_router
+from backend.routes.auth import router as auth_router
+from backend.routes.users import router as users_router
+from backend.routes.profile import router as profile_router
+from backend.routes.dashboard import router as dashboard_router
+from backend.routes.content import router as content_router
+from backend.routes.settings import router as settings_router
+from backend.routes.menus import router as menus_router
+from backend.routes.header_footer import router as header_footer_router
+from backend.routes.media import router as media_router
+from backend.routes.page_builder import router as page_builder_router
+
+
+app = FastAPI()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Project root: D:\python-inventory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Uploads directory
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+
+# Automatically create uploads folder if missing
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+
+app.mount(
+    "/uploads",
+    StaticFiles(directory=UPLOADS_DIR),
+    name="uploads",
+)
+
+
+# Register API routers
+app.include_router(auth_router)
+app.include_router(users_router)
+app.include_router(profile_router)
+app.include_router(product_router)
+app.include_router(dashboard_router)
+app.include_router(content_router)
+app.include_router(settings_router)
+app.include_router(menus_router)
+app.include_router(header_footer_router)
+app.include_router(media_router)
+app.include_router(page_builder_router)
+
+
+@app.get("/")
+def home():
     try:
-        product_id = int(input("Enter Product Id: "))
-    except ValueError:
-        print("Invalid Product Id")
-        return
+        client.admin.command("ping")
 
-    found = False
+        return {
+            "message": "Smart Inventory API is running",
+            "mongodb": "Connected",
+        }
 
-    for product in products:
-        if product["id"] == product_id:
-            found = True
+    except Exception as error:
+        return {
+            "message": "Smart Inventory API is running",
+            "mongodb": "Connection Failed",
+            "error": str(error),
+        }
 
-            print("Name:", product["name"])
-            print("Price:", product["price"])
-            print("Quantity:", product["quantity"])
-            print("Category:", product["category"])
-
-            name = input("Enter new name: ")
-            if name == "":
-                name = product["name"]
-
-            try:
-                price_input = input("Enter new Price: ")
-                if price_input == "":
-                    price = product["price"]
-                else:
-                    price = float(price_input)
-                    if price < 0:
-                        print("Price cannot be negative")
-                        return
-            except ValueError:
-                print("Invalid Price")
-                return
-
-            try:
-                quantity_input = input("Enter new quantity: ")
-                if quantity_input == "":
-                    quantity = product["quantity"]
-                else:
-                    quantity = int(quantity_input)
-                    if quantity < 0:
-                        print("Quantity cannot be negative")
-                        return
-            except ValueError:
-                print("Invalid quantity")
-                return
-
-            category = input("Enter new Category: ")
-            if category == "":
-                category = product["category"]
-
-            product["name"] = name
-            product["price"] = price
-            product["quantity"] = quantity
-            product["category"] = category
-
-            print("Product updated successfully")
-            return
-
-    if not found:
-        print("Product not found")
-
-
-products = [
-    {
-        "id": 1,
-        "name": "Laptop",
-        "price": 1200,
-        "quantity": 5,
-        "category": "Electronics"
-    },
-    {
-        "id": 2,
-        "name": "Mouse",
-        "price": 25,
-        "quantity": 10,
-        "category": "Accessories"
-    }
-]
-
-update_product(products)
