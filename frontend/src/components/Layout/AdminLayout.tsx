@@ -1,53 +1,72 @@
-import { useEffect, useRef, useState } from "react";
-
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../context/AuthContext";
-
 import { getImageUrl } from "../../api/profile";
-
 import { getPostTypes, type PostType } from "../../api/content";
+
+const normalizePostTypes = (response: unknown): PostType[] => {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  if (response && typeof response === "object") {
+    const data = response as Record<string, unknown>;
+
+    for (const key of ["items", "post_types", "data"]) {
+      if (Array.isArray(data[key])) {
+        return data[key] as PostType[];
+      }
+    }
+  }
+
+  return [];
+};
 
 const AdminLayout = () => {
   const { user, logout } = useAuth();
 
   const location = useLocation();
-
   const navigate = useNavigate();
 
   const [postTypes, setPostTypes] = useState<PostType[]>([]);
-
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [profileImageFailed, setProfileImageFailed] = useState(false);
 
   const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   const handleLogout = () => {
     setIsUserMenuOpen(false);
-
     logout();
-
     navigate("/login");
   };
 
   const handleProfile = () => {
     setIsUserMenuOpen(false);
-
     navigate("/admin/profile");
   };
 
-  const loadPostTypes = async () => {
+  const loadPostTypes = useCallback(async () => {
     try {
       const response = await getPostTypes();
-
-      setPostTypes(response);
+      setPostTypes(normalizePostTypes(response));
     } catch (error) {
-      console.log("SIDEBAR POST TYPES ERROR:", error);
+      console.error("SIDEBAR POST TYPES ERROR:", error);
+      setPostTypes([]);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadPostTypes();
-  }, []);
+    void loadPostTypes();
+  }, [loadPostTypes]);
+
+  useEffect(() => {
+    setIsUserMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    setProfileImageFailed(false);
+  }, [user?.profile_image]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -69,6 +88,16 @@ const AdminLayout = () => {
   const customPostTypes = postTypes.filter(
     (postType) => !postType.is_builtin && postType.is_active,
   );
+
+  const profileImageUrl = user?.profile_image
+    ? getImageUrl(user.profile_image)
+    : "";
+
+  const showProfileImage = Boolean(profileImageUrl) && !profileImageFailed;
+
+  const userInitial = user?.name?.trim()
+    ? user.name.trim().charAt(0).toUpperCase()
+    : "U";
 
   return (
     <div className="admin-layout">
@@ -93,7 +122,7 @@ const AdminLayout = () => {
           <Link
             to="/admin/profile"
             className={
-              location.pathname === "/admin/profile"
+              location.pathname.startsWith("/admin/profile")
                 ? "nav-link active"
                 : "nav-link"
             }
@@ -193,7 +222,6 @@ const AdminLayout = () => {
                 }
               >
                 <span>{postType.icon || "📄"}</span>
-
                 {postType.name}
               </Link>
             ))}
@@ -238,7 +266,7 @@ const AdminLayout = () => {
               }
             >
               <span>🖼️</span>
-              Header & Footer
+              Header &amp; Footer
             </Link>
           </div>
 
@@ -273,25 +301,26 @@ const AdminLayout = () => {
             <button
               type="button"
               className="header-user"
+              aria-expanded={isUserMenuOpen}
+              aria-haspopup="true"
               onClick={() => setIsUserMenuOpen((current) => !current)}
             >
               <div className="header-user-image-wrapper">
-                {user?.profile_image ? (
+                {showProfileImage ? (
                   <img
-                    src={getImageUrl(user.profile_image)}
+                    key={profileImageUrl}
+                    src={profileImageUrl}
                     alt="Profile"
                     className="header-user-image"
+                    onError={() => setProfileImageFailed(true)}
                   />
                 ) : (
-                  <div className="header-user-placeholder">
-                    {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
-                  </div>
+                  <div className="header-user-placeholder">{userInitial}</div>
                 )}
               </div>
 
               <div className="header-user-info">
                 <strong>{user?.name || "User"}</strong>
-
                 <small>{user?.role || "subscriber"}</small>
               </div>
 
@@ -310,22 +339,23 @@ const AdminLayout = () => {
               <div className="header-user-dropdown">
                 <div className="header-dropdown-user">
                   <div className="header-dropdown-image-wrapper">
-                    {user?.profile_image ? (
+                    {showProfileImage ? (
                       <img
-                        src={getImageUrl(user.profile_image)}
+                        key={profileImageUrl}
+                        src={profileImageUrl}
                         alt="Profile"
                         className="header-dropdown-image"
+                        onError={() => setProfileImageFailed(true)}
                       />
                     ) : (
                       <div className="header-dropdown-placeholder">
-                        {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
+                        {userInitial}
                       </div>
                     )}
                   </div>
 
                   <div>
                     <strong>{user?.name || "User"}</strong>
-
                     <small>{user?.email || ""}</small>
                   </div>
                 </div>
