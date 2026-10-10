@@ -6,7 +6,7 @@ from bson import ObjectId
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Depends
 from fastapi.responses import FileResponse
 
-from database.connection import media_collection
+from backend.database.connection import media_collection
 from backend.utils.permissions import require_permission
 
 

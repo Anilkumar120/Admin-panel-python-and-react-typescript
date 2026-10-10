@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Form, HTTPException, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 
-from database.connection import users_collection
+from backend.database.connection import users_collection
 
 from backend.utils.auth import (
     hash_password,

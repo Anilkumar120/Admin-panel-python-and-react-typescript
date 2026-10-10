@@ -3,7 +3,7 @@ import uuid
  
 from bson import ObjectId 
 from fastapi import (APIRouter, UploadFile, File, Form, HTTPException, Query, Request, Depends) 
-from database.connection import products_collection, media_collection
+from backend.database.connection import products_collection, media_collection
 from backend.utils.permissions import require_permission
  
 router = APIRouter( prefix="/api/products", tags=["Products"]) 
