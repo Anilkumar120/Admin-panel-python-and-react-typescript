@@ -4621,3 +4621,65 @@ textarea {
         min-width: 120px;
     }
 }
+
+
+.hf-menu-preview-item {
+  position: relative;
+}
+
+.hf-menu-preview-label {
+  padding: 8px 0;
+}
+
+.hf-submenu-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 180px;
+  padding: 8px 0;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+}
+
+.hf-menu-preview-item:hover > .hf-submenu-dropdown {
+  display: block;
+}
+
+.hf-menu-preview-horizontal > .hf-menu-preview-item > .hf-submenu-dropdown {
+  top: 100%;
+  left: 0;
+}
+
+.hf-submenu-dropdown .hf-menu-preview-item {
+  width: 100%;
+}
+
+.hf-submenu-dropdown .hf-menu-preview-label {
+  padding: 9px 14px;
+}
+
+.hf-submenu-dropdown .hf-menu-preview-item:hover > .hf-menu-preview-label {
+  color: #0c2f55;
+  background: #f3f6fa;
+}
+
+.hf-menu-preview-vertical .hf-submenu-dropdown {
+  top: 0;
+  left: 100%;
+}
+
+.hf-menu-status {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.hf-menu-status-error {
+  color: #a12622;
+  background: #fff0ef;
+  border-radius: 4px;
+}
