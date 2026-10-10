@@ -1,3 +1,4 @@
+
 {
   "services": {
     "frontend": {
@@ -5,12 +6,18 @@
       "framework": "vite"
     },
     "backend": {
-      "root": "backend/",
+      "root": ".",
       "framework": "fastapi",
       "entrypoint": "main.py"
     }
   },
   "rewrites": [
+    {
+      "source": "/api",
+      "destination": {
+        "service": "backend"
+      }
+    },
     {
       "source": "/api/(.*)",
       "destination": {
