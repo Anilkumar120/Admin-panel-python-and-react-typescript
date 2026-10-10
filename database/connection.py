@@ -6,11 +6,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MONGO_URL = os.getenv("MONGO_URL")
+MONGODB_URI = os.getenv("MONGODB_URI")
 
 DATABASE_NAME = os.getenv("DATABASE_NAME")
 
-client = MongoClient(MONGO_URL)
+client = MongoClient(MONGODB_URI)
 
 db = client[DATABASE_NAME]
 
