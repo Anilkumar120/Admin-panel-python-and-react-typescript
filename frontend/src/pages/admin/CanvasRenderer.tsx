@@ -584,32 +584,90 @@ const WidgetContent = ({
         />
       );
 
-    // ===== CAROUSEL / SLIDER =====
+    // ===== CAROUSEL / SLIDER (with per-slide data) =====
     case "carousel":
-    case "slider":
-      return widget.settings?.images && widget.settings.images.length > 0 ? (
+    case "slider": {
+      const images = widget.settings?.images || [];
+      const items = widget.items || [];
+      const totalSlides = Math.max(images.length, items.length);
+
+      if (totalSlides === 0) {
+        return (
+          <WidgetEmptyState
+            icon={widget.type === "slider" ? "🎞" : "🎠"}
+            title={
+              widget.type === "slider"
+                ? "Add Slider Images"
+                : "Add Carousel Images"
+            }
+            subtitle="Select multiple images for slideshow"
+            actionLabel="📁 Add Images"
+            onAction={() => onOpenMedia(true, "slider")}
+          />
+        );
+      }
+
+      // ✅ Use first slide as the preview
+      const firstImage = images[0];
+      const firstItem = items[0];
+
+      // ✅ Resolve content position + alignment from slide data
+      const contentPosition = firstItem?.contentPosition || "center";
+      const contentTextAlign =
+        firstItem?.contentTextAlign ||
+        (contentPosition === "left"
+          ? "left"
+          : contentPosition === "right"
+            ? "right"
+            : "center");
+
+      const alignContent =
+        contentPosition === "left"
+          ? "flex-start"
+          : contentPosition === "right"
+            ? "flex-end"
+            : "center";
+
+      const contentColor = firstItem?.contentColor || "#ffffff";
+
+      // ✅ Slider height
+      const sliderHeight =
+        widget.type === "slider"
+          ? widget.settings?.sliderHeight
+            ? `${widget.settings.sliderHeight}${
+                widget.settings.sliderHeightUnit || "px"
+              }`
+            : "400px"
+          : "250px";
+
+      return (
         <div
           style={{
             position: "relative",
             overflow: "hidden",
             borderRadius: 8,
             background: "#000",
-            minHeight: widget.type === "slider" ? 400 : 250,
+            minHeight: sliderHeight,
             width: "100%",
             alignSelf: "stretch",
           }}
         >
-          <img
-            src={widget.settings.images[0].url}
-            alt=""
-            style={{
-              width: "100%",
-              height: widget.type === "slider" ? 400 : 250,
-              objectFit: "cover",
-              display: "block",
-              opacity: 0.9,
-            }}
-          />
+          {/* ✅ Background image (first slide) */}
+          {firstImage?.url && (
+            <img
+              src={firstImage.url}
+              alt={firstImage.alt || firstItem?.imageAlt || ""}
+              style={{
+                width: "100%",
+                height: sliderHeight,
+                objectFit: "cover",
+                display: "block",
+                opacity: 0.9,
+              }}
+            />
+          )}
+
+          {/* ✅ Overlay with title + content + buttons (slider only) */}
           {widget.type === "slider" && (
             <div
               className="slider-preview-content"
@@ -618,78 +676,94 @@ const WidgetContent = ({
                 inset: 0,
                 display: "flex",
                 flexDirection: "column",
-                alignItems: "center",
+                alignItems: alignContent,
                 justifyContent: "center",
-                color: "#fff",
-                textAlign: "center",
+                color: contentColor,
+                textAlign: contentTextAlign as any,
                 padding: 40,
                 background:
                   "linear-gradient(135deg, rgba(12, 47, 85, 0.6), rgba(0, 0, 0, 0.4))",
               }}
             >
-              <h2
-                style={{
-                  fontSize: 42,
-                  fontWeight: 700,
-                  margin: "0 0 16px",
-                  textShadow: "0 2px 8px rgba(0,0,0,0.4)",
-                  color: "#fff",
-                }}
-              >
-                {widget.settings.images[0].title || "Slide Title"}
-              </h2>
-              <p
-                style={{
-                  fontSize: 18,
-                  margin: "0 0 24px",
-                  opacity: 0.95,
-                  color: "#fff",
-                  maxWidth: 600,
-                }}
-              >
-                {widget.settings?.items?.[0]?.content ||
-                  "Slide description goes here. Add your content."}
-              </p>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 12,
-                  flexWrap: "wrap",
-                  justifyContent: "center",
-                }}
-              >
-                <span
+              {/* Title */}
+              {firstItem?.title && (
+                <h2
                   style={{
-                    backgroundColor: "#f0b429",
-                    color: "#0c2f55",
-                    padding: "12px 28px",
-                    borderRadius: 6,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    fontSize: 15,
-                    display: "inline-block",
+                    fontSize: 42,
+                    fontWeight: 700,
+                    margin: "0 0 16px",
+                    textShadow: "0 2px 8px rgba(0,0,0,0.4)",
+                    color: contentColor,
                   }}
                 >
-                  {widget.settings?.items?.[0]?.title || "Learn More"}
-                </span>
-                <span
+                  {firstItem.title}
+                </h2>
+              )}
+
+              {/* Description */}
+              {firstItem?.content && (
+                <p
                   style={{
-                    backgroundColor: "transparent",
-                    color: "#fff",
-                    padding: "12px 28px",
-                    borderRadius: 6,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    fontSize: 15,
-                    display: "inline-block",
-                    border: "2px solid #fff",
+                    fontSize: 18,
+                    margin: "0 0 24px",
+                    opacity: 0.95,
+                    color: contentColor,
+                    maxWidth: 600,
                   }}
                 >
-                  {widget.settings?.items?.[1]?.title || "Contact Us"}
-                </span>
-              </div>
+                  {firstItem.content}
+                </p>
+              )}
+
+              {/* Buttons */}
+              {(firstItem?.button1Text || firstItem?.button2Text) && (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    flexWrap: "wrap",
+                    justifyContent: alignContent,
+                  }}
+                >
+                  {firstItem.button1Text && (
+                    <span
+                      style={{
+                        backgroundColor: "#f0b429",
+                        color: "#0c2f55",
+                        padding: "12px 28px",
+                        borderRadius: 6,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        fontSize: 15,
+                        display: "inline-block",
+                      }}
+                    >
+                      {firstItem.button1Text}
+                    </span>
+                  )}
+                  {firstItem.button2Text && (
+                    <span
+                      style={{
+                        backgroundColor: "transparent",
+                        color: contentColor,
+                        padding: "12px 28px",
+                        borderRadius: 6,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        fontSize: 15,
+                        display: "inline-block",
+                        border: `2px solid ${contentColor}`,
+                      }}
+                    >
+                      {firstItem.button2Text}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
+
+          {/* Dots indicator */}
           <div
             style={{
               position: "absolute",
@@ -700,7 +774,7 @@ const WidgetContent = ({
               gap: 8,
             }}
           >
-            {widget.settings.images.slice(0, 8).map((_, i) => (
+            {Array.from({ length: Math.min(totalSlides, 8) }).map((_, i) => (
               <span
                 key={i}
                 style={{
@@ -713,6 +787,8 @@ const WidgetContent = ({
               />
             ))}
           </div>
+
+          {/* Nav arrows */}
           <button
             type="button"
             style={{
@@ -759,6 +835,8 @@ const WidgetContent = ({
           >
             ›
           </button>
+
+          {/* Add Slide button */}
           {isEditMode && (
             <button
               type="button"
@@ -784,19 +862,8 @@ const WidgetContent = ({
             </button>
           )}
         </div>
-      ) : (
-        <WidgetEmptyState
-          icon={widget.type === "slider" ? "🎞" : "🎠"}
-          title={
-            widget.type === "slider"
-              ? "Add Slider Images"
-              : "Add Carousel Images"
-          }
-          subtitle="Select multiple images for slideshow"
-          actionLabel="📁 Add Images"
-          onAction={() => onOpenMedia(true, "slider")}
-        />
       );
+    }
 
     // ===== SPACER =====
     case "spacer":
@@ -1431,9 +1498,6 @@ const CanvasRenderer = ({
     opacity: isDragging ? 0.4 : 1,
   };
 
-  // ============================================================
-  // ✅ BUTTON FIX: force block + width for alignment to work
-  // ============================================================
   const rawWidgetStyle = renderWidgetStyles(widget.style, device);
 
   const widgetStyle: React.CSSProperties =

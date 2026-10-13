@@ -406,6 +406,10 @@ const SortableLayerItem = ({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: `layer-${widget.id}` });
 
+  // ✅ Local collapse state per node
+  const [collapsed, setCollapsed] = useState(false);
+  const hasChildren = (widget.children?.length || 0) > 0;
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -427,6 +431,24 @@ const SortableLayerItem = ({
         >
           ⠿
         </span>
+
+        {/* ✅ Collapse/expand toggle (only for containers with children) */}
+        {hasChildren ? (
+          <button
+            type="button"
+            className="structure-toggle"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCollapsed((v) => !v);
+            }}
+            title={collapsed ? "Expand" : "Collapse"}
+          >
+            {collapsed ? "▸" : "▾"}
+          </button>
+        ) : (
+          <span className="structure-toggle-placeholder" />
+        )}
+
         <button
           type="button"
           className="structure-item-btn"
@@ -438,6 +460,7 @@ const SortableLayerItem = ({
           <span className="structure-icon">{getLayerIcon(widget.type)}</span>
           <span className="structure-label">{widget.label}</span>
         </button>
+
         <button
           type="button"
           className="structure-delete"
@@ -450,12 +473,12 @@ const SortableLayerItem = ({
         </button>
       </div>
 
-      {widget.children && widget.children.length > 0 && (
+      {hasChildren && !collapsed && (
         <SortableContext
-          items={widget.children.map((c) => `layer-${c.id}`)}
+          items={widget.children!.map((c) => `layer-${c.id}`)}
           strategy={verticalListSortingStrategy}
         >
-          {widget.children.map((child) => (
+          {widget.children!.map((child) => (
             <SortableLayerItem
               key={child.id}
               widget={child}

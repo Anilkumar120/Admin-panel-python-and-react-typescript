@@ -1,6 +1,7 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -19,7 +20,11 @@ from backend.routes.media import router as media_router
 from backend.routes.page_builder import router as page_builder_router
 from backend.routes.public import router as public_router
 
+
 app = FastAPI()
+
+# Maximum request size: 25 MB
+MAX_REQUEST_SIZE = 25 * 1024 * 1024
 
 
 app.add_middleware(
@@ -34,14 +39,38 @@ app.add_middleware(
 )
 
 
-# Project root: D:\python-inventory
+# Project root
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Uploads directory
+# Upload directory
 UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
 
-# Automatically create uploads folder if missing
 os.makedirs(UPLOADS_DIR, exist_ok=True)
+
+
+@app.middleware("http")
+async def check_request_size(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+
+    if content_length:
+        try:
+            request_size = int(content_length)
+        except ValueError:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Invalid Content-Length header"},
+            )
+
+        if request_size > MAX_REQUEST_SIZE:
+            return JSONResponse(
+                status_code=413,
+                content={
+                    "detail": "Request too large. Maximum allowed size is 25 MB."
+                },
+            )
+
+    return await call_next(request)
+
 
 app.mount(
     "/uploads",
@@ -81,4 +110,3 @@ def home():
             "mongodb": "Connection Failed",
             "error": str(error),
         }
-
