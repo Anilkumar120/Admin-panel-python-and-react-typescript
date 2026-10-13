@@ -37,17 +37,26 @@ import EditHeaderFooter from "./pages/Appearance/HeaderFooter/EditHeaderFooter";
 import MediaLibrary from "./pages/Media/MediaLibrary";
 import MediaTrash from "./pages/Media/MediaTrash";
 import PageBuilder from "./pages/admin/PageBuilder";
+import PublicPageView from "./pages/admin/PublicPageView";
 
 const App = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          {/* ============ AUTH ROUTES ============ */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
+          {/* ============ ✅ PUBLIC ROUTES (ADMIN KE BAHAR) ============ */}
+          {/* Ye routes admin ke bahar hain — public URL se accessible */}
+          <Route path="/page/:slug" element={<PublicPageView />} />
+          <Route path="/post/:slug" element={<PublicPageView />} />
+          <Route path="/:postType/:slug" element={<PublicPageView />} />
+
+          {/* ============ ADMIN ROUTES ============ */}
           <Route
             path="/admin"
             element={
@@ -131,6 +140,7 @@ const App = () => {
             <Route path="appearance/page-builder" element={<PageBuilder />} />
           </Route>
 
+          {/* ============ DEFAULT ============ */}
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

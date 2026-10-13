@@ -17,7 +17,7 @@ from backend.routes.menus import router as menus_router
 from backend.routes.header_footer import router as header_footer_router
 from backend.routes.media import router as media_router
 from backend.routes.page_builder import router as page_builder_router
-
+from backend.routes.public import router as public_router
 
 app = FastAPI()
 
@@ -62,6 +62,7 @@ app.include_router(menus_router)
 app.include_router(header_footer_router)
 app.include_router(media_router)
 app.include_router(page_builder_router)
+app.include_router(public_router)
 
 
 @app.get("/")

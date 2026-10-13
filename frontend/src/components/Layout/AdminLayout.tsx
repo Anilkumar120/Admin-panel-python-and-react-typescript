@@ -268,6 +268,20 @@ const AdminLayout = () => {
               <span>🖼️</span>
               Header &amp; Footer
             </Link>
+
+            {/* ✅ NEW: Page Builder Link */}
+            <Link
+              to="/admin/appearance/page-builder"
+              className={
+                location.pathname.startsWith("/admin/appearance/page-builder")
+                  ? "nav-link active"
+                  : "nav-link"
+              }
+            >
+              <span>🏗️</span>
+              Page Builder
+            </Link>
+            {/* ✅ END NEW */}
           </div>
 
           <div className="sidebar-section">

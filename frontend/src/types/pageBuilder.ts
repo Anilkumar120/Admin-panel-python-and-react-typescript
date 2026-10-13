@@ -1,50 +1,34 @@
-﻿
-export type WidgetType =
-  | "container"
-  | "heading"
-  | "text"
-  | "image"
-  | "button"
-  | "spacer";
-
-export type PageStatus = "draft" | "published";
-
-export interface WidgetStyle {
-  backgroundColor?: string;
-  color?: string;
-  fontSize?: number;
-  textAlign?: "left" | "center" | "right";
-  padding?: number;
-  margin?: number;
-  width?: string;
-  borderRadius?: number;
-}
-
-export interface PageWidget {
-  id: string;
-  type: WidgetType;
-  label: string;
-  content?: string;
-  url?: string;
-  children?: PageWidget[];
-  style: WidgetStyle;
-}
-
-export interface BuilderPage {
-  id: string;
-  title: string;
-  slug: string;
-  layout: PageWidget[];
-  status: PageStatus;
-  created_at?: string;
-  updated_at?: string;
-}
-
-export interface CreatePageData {
-  title: string;
-  slug: string;
-  layout: PageWidget[];
-  status: PageStatus;
-}
-
-export type UpdatePageData = CreatePageData;
+export type {
+  WidgetType,
+  PageStatus,
+  CSSUnit,
+  ResponsiveDevice,
+  CSSDisplay,
+  TextAlignment,
+  FlexDirection,
+  FlexWrap,
+  BorderStyle,
+  PositionType,
+  OverflowType,
+  DimensionValue,
+  BoxSpacing,
+  ShadowSettings,
+  TransformSettings,
+  ResponsiveStyle,
+  WidgetStyle,
+  LinkSettings,
+  MediaItem,
+  WidgetItem,
+  QuerySettings,
+  AccessibilitySettings,
+  AdvancedWidgetSettings,
+  GlobalStyleReference,
+  WidgetSettings,
+  PageWidget,
+  GlobalColor,
+  GlobalFont,
+  BuilderGlobals,
+  BuilderPage,
+  CreatePageData,
+  UpdatePageData,
+} from "../api/pageBuilder";

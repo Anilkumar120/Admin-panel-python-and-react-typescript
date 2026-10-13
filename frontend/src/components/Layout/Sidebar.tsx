@@ -160,6 +160,18 @@ const Sidebar = () => {
             <span>🖼️</span>
             Header & Footer
           </NavLink>
+
+          {/* ✅ NEW: Page Builder Link */}
+          <NavLink
+            to="/admin/appearance/page-builder"
+            className={({ isActive }) =>
+              isActive ? "nav-link active" : "nav-link"
+            }
+          >
+            <span>🏗️</span>
+            Page Builder
+          </NavLink>
+          {/* ✅ END NEW */}
         </div>
 
         <div className="sidebar-section">

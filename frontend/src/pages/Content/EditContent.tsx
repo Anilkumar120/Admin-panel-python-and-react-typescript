@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
   createCategory,
@@ -18,90 +17,58 @@ import {
 } from "../../api/content";
 
 import { getMediaUrl, type MediaItem } from "../../api/media";
-
 import MediaSelector from "../../components/Media/MediaSelector";
 
 const EditContent = () => {
   const navigate = useNavigate();
-
   const { postTypeSlug, itemId } = useParams();
 
   const [postType, setPostType] = useState<PostType | null>(null);
-
   const [item, setItem] = useState<ContentItem | null>(null);
-
   const [categories, setCategories] = useState<Category[]>([]);
-
   const [tags, setTags] = useState<Tag[]>([]);
-
   const [pages, setPages] = useState<ContentItem[]>([]);
 
   const [title, setTitle] = useState("");
-
   const [slug, setSlug] = useState("");
-
   const [content, setContent] = useState("");
-
   const [featuredImage, setFeaturedImage] = useState("");
-
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
-
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = useState(false);
-
   const [parentId, setParentId] = useState("");
-
   const [status, setStatus] = useState("draft");
 
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const [metaTitle, setMetaTitle] = useState("");
-
   const [metaDescription, setMetaDescription] = useState("");
-
   const [focusKeyword, setFocusKeyword] = useState("");
-
   const [canonicalUrl, setCanonicalUrl] = useState("");
-
   const [robots, setRobots] = useState("index,follow");
-
   const [ogTitle, setOgTitle] = useState("");
-
   const [ogDescription, setOgDescription] = useState("");
-
   const [ogImage, setOgImage] = useState("");
-
   const [twitterTitle, setTwitterTitle] = useState("");
-
   const [twitterDescription, setTwitterDescription] = useState("");
-
   const [twitterImage, setTwitterImage] = useState("");
-
   const [schemaType, setSchemaType] = useState("Article");
 
   const [showAddCategory, setShowAddCategory] = useState(false);
-
   const [newCategoryName, setNewCategoryName] = useState("");
-
   const [newCategorySlug, setNewCategorySlug] = useState("");
-
   const [newCategoryParentId, setNewCategoryParentId] = useState("");
 
   const [addingCategory, setAddingCategory] = useState(false);
 
   const [showAddTag, setShowAddTag] = useState(false);
-
   const [newTagName, setNewTagName] = useState("");
-
   const [newTagSlug, setNewTagSlug] = useState("");
 
   const [addingTag, setAddingTag] = useState(false);
 
   const [loading, setLoading] = useState(true);
-
   const [saving, setSaving] = useState(false);
-
   const [error, setError] = useState("");
 
   const createSlug = (value: string) => {
@@ -116,118 +83,81 @@ const EditContent = () => {
     const loadData = async () => {
       try {
         setLoading(true);
-
         setError("");
 
         if (!postTypeSlug || !itemId) {
           setError("Invalid content URL.");
-
           return;
         }
 
         const postTypeResponse = await getPostTypeBySlug(postTypeSlug);
-
         const itemResponse = await getContentItem(itemId);
 
         setPostType(postTypeResponse);
-
         setItem(itemResponse);
 
         setTitle(itemResponse.title || "");
-
         setSlug(itemResponse.slug || "");
-
         setContent(itemResponse.content || "");
-
         setFeaturedImage(itemResponse.featured_image || "");
 
         if (itemResponse.featured_image_id) {
           setSelectedMedia({
             _id: itemResponse.featured_image_id,
-
             file_name: itemResponse.featured_image || "",
-
             original_name: itemResponse.featured_image || "",
-
             title: itemResponse.title || "",
-
             alt_text: itemResponse.title || "",
-
             description: "",
-
             mime_type: "image",
-
             file_type: "image",
-
             extension: "",
-
             file_size: 0,
-
             url: itemResponse.featured_image || "",
-
             is_deleted: false,
           });
         }
 
         setParentId(itemResponse.parent_id || "");
-
         setStatus(itemResponse.status || "draft");
-
         setSelectedCategories(itemResponse.categories || []);
-
         setSelectedTags(itemResponse.tags || []);
 
         const seo = itemResponse.seo || {};
-
         setMetaTitle(seo.title || "");
-
         setMetaDescription(seo.description || "");
-
         setFocusKeyword(seo.focus_keyword || "");
-
         setCanonicalUrl(seo.canonical_url || "");
-
         setRobots(seo.robots || "index,follow");
-
         setOgTitle(seo.og_title || "");
-
         setOgDescription(seo.og_description || "");
-
         setOgImage(seo.og_image || "");
-
         setTwitterTitle(seo.twitter_title || "");
-
         setTwitterDescription(seo.twitter_description || "");
-
         setTwitterImage(seo.twitter_image || "");
-
         setSchemaType(seo.schema_type || "Article");
 
         if (postTypeResponse.features?.categories) {
           const categoryResponse = await getCategories(postTypeSlug);
-
           setCategories(categoryResponse);
         }
 
         if (postTypeResponse.features?.tags) {
           const tagResponse = await getTags(postTypeSlug);
-
           setTags(tagResponse);
         }
 
         if (postTypeResponse.features?.parent_page) {
           const pageResponse = await getPages(false, true);
-
           setPages(
             pageResponse.filter(
               (page: ContentItem) =>
-                page.id !== itemId && page.status === "published",
-            ),
+                page.id !== itemId && page.status === "published"
+            )
           );
         }
       } catch (err) {
         console.error(err);
-
         setError("Failed to load content.");
       } finally {
         setLoading(false);
@@ -242,7 +172,6 @@ const EditContent = () => {
       if (current.includes(categoryId)) {
         return current.filter((id) => id !== categoryId);
       }
-
       return [...current, categoryId];
     });
   };
@@ -252,48 +181,38 @@ const EditContent = () => {
       if (current.includes(tagId)) {
         return current.filter((id) => id !== tagId);
       }
-
       return [...current, tagId];
     });
   };
 
   const handleAddCategory = async () => {
-    if (!postTypeSlug || !newCategoryName.trim()) {
-      return;
-    }
+    if (!postTypeSlug || !newCategoryName.trim()) return;
 
     try {
       setAddingCategory(true);
-
       setError("");
 
       const response = await createCategory(
         postTypeSlug,
         newCategoryName.trim(),
         newCategorySlug.trim() || createSlug(newCategoryName),
-        newCategoryParentId || "",
+        newCategoryParentId || ""
       );
 
       const categoryResponse = await getCategories(postTypeSlug);
-
       setCategories(categoryResponse);
 
       const createdId = response?.id || response?.category?.id;
-
       if (createdId) {
         setSelectedCategories((current) => [...current, createdId]);
       }
 
       setNewCategoryName("");
-
       setNewCategorySlug("");
-
       setNewCategoryParentId("");
-
       setShowAddCategory(false);
     } catch (err) {
       console.error(err);
-
       setError("Failed to create category.");
     } finally {
       setAddingCategory(false);
@@ -301,39 +220,31 @@ const EditContent = () => {
   };
 
   const handleAddTag = async () => {
-    if (!postTypeSlug || !newTagName.trim()) {
-      return;
-    }
+    if (!postTypeSlug || !newTagName.trim()) return;
 
     try {
       setAddingTag(true);
-
       setError("");
 
       const response = await createTag(
         postTypeSlug,
         newTagName.trim(),
-        newTagSlug.trim() || createSlug(newTagName),
+        newTagSlug.trim() || createSlug(newTagName)
       );
 
       const tagResponse = await getTags(postTypeSlug);
-
       setTags(tagResponse);
 
       const createdId = response?.id || response?.tag?.id;
-
       if (createdId) {
         setSelectedTags((current) => [...current, createdId]);
       }
 
       setNewTagName("");
-
       setNewTagSlug("");
-
       setShowAddTag(false);
     } catch (err) {
       console.error(err);
-
       setError("Failed to create tag.");
     } finally {
       setAddingTag(false);
@@ -343,67 +254,40 @@ const EditContent = () => {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    if (!itemId || !postTypeSlug) {
-      return;
-    }
+    if (!itemId || !postTypeSlug) return;
 
     try {
       setSaving(true);
-
       setError("");
 
       const data: Record<string, string> = {};
-
       data.title = title.trim();
-
       data.slug = slug.trim();
-
       data.content = content;
-
       data.featured_image = selectedMedia?.url || featuredImage.trim();
-
       data.featured_image_id = selectedMedia?._id || "";
-
       data.status = status;
-
       data.categories = selectedCategories.join(",");
-
       data.tags = selectedTags.join(",");
-
       data.parent_id = parentId || "";
-
       data.seo_title = metaTitle.trim();
-
       data.seo_description = metaDescription.trim();
-
       data.focus_keyword = focusKeyword.trim();
-
       data.canonical_url = canonicalUrl.trim();
-
       data.robots = robots.trim();
-
       data.og_title = ogTitle.trim();
-
       data.og_description = ogDescription.trim();
-
       data.og_image = ogImage.trim();
-
       data.twitter_title = twitterTitle.trim();
-
       data.twitter_description = twitterDescription.trim();
-
       data.twitter_image = twitterImage.trim();
-
       data.schema_type = schemaType;
 
       await updateContent(itemId, data);
-
       navigate(`/admin/content/${postTypeSlug}`);
     } catch (err: any) {
       console.error(err);
-
       const detail = err?.response?.data?.detail;
-
       if (Array.isArray(detail)) {
         setError(
           detail
@@ -411,12 +295,11 @@ const EditContent = () => {
               const location = Array.isArray(item?.loc)
                 ? item.loc.join(" → ")
                 : "";
-
               return location
                 ? `${location}: ${item?.msg || "Validation error."}`
                 : item?.msg || "Validation error.";
             })
-            .join(", "),
+            .join(", ")
         );
       } else {
         setError(detail || "Failed to update content.");
@@ -448,11 +331,39 @@ const EditContent = () => {
 
   return (
     <div className="content-page">
-      <div className="content-card-header">
+      {/* ✅ HEADER WITH EDIT WITH PAGE BUILDER BUTTON */}
+      <div className="content-card-header" style={{ marginBottom: 20 }}>
         <div>
           <h1>Edit {postType.name}</h1>
-
           <p>Update your {postType.name.toLowerCase()}.</p>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <Link
+            to={`/admin/appearance/page-builder?contentId=${itemId}&postType=${postTypeSlug}`}
+            className="content-primary-button"
+            style={{
+              background: "#5b3df5",
+              color: "#fff",
+              textDecoration: "none",
+              padding: "10px 18px",
+              borderRadius: 6,
+              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+            title="Edit this content with Page Builder"
+          >
+            🎨 Edit with Page Builder
+          </Link>
+
+          <Link
+            to={`/admin/content/${postTypeSlug}`}
+            className="content-secondary-button"
+          >
+            ← Back
+          </Link>
         </div>
       </div>
 
@@ -470,7 +381,6 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>Title</label>
-
                 <input
                   type="text"
                   value={title}
@@ -481,7 +391,6 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>Slug</label>
-
                 <input
                   type="text"
                   value={slug}
@@ -492,7 +401,6 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>Content</label>
-
                 <textarea
                   value={content}
                   onChange={(event) => setContent(event.target.value)}
@@ -502,13 +410,11 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>Status</label>
-
                 <select
                   value={status}
                   onChange={(event) => setStatus(event.target.value)}
                 >
                   <option value="draft">Draft</option>
-
                   <option value="published">Published</option>
                 </select>
               </div>
@@ -516,13 +422,11 @@ const EditContent = () => {
               {postType.features?.parent_page && (
                 <div className="form-group">
                   <label>Parent Page</label>
-
                   <select
                     value={parentId}
                     onChange={(event) => setParentId(event.target.value)}
                   >
                     <option value="">No Parent</option>
-
                     {pages.map((page) => (
                       <option key={page.id} value={page.id}>
                         {page.title}
@@ -537,14 +441,12 @@ const EditContent = () => {
               <div className="content-card-header">
                 <div>
                   <h2>SEO</h2>
-
                   <p>Search engine optimization settings.</p>
                 </div>
               </div>
 
               <div className="form-group">
                 <label>SEO Title</label>
-
                 <input
                   type="text"
                   value={metaTitle}
@@ -554,7 +456,6 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>SEO Description</label>
-
                 <textarea
                   value={metaDescription}
                   onChange={(event) => setMetaDescription(event.target.value)}
@@ -564,7 +465,6 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>Focus Keyword</label>
-
                 <input
                   type="text"
                   value={focusKeyword}
@@ -574,7 +474,6 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>Canonical URL</label>
-
                 <input
                   type="text"
                   value={canonicalUrl}
@@ -584,34 +483,26 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>Robots</label>
-
                 <select
                   value={robots}
                   onChange={(event) => setRobots(event.target.value)}
                 >
                   <option value="index,follow">Index, Follow</option>
-
                   <option value="noindex,follow">Noindex, Follow</option>
-
                   <option value="index,nofollow">Index, Nofollow</option>
-
                   <option value="noindex,nofollow">Noindex, Nofollow</option>
                 </select>
               </div>
 
               <div className="form-group">
                 <label>Schema Type</label>
-
                 <select
                   value={schemaType}
                   onChange={(event) => setSchemaType(event.target.value)}
                 >
                   <option value="Article">Article</option>
-
                   <option value="WebPage">WebPage</option>
-
                   <option value="BlogPosting">BlogPosting</option>
-
                   <option value="Product">Product</option>
                 </select>
               </div>
@@ -626,7 +517,6 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>OG Title</label>
-
                 <input
                   type="text"
                   value={ogTitle}
@@ -636,7 +526,6 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>OG Description</label>
-
                 <textarea
                   value={ogDescription}
                   onChange={(event) => setOgDescription(event.target.value)}
@@ -646,7 +535,6 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>OG Image</label>
-
                 <input
                   type="text"
                   value={ogImage}
@@ -656,7 +544,6 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>Twitter Title</label>
-
                 <input
                   type="text"
                   value={twitterTitle}
@@ -666,7 +553,6 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>Twitter Description</label>
-
                 <textarea
                   value={twitterDescription}
                   onChange={(event) =>
@@ -678,7 +564,6 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>Twitter Image</label>
-
                 <input
                   type="text"
                   value={twitterImage}
@@ -698,7 +583,6 @@ const EditContent = () => {
 
               <div className="form-group">
                 <label>Featured Image</label>
-
                 <div
                   className="content-featured-image-selector"
                   onClick={() => setIsMediaSelectorOpen(true)}
@@ -710,19 +594,15 @@ const EditContent = () => {
                         alt={selectedMedia.alt_text || selectedMedia.title}
                         className="content-featured-image-preview"
                       />
-
                       <p>
                         {selectedMedia.title || selectedMedia.original_name}
                       </p>
-
                       <small>Click to change image</small>
                     </>
                   ) : (
                     <>
                       <div className="content-image-placeholder">🖼️</div>
-
                       <p>Select Featured Image</p>
-
                       <small>
                         Choose from Media Library or upload from computer
                       </small>
@@ -738,7 +618,6 @@ const EditContent = () => {
                   <div>
                     <h2>Categories</h2>
                   </div>
-
                   <button
                     type="button"
                     className="content-secondary-button"
@@ -752,7 +631,6 @@ const EditContent = () => {
                   <div className="taxonomy-create-box">
                     <div className="form-group">
                       <label>Category Name</label>
-
                       <input
                         type="text"
                         value={newCategoryName}
@@ -764,7 +642,6 @@ const EditContent = () => {
 
                     <div className="form-group">
                       <label>Slug</label>
-
                       <input
                         type="text"
                         value={newCategorySlug}
@@ -776,7 +653,6 @@ const EditContent = () => {
 
                     <div className="form-group">
                       <label>Parent Category</label>
-
                       <select
                         value={newCategoryParentId}
                         onChange={(event) =>
@@ -784,7 +660,6 @@ const EditContent = () => {
                         }
                       >
                         <option value="">No Parent</option>
-
                         {categories.map((category) => (
                           <option key={category.id} value={category.id}>
                             {category.name}
@@ -812,7 +687,6 @@ const EditContent = () => {
                         checked={selectedCategories.includes(category.id)}
                         onChange={() => handleCategoryChange(category.id)}
                       />
-
                       <span>{category.name}</span>
                     </label>
                   ))}
@@ -826,7 +700,6 @@ const EditContent = () => {
                   <div>
                     <h2>Tags</h2>
                   </div>
-
                   <button
                     type="button"
                     className="content-secondary-button"
@@ -840,7 +713,6 @@ const EditContent = () => {
                   <div className="taxonomy-create-box">
                     <div className="form-group">
                       <label>Tag Name</label>
-
                       <input
                         type="text"
                         value={newTagName}
@@ -850,7 +722,6 @@ const EditContent = () => {
 
                     <div className="form-group">
                       <label>Slug</label>
-
                       <input
                         type="text"
                         value={newTagSlug}
@@ -877,7 +748,6 @@ const EditContent = () => {
                         checked={selectedTags.includes(tag.id)}
                         onChange={() => handleTagChange(tag.id)}
                       />
-
                       <span>{tag.name}</span>
                     </label>
                   ))}
@@ -913,9 +783,7 @@ const EditContent = () => {
         onClose={() => setIsMediaSelectorOpen(false)}
         onSelect={(media) => {
           setSelectedMedia(media);
-
           setFeaturedImage(media.url);
-
           setIsMediaSelectorOpen(false);
         }}
         selectedMediaId={selectedMedia?._id}

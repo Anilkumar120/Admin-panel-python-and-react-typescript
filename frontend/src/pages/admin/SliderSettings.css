@@ -1,0 +1,195 @@
+/* ============ SLIDER SETTINGS (Elementor Style) ============ */
+.slider-settings {
+  padding: 0;
+}
+
+.slides-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.slide-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f5f7fa;
+  border: 1px solid #e3e6eb;
+  border-radius: 5px;
+  transition: all 0.15s;
+}
+
+.slide-list-item:hover {
+  background: #eef2f8;
+  border-color: #c5d3e3;
+}
+
+.slide-list-item.active {
+  background: #e8f0fa;
+  border-color: #0c2f55;
+  box-shadow: 0 0 0 1px rgba(12, 47, 85, 0.1);
+}
+
+.slide-list-header {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  color: #333;
+}
+
+.slide-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #d9dee7;
+  font-size: 11px;
+  font-weight: 600;
+  color: #0c2f55;
+  flex-shrink: 0;
+}
+
+.slide-list-item.active .slide-number {
+  background: #0c2f55;
+  color: #fff;
+  border-color: #0c2f55;
+}
+
+.slide-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slide-list-actions {
+  display: flex;
+  gap: 2px;
+  padding-right: 8px;
+}
+
+.slide-list-actions button {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  color: #666;
+  border-radius: 3px;
+}
+
+.slide-list-actions button:hover {
+  background: #fff;
+  color: #0c2f55;
+}
+
+.slide-list-actions button:last-child:hover {
+  color: #b42318;
+}
+
+.add-slide-btn {
+  width: 100%;
+  padding: 10px;
+  background: #0c2f55;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.add-slide-btn:hover {
+  background: #1a4a7a;
+}
+
+/* Active Slide Editor */
+.active-slide-editor {
+  border: 1px solid #e3e6eb;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  margin-top: 12px;
+}
+
+.slide-tabs {
+  display: flex;
+  border-bottom: 1px solid #e3e6eb;
+  background: #f8f9fc;
+}
+
+.slide-tabs button {
+  flex: 1;
+  padding: 10px 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
+  border-bottom: 2px solid transparent;
+}
+
+.slide-tabs button.active {
+  color: #0c2f55;
+  border-bottom-color: #0c2f55;
+  background: #fff;
+}
+
+.slide-tab-content {
+  padding: 14px;
+}
+
+/* Collapsible sections */
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f5f7fa;
+  border: 1px solid #e3e6eb;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0c2f55;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 12px;
+}
+
+.collapsible-header:hover {
+  background: #eef2f8;
+}
+
+.collapsible-content {
+  padding: 0 4px 14px;
+}
+
+/* Checkbox with toggle */
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 12px;
+  color: #454c57;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}

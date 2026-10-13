@@ -1,87 +1,54 @@
 ﻿import axios from "axios";
-
 import { API_URL } from "./config";
 
 const PAGE_BUILDER_URL = `${API_URL}/api/page-builder`;
 
 const getHeaders = () => {
-  const token = typeof window !== "undefined" ? window.localStorage.getItem("access_token") : null;
+  const token =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem("access_token")
+      : null;
 
   return {
     Authorization: token ? `Bearer ${token}` : "",
+    "Content-Type": "application/json",
   };
 };
 
+// ============ TYPES ============
 export type WidgetType =
-  | "container"
-  | "grid"
-  | "heading"
-  | "text"
-  | "image"
-  | "button"
-  | "spacer"
-  | "icon"
-  | "gallery"
-  | "carousel"
-  | "video"
-  | "icon_box"
-  | "divider"
-  | "accordion"
-  | "tabs"
-  | "form"
-  | "posts"
-  | "post_grid"
-  | "post_list"
-  | "products"
-  | "product_grid"
-  | "html"
-  | "shortcode"
-  | "menu"
-  | "search"
-  | "social_icons"
-  | "testimonial"
-  | "progress_bar"
-  | "counter"
-  | "countdown"
-  | "map"
-  | "table"
-  | "alert"
-  | "rating"
-  | "author_box"
-  | "breadcrumbs"
-  | "pagination"
-  | "post_title"
-  | "post_content"
-  | "featured_image"
-  | "post_excerpt"
-  | "post_meta"
-  | "site_logo"
-  | "site_title"
-  | "site_tagline"
-  | "archive_title"
-  | "archive_description"
-  | "product_title"
-  | "product_price"
-  | "product_image"
-  | "product_gallery"
-  | "product_description"
-  | "add_to_cart"
-  | "product_rating"
-  | "product_stock"
-  | "related_products"
-  | "cart"
-  | "checkout"
-  | "my_account";
+  | "container" | "grid" | "section" | "column"
+  | "heading" | "text" | "image" | "button" | "spacer"
+  | "icon" | "icon_box" | "divider" | "alert"
+  | "gallery" | "carousel" | "slider" | "video" | "map"
+  | "accordion" | "tabs" | "toggle" | "testimonial"
+  | "progress_bar" | "counter" | "countdown" | "rating"
+  | "form" | "search" | "menu" | "social_icons"
+  | "posts" | "post_grid" | "post_list" | "post_carousel"
+  | "post_title" | "post_content" | "post_excerpt"
+  | "post_meta" | "post_image" | "author_box"
+  | "products" | "product_grid" | "product_list"
+  | "product_title" | "product_price" | "product_image"
+  | "product_gallery" | "product_description"
+  | "add_to_cart" | "product_rating" | "product_stock"
+  | "related_products" | "cart" | "checkout" | "my_account"
+  | "html" | "shortcode" | "table" | "breadcrumbs"
+  | "pagination" | "site_logo" | "site_title"
+  | "site_tagline" | "archive_title" | "archive_description"
+  | "featured_image";
 
 export type PageStatus = "draft" | "published";
-
 export type CSSUnit = "px" | "%" | "vh" | "vw" | "em" | "rem" | "auto";
 export type ResponsiveDevice = "desktop" | "tablet" | "mobile";
-export type CSSDisplay = "block" | "inline" | "inline-block" | "flex" | "inline-flex" | "grid" | "inline-grid" | "none";
+export type CSSDisplay =
+  | "block" | "inline" | "inline-block"
+  | "flex" | "inline-flex" | "grid" | "inline-grid" | "none";
 export type TextAlignment = "left" | "center" | "right" | "justify";
 export type FlexDirection = "row" | "column" | "row-reverse" | "column-reverse";
 export type FlexWrap = "nowrap" | "wrap" | "wrap-reverse";
-export type BorderStyle = "none" | "solid" | "dashed" | "dotted" | "double" | "groove" | "ridge" | "inset" | "outset";
+export type BorderStyle =
+  | "none" | "solid" | "dashed" | "dotted"
+  | "double" | "groove" | "ridge" | "inset" | "outset";
 export type PositionType = "static" | "relative" | "absolute" | "fixed" | "sticky";
 export type OverflowType = "visible" | "hidden" | "auto" | "scroll";
 
@@ -95,6 +62,8 @@ export interface BoxSpacing {
   right?: number;
   bottom?: number;
   left?: number;
+  unit?: string;
+  linked?: boolean;
 }
 
 export interface ShadowSettings {
@@ -116,21 +85,18 @@ export interface TransformSettings {
 }
 
 export interface ResponsiveStyle {
-  width?: DimensionValue;
-  height?: DimensionValue;
-  minWidth?: DimensionValue;
-  maxWidth?: DimensionValue;
-  minHeight?: DimensionValue;
-  maxHeight?: DimensionValue;
-
-  padding?: number;
-  margin?: number;
+  width?: DimensionValue | string;
+  height?: DimensionValue | string;
+  minWidth?: DimensionValue | string;
+  maxWidth?: DimensionValue | string;
+  minHeight?: DimensionValue | string;
+  maxHeight?: DimensionValue | string;
+  padding?: BoxSpacing;
+  margin?: BoxSpacing;
   gap?: number;
   fontSize?: number;
   display?: CSSDisplay;
   hide?: boolean;
-  paddingBox?: BoxSpacing;
-  marginBox?: BoxSpacing;
   flexDirection?: FlexDirection;
   flexWrap?: FlexWrap;
   justifyContent?: string;
@@ -159,7 +125,6 @@ export interface WidgetStyle {
   backgroundClip?: string;
   overlayColor?: string;
   overlayOpacity?: number;
-
   color?: string;
   fontSize?: number;
   fontFamily?: string;
@@ -172,7 +137,6 @@ export interface WidgetStyle {
   textTransform?: "none" | "uppercase" | "lowercase" | "capitalize";
   textDecoration?: "none" | "underline" | "overline" | "line-through";
   textShadow?: string;
-
   width?: string;
   height?: string;
   minWidth?: string;
@@ -180,13 +144,9 @@ export interface WidgetStyle {
   minHeight?: string;
   maxHeight?: string;
   aspectRatio?: string;
-
-  padding?: number;
-  margin?: number;
+  padding?: BoxSpacing;
+  margin?: BoxSpacing;
   gap?: number;
-  paddingBox?: BoxSpacing;
-  marginBox?: BoxSpacing;
-
   display?: CSSDisplay;
   flexDirection?: FlexDirection;
   flexWrap?: FlexWrap;
@@ -198,7 +158,6 @@ export interface WidgetStyle {
   justifyContent?: string;
   alignItems?: string;
   alignContent?: string;
-
   gridColumns?: number;
   gridRows?: number;
   gridColumnGap?: number;
@@ -208,7 +167,6 @@ export interface WidgetStyle {
   gridAutoFlow?: string;
   gridColumn?: string;
   gridRow?: string;
-
   borderColor?: string;
   borderWidth?: number;
   borderStyle?: BorderStyle;
@@ -225,10 +183,8 @@ export interface WidgetStyle {
   borderTopRightRadius?: number;
   borderBottomLeftRadius?: number;
   borderBottomRightRadius?: number;
-
   boxShadow?: string;
   boxShadowSettings?: ShadowSettings;
-
   opacity?: number;
   zIndex?: number;
   position?: PositionType;
@@ -239,7 +195,6 @@ export interface WidgetStyle {
   overflow?: OverflowType;
   cursor?: string;
   pointerEvents?: "auto" | "none";
-
   transitionDuration?: number;
   hoverBackgroundColor?: string;
   hoverColor?: string;
@@ -248,14 +203,13 @@ export interface WidgetStyle {
   hoverBoxShadow?: string;
   hoverScale?: number;
   hoverOpacity?: number;
-
   transform?: TransformSettings;
   animation?: string;
   animationDuration?: number;
-
   responsive?: Partial<Record<ResponsiveDevice, ResponsiveStyle>>;
   htmlTag?: string;
   ariaLabel?: string;
+  customClasses?: string;
 }
 
 export interface LinkSettings {
@@ -282,8 +236,17 @@ export interface WidgetItem {
   title: string;
   content?: string;
   image?: string;
+  imageAlt?: string;
   icon?: string;
   link?: LinkSettings;
+  button1Text?: string;
+  button1Link?: string;
+  button2Text?: string;
+  button2Link?: string;
+  contentPosition?: string;
+  contentTextAlign?: string;
+  contentColor?: string;
+  customStyle?: boolean;
 }
 
 export interface QuerySettings {
@@ -336,6 +299,7 @@ export interface WidgetSettings {
   showDots?: boolean;
   infiniteLoop?: boolean;
   pauseOnHover?: boolean;
+  pauseOnInteraction?: boolean;
   imageIds?: string[];
   images?: MediaItem[];
   queryType?: "latest" | "category" | "tag" | "manual";
@@ -374,6 +338,24 @@ export interface WidgetSettings {
   contentPosition?: string;
   dynamicSource?: string;
   dynamicField?: string;
+  altText?: string;
+
+  sliderName?: string;
+  sliderHeight?: number;
+  sliderHeightUnit?: string;
+  navigation?: "none" | "arrows" | "dots" | "arrows-dots";
+  transition?: "slide" | "fade" | "zoom";
+  transitionSpeed?: number;
+  contentAnimation?: "none" | "up" | "down" | "left" | "right" | "zoom";
+  contentWidth?: number;
+  contentWidthUnit?: string;
+  contentPadding?: BoxSpacing;
+  contentHorizontalPosition?: "left" | "center" | "right";
+  contentVerticalPosition?: "top" | "middle" | "bottom";
+  contentTextAlign?: "left" | "center" | "right";
+  titleHtmlTag?: string;
+  descriptionHtmlTag?: string;
+  buttonStyle?: "solid" | "outline" | "text";
 }
 
 export interface PageWidget {
@@ -411,24 +393,10 @@ export interface GlobalFont {
 export interface BuilderGlobals {
   colors?: GlobalColor[];
   fonts?: GlobalFont[];
-}
-
-export interface TemplateConditions {
-  include?: string[];
-  exclude?: string[];
-}
-
-export type TemplateType = "header" | "footer" | "single" | "archive" | "page" | "product" | "product_archive" | "cart" | "checkout" | "my_account";
-
-export interface BuilderTemplate {
-  id: string;
-  title: string;
-  type: TemplateType;
-  layout: PageWidget[];
-  conditions?: TemplateConditions;
-  status: PageStatus;
-  created_at?: string;
-  updated_at?: string;
+  containerWidth?: number;
+  defaultFontFamily?: string;
+  defaultFontSize?: number;
+  defaultLineHeight?: number;
 }
 
 export interface BuilderPage {
@@ -438,6 +406,11 @@ export interface BuilderPage {
   layout: PageWidget[];
   status: PageStatus;
   globals?: BuilderGlobals;
+  content_id?: string;
+  post_type?: string;
+  template_type?: string;
+  conditions?: { include?: string[]; exclude?: string[] };
+  show_title?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -448,31 +421,37 @@ export interface CreatePageData {
   layout: PageWidget[];
   status: PageStatus;
   globals?: BuilderGlobals;
+  content_id?: string;
+  post_type?: string;
+  show_title?: boolean;
 }
 
-export type UpdatePageData = CreatePageData;
+export type UpdatePageData = Partial<CreatePageData>;
 
-export const getPages = async () => {
-  const response = await axios.get(`${PAGE_BUILDER_URL}`, {
+// ============ API FUNCTIONS ============
+
+export const getPages = async (params?: {
+  status?: string;
+  post_type?: string;
+}): Promise<BuilderPage[]> => {
+  const response = await axios.get(PAGE_BUILDER_URL, {
     headers: getHeaders(),
+    params,
   });
-
   return response.data;
 };
 
-export const getPage = async (pageId: string) => {
+export const getPage = async (pageId: string): Promise<BuilderPage> => {
   const response = await axios.get(`${PAGE_BUILDER_URL}/${pageId}`, {
     headers: getHeaders(),
   });
-
   return response.data;
 };
 
 export const createPage = async (data: CreatePageData) => {
-  const response = await axios.post(`${PAGE_BUILDER_URL}`, data, {
+  const response = await axios.post(PAGE_BUILDER_URL, data, {
     headers: getHeaders(),
   });
-
   return response.data;
 };
 
@@ -480,7 +459,15 @@ export const updatePage = async (pageId: string, data: UpdatePageData) => {
   const response = await axios.put(`${PAGE_BUILDER_URL}/${pageId}`, data, {
     headers: getHeaders(),
   });
+  return response.data;
+};
 
+export const autosavePage = async (pageId: string, data: UpdatePageData) => {
+  const response = await axios.patch(
+    `${PAGE_BUILDER_URL}/${pageId}/autosave`,
+    data,
+    { headers: getHeaders() },
+  );
   return response.data;
 };
 
@@ -488,6 +475,52 @@ export const deletePage = async (pageId: string) => {
   const response = await axios.delete(`${PAGE_BUILDER_URL}/${pageId}`, {
     headers: getHeaders(),
   });
+  return response.data;
+};
 
+export const duplicatePage = async (pageId: string) => {
+  const response = await axios.post(
+    `${PAGE_BUILDER_URL}/${pageId}/duplicate`,
+    {},
+    { headers: getHeaders() },
+  );
+  return response.data;
+};
+
+export const getGlobalStyles = async (): Promise<BuilderGlobals> => {
+  const response = await axios.get(`${PAGE_BUILDER_URL}/globals/styles`, {
+    headers: getHeaders(),
+  });
+  return response.data;
+};
+
+export const updateGlobalStyles = async (data: BuilderGlobals) => {
+  const response = await axios.put(
+    `${PAGE_BUILDER_URL}/globals/styles`,
+    data,
+    { headers: getHeaders() },
+  );
+  return response.data;
+};
+
+export const convertContentToBuilder = async (contentId: string) => {
+  const response = await axios.post(
+    `${PAGE_BUILDER_URL}/from-content/${contentId}`,
+    {},
+    { headers: getHeaders() },
+  );
+  return response.data as { id: string; existing: boolean; message: string };
+};
+
+export const linkBuilderToContent = async (
+  pageId: string,
+  contentId: string,
+  postType: string,
+) => {
+  const response = await axios.post(
+    `${PAGE_BUILDER_URL}/${pageId}/link-content`,
+    { content_id: contentId, post_type: postType },
+    { headers: getHeaders() },
+  );
   return response.data;
 };
