@@ -42,6 +42,7 @@ type ContainerJustify =
   | "space-around"
   | "space-evenly";
 type ContainerAlign = "flex-start" | "center" | "flex-end" | "stretch";
+type ContainerWrap = "nowrap" | "wrap" | "wrap-reverse";
 
 // ============ DYNAMIC LINK PICKER ============
 interface LinkOption {
@@ -350,7 +351,13 @@ const SettingsPanel = ({
   }, [widget.type]);
 
   useEffect(() => {
-    if (!widget.type.startsWith("product_") && widget.type !== "add_to_cart") return;
+    const isProductWidget =
+      widget.type.startsWith("product_") ||
+      widget.type === "add_to_cart" ||
+      widget.type === "quantity" ||
+      widget.type === "related_products" ||
+      widget.type === "recent_products";
+    if (!isProductWidget) return;
     let active = true;
     getProducts(1, 100)
       .then((response) => {
@@ -358,7 +365,8 @@ const SettingsPanel = ({
       })
       .catch((error) => {
         console.error("Unable to load product preview options:", error);
-        if (active) setPreviewProductError("Products could not be loaded for preview.");
+        if (active)
+          setPreviewProductError("Products could not be loaded for preview.");
       });
     return () => {
       active = false;
@@ -504,6 +512,8 @@ const SettingsPanel = ({
   const currentAlign: ContainerAlign =
     (currentStyle.alignItems as ContainerAlign) || "stretch";
   const currentGap: number = currentStyle.gap ?? 0;
+  const currentWrap: ContainerWrap =
+    (currentStyle.flexWrap as ContainerWrap) || "nowrap";
 
   const applyLink = () => {
     onChangeSettings({
@@ -517,6 +527,13 @@ const SettingsPanel = ({
     setLinkInput("");
     setShowLinkPopup(false);
   };
+
+  const isProductWidget =
+    widget.type.startsWith("product_") ||
+    widget.type === "add_to_cart" ||
+    widget.type === "quantity" ||
+    widget.type === "related_products" ||
+    widget.type === "recent_products";
 
   return (
     <div className="settings-panel">
@@ -570,7 +587,7 @@ const SettingsPanel = ({
         {/* ============================================ */}
         {activeTab === "content" && (
           <div className="settings-section">
-            {(widget.type.startsWith("product_") || widget.type === "add_to_cart") &&
+            {isProductWidget &&
               !["products", "product_grid"].includes(widget.type) && (
                 <div className="items-editor">
                   <h4>Product Preview</h4>
@@ -591,12 +608,31 @@ const SettingsPanel = ({
                                 price: Number(selected.price || 0),
                                 image: selected.image || "",
                                 description: selected.description || "",
-                                short_description: selected.short_description || "",
+                                short_description:
+                                  selected.short_description || "",
                                 quantity: Number(selected.quantity || 0),
                                 manage_stock: selected.manage_stock !== false,
                                 category: selected.category || "",
                                 tags: selected.tags || [],
                                 gallery: selected.gallery || [],
+                                sku: (selected as any).sku || "",
+                                barcode: (selected as any).barcode || "",
+                                brand: selected.brand || "",
+                                weight: Number(
+                                  (selected as any).weight || 0,
+                                ),
+                                dimensions:
+                                  (selected as any).dimensions || {},
+                                attributes:
+                                  (selected as any).attributes || [],
+                                variations:
+                                  (selected as any).variations || [],
+                                stock_status:
+                                  (selected as any).stock_status ||
+                                  (Number(selected.quantity || 0) > 0
+                                    ? "in_stock"
+                                    : "out_of_stock"),
+                                status: selected.status || "published",
                               }
                             : undefined,
                         });
@@ -611,10 +647,13 @@ const SettingsPanel = ({
                     </select>
                   </label>
                   {previewProductError && (
-                    <p role="alert" className="field-error">{previewProductError}</p>
+                    <p role="alert" className="field-error">
+                      {previewProductError}
+                    </p>
                   )}
                   <small>
-                    This selection is only for the builder canvas. Published product templates use the current product automatically.
+                    This selection is only for the builder canvas. Published
+                    product templates use the current product automatically.
                   </small>
                 </div>
               )}
@@ -771,6 +810,44 @@ const SettingsPanel = ({
                       </div>
                     </label>
 
+                    {/* ✅ NEW: Wrap control */}
+                    <label className="setting-field">
+                      <span>Wrap</span>
+                      <div className="button-group">
+                        <button
+                          type="button"
+                          className={
+                            currentWrap === "nowrap" ? "active" : ""
+                          }
+                          onClick={() => updateStyle({ flexWrap: "nowrap" })}
+                          title="No Wrap"
+                        >
+                          →|
+                        </button>
+                        <button
+                          type="button"
+                          className={currentWrap === "wrap" ? "active" : ""}
+                          onClick={() => updateStyle({ flexWrap: "wrap" })}
+                          title="Wrap"
+                        >
+                          ↩
+                        </button>
+                      </div>
+                    </label>
+
+                    <p
+                      style={{
+                        fontSize: 11,
+                        color: "#888",
+                        fontStyle: "italic",
+                        marginTop: -8,
+                        marginBottom: 12,
+                      }}
+                    >
+                      Items within the container can stay in a single line (No
+                      wrap), or break into multiple lines (Wrap).
+                    </p>
+
                     <label className="setting-field">
                       <span>Gap (px)</span>
                       <input
@@ -914,10 +991,18 @@ const SettingsPanel = ({
                   style={{ display: "flex", flexWrap: "wrap", gap: 8 }}
                 >
                   {[
-                    ["Star", "★"], ["Heart", "♥"], ["Check", "✓"],
-                    ["Arrow", "→"], ["Phone", "☎"], ["Email", "✉"],
-                    ["Settings", "⚙"], ["Lightning", "⚡"], ["Home", "⌂"],
-                    ["Plus", "+"], ["Globe", "◎"], ["Music", "♫"],
+                    ["Star", "★"],
+                    ["Heart", "♥"],
+                    ["Check", "✓"],
+                    ["Arrow", "→"],
+                    ["Phone", "☎"],
+                    ["Email", "✉"],
+                    ["Settings", "⚙"],
+                    ["Lightning", "⚡"],
+                    ["Home", "⌂"],
+                    ["Plus", "+"],
+                    ["Globe", "◎"],
+                    ["Music", "♫"],
                   ].map(([label, symbol]) => (
                     <button
                       key={label}
@@ -930,9 +1015,10 @@ const SettingsPanel = ({
                         width: 42,
                         height: 42,
                         fontSize: 22,
-                        border: (widget.content || "★") === symbol
-                          ? "2px solid #2563eb"
-                          : "1px solid #d1d5db",
+                        border:
+                          (widget.content || "★") === symbol
+                            ? "2px solid #2563eb"
+                            : "1px solid #d1d5db",
                         borderRadius: 6,
                         background: "#fff",
                         cursor: "pointer",
@@ -1096,12 +1182,18 @@ const SettingsPanel = ({
                         value={item.link?.url || ""}
                         onChange={(url) => {
                           const items = [...(widget.items || [])];
-                          items[index] = { ...item, link: { ...item.link, url } };
+                          items[index] = {
+                            ...item,
+                            link: { ...item.link, url },
+                          };
                           onChangeItems(items);
                         }}
                         onRemove={() => {
                           const items = [...(widget.items || [])];
-                          items[index] = { ...item, link: { ...item.link, url: "" } };
+                          items[index] = {
+                            ...item,
+                            link: { ...item.link, url: "" },
+                          };
                           onChangeItems(items);
                         }}
                       />
@@ -1111,7 +1203,9 @@ const SettingsPanel = ({
                       className="remove-item"
                       onClick={() =>
                         onChangeItems(
-                          (widget.items || []).filter((_, itemIndex) => itemIndex !== index),
+                          (widget.items || []).filter(
+                            (_, itemIndex) => itemIndex !== index,
+                          ),
                         )
                       }
                     >
@@ -1191,7 +1285,8 @@ const SettingsPanel = ({
                   />
                 </label>
                 <small>
-                  Entries are saved in Content → Form Submissions in the admin dashboard.
+                  Entries are saved in Content → Form Submissions in the admin
+                  dashboard.
                 </small>
               </>
             )}
@@ -1205,7 +1300,10 @@ const SettingsPanel = ({
                   onChange={(event) => onChangeContent(event.target.value)}
                   placeholder="[shortcode]"
                 />
-                <small>Shortcodes are shown as text unless a matching renderer is installed.</small>
+                <small>
+                  Shortcodes are shown as text unless a matching renderer is
+                  installed.
+                </small>
               </label>
             )}
 
@@ -1223,7 +1321,9 @@ const SettingsPanel = ({
             {(widget.type === "read_more" || widget.type === "sidebar") && (
               <>
                 <label className="setting-field">
-                  <span>{widget.type === "sidebar" ? "Sidebar Title" : "Link Text"}</span>
+                  <span>
+                    {widget.type === "sidebar" ? "Sidebar Title" : "Link Text"}
+                  </span>
                   <input
                     value={widget.content || ""}
                     onChange={(event) => onChangeContent(event.target.value)}
@@ -1282,7 +1382,10 @@ const SettingsPanel = ({
                       }}
                       onRemove={() => {
                         const items = [...(widget.items || [])];
-                        items[index] = { ...item, link: { ...item.link, url: "" } };
+                        items[index] = {
+                          ...item,
+                          link: { ...item.link, url: "" },
+                        };
                         onChangeItems(items);
                       }}
                     />
@@ -1291,7 +1394,9 @@ const SettingsPanel = ({
                       className="remove-item"
                       onClick={() =>
                         onChangeItems(
-                          (widget.items || []).filter((_, itemIndex) => itemIndex !== index),
+                          (widget.items || []).filter(
+                            (_, itemIndex) => itemIndex !== index,
+                          ),
                         )
                       }
                     >
@@ -1313,7 +1418,10 @@ const SettingsPanel = ({
                   value={widget.settings?.rating ?? 4}
                   onChange={(event) =>
                     onChangeSettings({
-                      rating: Math.max(0, Math.min(5, Number(event.target.value))),
+                      rating: Math.max(
+                        0,
+                        Math.min(5, Number(event.target.value)),
+                      ),
                     })
                   }
                 />
@@ -1336,7 +1444,9 @@ const SettingsPanel = ({
                 <label className="setting-field">
                   <span>Column Headings (two columns)</span>
                   <input
-                    value={(widget.settings?.tableHeaders || ["Name", "Role"]).join(", ")}
+                    value={(
+                      widget.settings?.tableHeaders || ["Name", "Role"]
+                    ).join(", ")}
                     onChange={(event) =>
                       onChangeSettings({
                         tableHeaders: event.target.value
@@ -1388,7 +1498,9 @@ const SettingsPanel = ({
                     <button
                       type="button"
                       onClick={() =>
-                        onChangeItems((widget.items || []).filter((_, row) => row !== index))
+                        onChangeItems(
+                          (widget.items || []).filter((_, row) => row !== index),
+                        )
                       }
                     >
                       ×
@@ -1686,10 +1798,7 @@ const SettingsPanel = ({
                               id:
                                 String(item.id || "") ||
                                 `menu-item-${Date.now()}-${depth}-${idx}`,
-                              title:
-                                item.title ||
-                                item.label ||
-                                "Menu Item",
+                              title: item.title || item.label || "Menu Item",
                               link: {
                                 url:
                                   item.url ||
@@ -1972,7 +2081,10 @@ const SettingsPanel = ({
                   </button>
                 </div>
                 {(widget.items || []).map((item, index) => (
-                  <div key={item.id} className="item-editor icon-list-editor-item">
+                  <div
+                    key={item.id}
+                    className="item-editor icon-list-editor-item"
+                  >
                     <label className="setting-field">
                       <span>Text</span>
                       <input
@@ -1980,7 +2092,10 @@ const SettingsPanel = ({
                         value={item.title || ""}
                         onChange={(event) => {
                           const items = [...(widget.items || [])];
-                          items[index] = { ...item, title: event.target.value };
+                          items[index] = {
+                            ...item,
+                            title: event.target.value,
+                          };
                           onChangeItems(items);
                         }}
                         placeholder="List item text"
@@ -2088,9 +2203,17 @@ const SettingsPanel = ({
                 <label className="setting-field">
                   <span>Title</span>
                   <input
-                    value={widget.items?.[0]?.title || widget.settings?.items?.[0]?.title || ""}
+                    value={
+                      widget.items?.[0]?.title ||
+                      widget.settings?.items?.[0]?.title ||
+                      ""
+                    }
                     onChange={(event) => {
-                      const item = widget.items?.[0] || widget.settings?.items?.[0] || { id: `${widget.id}-feature` };
+                      const item =
+                        widget.items?.[0] ||
+                        widget.settings?.items?.[0] || {
+                          id: `${widget.id}-feature`,
+                        };
                       onChangeItems([{ ...item, title: event.target.value }]);
                     }}
                   />
@@ -2099,9 +2222,17 @@ const SettingsPanel = ({
                   <span>Description</span>
                   <textarea
                     rows={3}
-                    value={widget.items?.[0]?.content || widget.settings?.items?.[0]?.content || ""}
+                    value={
+                      widget.items?.[0]?.content ||
+                      widget.settings?.items?.[0]?.content ||
+                      ""
+                    }
                     onChange={(event) => {
-                      const item = widget.items?.[0] || widget.settings?.items?.[0] || { id: `${widget.id}-feature` };
+                      const item =
+                        widget.items?.[0] ||
+                        widget.settings?.items?.[0] || {
+                          id: `${widget.id}-feature`,
+                        };
                       onChangeItems([{ ...item, content: event.target.value }]);
                     }}
                   />
@@ -2114,9 +2245,18 @@ const SettingsPanel = ({
                 <label className="setting-field">
                   <span>Number</span>
                   <input
-                    value={widget.items?.[0]?.content || widget.settings?.items?.[0]?.content || widget.content || ""}
+                    value={
+                      widget.items?.[0]?.content ||
+                      widget.settings?.items?.[0]?.content ||
+                      widget.content ||
+                      ""
+                    }
                     onChange={(event) => {
-                      const item = widget.items?.[0] || widget.settings?.items?.[0] || { id: `${widget.id}-counter` };
+                      const item =
+                        widget.items?.[0] ||
+                        widget.settings?.items?.[0] || {
+                          id: `${widget.id}-counter`,
+                        };
                       onChangeItems([{ ...item, content: event.target.value }]);
                     }}
                   />
@@ -2124,9 +2264,17 @@ const SettingsPanel = ({
                 <label className="setting-field">
                   <span>Label</span>
                   <input
-                    value={widget.items?.[0]?.title || widget.settings?.items?.[0]?.title || ""}
+                    value={
+                      widget.items?.[0]?.title ||
+                      widget.settings?.items?.[0]?.title ||
+                      ""
+                    }
                     onChange={(event) => {
-                      const item = widget.items?.[0] || widget.settings?.items?.[0] || { id: `${widget.id}-counter` };
+                      const item =
+                        widget.items?.[0] ||
+                        widget.settings?.items?.[0] || {
+                          id: `${widget.id}-counter`,
+                        };
                       onChangeItems([{ ...item, title: event.target.value }]);
                     }}
                   />
@@ -2134,26 +2282,34 @@ const SettingsPanel = ({
               </>
             )}
 
-            {(widget.type === "testimonial" || widget.type === "progress_bar") && (
+            {(widget.type === "testimonial" ||
+              widget.type === "progress_bar") && (
               <div className="items-editor">
                 <label className="setting-field">
-                  <span>{widget.type === "testimonial" ? "Quote" : "Progress Label"}</span>
+                  <span>
+                    {widget.type === "testimonial"
+                      ? "Quote"
+                      : "Progress Label"}
+                  </span>
                   <input
-                  value={
-                    widget.type === "testimonial"
-                      ? widget.items?.[0]?.content || ""
-                      : widget.items?.[0]?.title || ""
-                  }
-                  onChange={(event) => {
-                    const item = widget.items?.[0] || { id: `${widget.id}-item` };
-                    onChangeItems([
-                      {
-                        ...item,
-                        [widget.type === "testimonial" ? "content" : "title"]:
-                          event.target.value,
-                      },
-                    ]);
-                  }}
+                    value={
+                      widget.type === "testimonial"
+                        ? widget.items?.[0]?.content || ""
+                        : widget.items?.[0]?.title || ""
+                    }
+                    onChange={(event) => {
+                      const item = widget.items?.[0] || {
+                        id: `${widget.id}-item`,
+                      };
+                      onChangeItems([
+                        {
+                          ...item,
+                          [widget.type === "testimonial"
+                            ? "content"
+                            : "title"]: event.target.value,
+                        },
+                      ]);
+                    }}
                   />
                 </label>
                 {widget.type === "testimonial" ? (
@@ -2162,8 +2318,12 @@ const SettingsPanel = ({
                     <input
                       value={widget.items?.[0]?.title || ""}
                       onChange={(event) => {
-                        const item = widget.items?.[0] || { id: `${widget.id}-item` };
-                        onChangeItems([{ ...item, title: event.target.value }]);
+                        const item = widget.items?.[0] || {
+                          id: `${widget.id}-item`,
+                        };
+                        onChangeItems([
+                          { ...item, title: event.target.value },
+                        ]);
                       }}
                     />
                   </label>
@@ -2176,9 +2336,16 @@ const SettingsPanel = ({
                       max="100"
                       value={widget.items?.[0]?.content || "80"}
                       onChange={(event) => {
-                        const item = widget.items?.[0] || { id: `${widget.id}-item` };
-                        const percentage = Math.max(0, Math.min(100, Number(event.target.value)));
-                        onChangeItems([{ ...item, content: String(percentage) }]);
+                        const item = widget.items?.[0] || {
+                          id: `${widget.id}-item`,
+                        };
+                        const percentage = Math.max(
+                          0,
+                          Math.min(100, Number(event.target.value)),
+                        );
+                        onChangeItems([
+                          { ...item, content: String(percentage) },
+                        ]);
                       }}
                     />
                   </label>
@@ -2237,12 +2404,18 @@ const SettingsPanel = ({
                         value={item.link?.url || ""}
                         onChange={(url) => {
                           const items = [...(widget.items || [])];
-                          items[index] = { ...item, link: { ...item.link, url } };
+                          items[index] = {
+                            ...item,
+                            link: { ...item.link, url },
+                          };
                           onChangeItems(items);
                         }}
                         onRemove={() => {
                           const items = [...(widget.items || [])];
-                          items[index] = { ...item, link: { ...item.link, url: "" } };
+                          items[index] = {
+                            ...item,
+                            link: { ...item.link, url: "" },
+                          };
                           onChangeItems(items);
                         }}
                       />
@@ -2252,7 +2425,9 @@ const SettingsPanel = ({
                       className="remove-item"
                       onClick={() =>
                         onChangeItems(
-                          (widget.items || []).filter((_, itemIndex) => itemIndex !== index),
+                          (widget.items || []).filter(
+                            (_, itemIndex) => itemIndex !== index,
+                          ),
                         )
                       }
                     >
@@ -2781,7 +2956,9 @@ const SettingsPanel = ({
                           max="96"
                           value={s.iconSize ?? 20}
                           onChange={(event) =>
-                            updateStyle({ iconSize: Number(event.target.value) })
+                            updateStyle({
+                              iconSize: Number(event.target.value),
+                            })
                           }
                         />
                       </label>
@@ -2826,7 +3003,9 @@ const SettingsPanel = ({
                           <select
                             value={s.backgroundSize || "cover"}
                             onChange={(event) =>
-                              updateStyle({ backgroundSize: event.target.value })
+                              updateStyle({
+                                backgroundSize: event.target.value,
+                              })
                             }
                           >
                             <option value="cover">Cover</option>
@@ -3202,7 +3381,11 @@ const SettingsPanel = ({
                       placeholder="Left"
                       value={(rs?.padding || s.padding)?.left || 0}
                       onChange={(e) =>
-                        updateSpacing("padding", "left", Number(e.target.value))
+                        updateSpacing(
+                          "padding",
+                          "left",
+                          Number(e.target.value),
+                        )
                       }
                     />
                   </div>

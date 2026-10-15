@@ -108,10 +108,16 @@ const CATEGORIES: WidgetCategory[] = [
       { type: "product_gallery", label: "Product Gallery", icon: "▦" },
       { type: "product_description", label: "Product Description", icon: "¶" },
       { type: "product_short_description", label: "Product Short Description", icon: "≡" },
+      { type: "product_sku", label: "Product SKU", icon: "⌗" },
       { type: "product_categories", label: "Product Categories", icon: "▤" },
       { type: "product_tags", label: "Product Tags", icon: "#" },
+      { type: "product_attributes", label: "Product Attributes", icon: "▥" },
+      { type: "product_variations", label: "Product Variations", icon: "⊟" },
       { type: "product_stock", label: "Product Stock", icon: "✓" },
+      { type: "quantity", label: "Quantity", icon: "#" },
       { type: "add_to_cart", label: "Add to Cart", icon: "🛒" },
+      { type: "related_products", label: "Related Products", icon: "↻" },
+      { type: "recent_products", label: "Recent Products", icon: "⏱" },
     ],
   },
   {
@@ -186,7 +192,7 @@ const WidgetLibrary = ({ onAdd }: WidgetLibraryProps) => {
     widgets: cat.widgets.filter(
       (w) =>
         w.label.toLowerCase().includes(search.toLowerCase()) ||
-        w.type.toLowerCase().includes(search.toLowerCase())
+        w.type.toLowerCase().includes(search.toLowerCase()),
     ),
   })).filter((cat) => cat.widgets.length > 0);
 
@@ -207,7 +213,9 @@ const WidgetLibrary = ({ onAdd }: WidgetLibraryProps) => {
             type="button"
             className="category-header"
             onClick={() =>
-              setOpenCategory(openCategory === category.name ? null : category.name)
+              setOpenCategory(
+                openCategory === category.name ? null : category.name,
+              )
             }
           >
             <span>

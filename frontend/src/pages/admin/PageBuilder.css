@@ -2883,3 +2883,28 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
+
+/* ============================================================ */
+/* INLINE DROP ZONE — for inserting between items during drag   */
+/* ============================================================ */
+
+.inline-drop-zone {
+  transition: height 0.15s, margin 0.15s, border 0.15s;
+  user-select: none;
+  position: relative;
+  z-index: 5;
+}
+
+.inline-drop-zone.visible {
+  position: relative;
+}
+
+.inline-drop-zone.active {
+  box-shadow: 0 0 0 2px rgba(147, 0, 60, 0.1);
+}
+
+/* Prevent inline drop zones from being flex children in a container */
+.canvas-element.is-container > .canvas-element-inner > .inline-drop-zone {
+  flex: 0 0 auto;
+  width: 100%;
+}

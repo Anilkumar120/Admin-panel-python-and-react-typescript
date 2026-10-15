@@ -17,27 +17,95 @@ const getHeaders = () => {
 
 // ============ TYPES ============
 export type WidgetType =
-  | "container" | "grid" | "section" | "column"
-  | "heading" | "text" | "image" | "button" | "spacer"
-  | "icon" | "icon_box" | "icon_list" | "image_box" | "divider" | "alert"
-  | "gallery" | "carousel" | "slider" | "video" | "map"
-  | "accordion" | "tabs" | "toggle" | "testimonial"
-  | "progress_bar" | "counter" | "countdown" | "rating"
-  | "form" | "search" | "menu" | "social_icons"
-  | "posts" | "post_grid" | "post_list" | "post_carousel"
-  | "post_title" | "post_content" | "post_excerpt"
-  | "post_meta" | "post_image" | "author_box"
-  | "products" | "product_grid" | "product_list"
-  | "product_title" | "product_price" | "product_image"
-  | "product_gallery" | "product_description" | "product_short_description"
-  | "product_categories" | "product_tags"
-  | "add_to_cart" | "product_rating" | "product_stock"
-  | "related_products" | "cart" | "checkout" | "my_account"
-  | "html" | "shortcode" | "table" | "tablepress" | "text_path" | "menu_anchor" | "sidebar" | "read_more" | "soundcloud" | "map" | "breadcrumbs"
-  | "link_bio_minimalist" | "link_bio_classic" | "link_bio_showcase"
-  | "link_bio_links" | "link_bio_services" | "link_bio_portfolio" | "link_bio_business_card"
-  | "pagination" | "site_logo" | "site_title"
-  | "site_tagline" | "archive_title" | "archive_description"
+  | "container"
+  | "grid"
+  | "section"
+  | "column"
+  | "heading"
+  | "text"
+  | "image"
+  | "button"
+  | "spacer"
+  | "icon"
+  | "icon_box"
+  | "icon_list"
+  | "image_box"
+  | "divider"
+  | "alert"
+  | "gallery"
+  | "carousel"
+  | "slider"
+  | "video"
+  | "map"
+  | "accordion"
+  | "tabs"
+  | "toggle"
+  | "testimonial"
+  | "progress_bar"
+  | "counter"
+  | "countdown"
+  | "rating"
+  | "form"
+  | "search"
+  | "menu"
+  | "social_icons"
+  | "posts"
+  | "post_grid"
+  | "post_list"
+  | "post_carousel"
+  | "post_title"
+  | "post_content"
+  | "post_excerpt"
+  | "post_meta"
+  | "post_image"
+  | "author_box"
+  | "products"
+  | "product_grid"
+  | "product_list"
+  | "product_title"
+  | "product_price"
+  | "product_image"
+  | "product_gallery"
+  | "product_description"
+  | "product_short_description"
+  | "product_categories"
+  | "product_tags"
+  | "add_to_cart"
+  | "product_rating"
+  | "product_stock"
+  | "related_products"
+  | "cart"
+  | "checkout"
+  | "my_account"
+  // 🆕 NEW product widgets
+  | "product_sku"
+  | "product_attributes"
+  | "product_variations"
+  | "quantity"
+  | "recent_products"
+  // existing
+  | "html"
+  | "shortcode"
+  | "table"
+  | "tablepress"
+  | "text_path"
+  | "menu_anchor"
+  | "sidebar"
+  | "read_more"
+  | "soundcloud"
+  | "link_bio_minimalist"
+  | "link_bio_classic"
+  | "link_bio_showcase"
+  | "link_bio_links"
+  | "link_bio_services"
+  | "link_bio_portfolio"
+  | "link_bio_business_card"
+  | "pagination"
+  | "site_logo"
+  | "site_title"
+  | "site_tagline"
+  | "archive_title"
+  | "archive_description"
   | "featured_image"
   | "nav_menu"
   | "footer_menu"
@@ -47,15 +115,33 @@ export type PageStatus = "draft" | "published";
 export type CSSUnit = "px" | "%" | "vh" | "vw" | "em" | "rem" | "auto";
 export type ResponsiveDevice = "desktop" | "tablet" | "mobile";
 export type CSSDisplay =
-  | "block" | "inline" | "inline-block"
-  | "flex" | "inline-flex" | "grid" | "inline-grid" | "none";
+  | "block"
+  | "inline"
+  | "inline-block"
+  | "flex"
+  | "inline-flex"
+  | "grid"
+  | "inline-grid"
+  | "none";
 export type TextAlignment = "left" | "center" | "right" | "justify";
 export type FlexDirection = "row" | "column" | "row-reverse" | "column-reverse";
 export type FlexWrap = "nowrap" | "wrap" | "wrap-reverse";
 export type BorderStyle =
-  | "none" | "solid" | "dashed" | "dotted"
-  | "double" | "groove" | "ridge" | "inset" | "outset";
-export type PositionType = "static" | "relative" | "absolute" | "fixed" | "sticky";
+  | "none"
+  | "solid"
+  | "dashed"
+  | "dotted"
+  | "double"
+  | "groove"
+  | "ridge"
+  | "inset"
+  | "outset";
+export type PositionType =
+  | "static"
+  | "relative"
+  | "absolute"
+  | "fixed"
+  | "sticky";
 export type OverflowType = "visible" | "hidden" | "auto" | "scroll";
 
 export interface DimensionValue {
@@ -271,15 +357,13 @@ export interface WidgetItem {
   contentTextAlign?: string;
   contentColor?: string;
   customStyle?: boolean;
-
-  // 🆕 For menu submenus (nested items)
   children?: WidgetItem[];
-
-  // 🆕 Alternate fields from menu API
   url?: string;
   label?: string;
   target?: string;
   parent_id?: string;
+  // 🆕 For product preview
+  options?: string[];
 }
 
 export interface QuerySettings {
@@ -382,6 +466,8 @@ export interface WidgetSettings {
   dynamicSource?: string;
   dynamicField?: string;
   altText?: string;
+
+  // ========== PRODUCT PREVIEW (updated) ==========
   previewProductId?: string;
   previewProduct?: {
     id: string;
@@ -395,6 +481,22 @@ export interface WidgetSettings {
     category?: string;
     tags?: string[];
     gallery?: MediaItem[];
+    sku?: string;
+    barcode?: string;
+    brand?: string;
+    weight?: number;
+    dimensions?: { length?: number; width?: number; height?: number };
+    attributes?: { name: string; options: string[] }[];
+    variations?: {
+      sku?: string;
+      attributes?: Record<string, string>;
+      price?: number;
+      quantity?: number;
+      image?: string;
+      enabled?: boolean;
+    }[];
+    stock_status?: string;
+    status?: string;
   };
 
   sliderName?: string;
@@ -414,7 +516,6 @@ export interface WidgetSettings {
   descriptionHtmlTag?: string;
   buttonStyle?: "solid" | "outline" | "text";
 
-  // 🆕 Menu-specific
   selectedMenuId?: string;
   menuName?: string;
 }
@@ -556,11 +657,9 @@ export const getGlobalStyles = async (): Promise<BuilderGlobals> => {
 };
 
 export const updateGlobalStyles = async (data: BuilderGlobals) => {
-  const response = await axios.put(
-    `${PAGE_BUILDER_URL}/globals/styles`,
-    data,
-    { headers: getHeaders() },
-  );
+  const response = await axios.put(`${PAGE_BUILDER_URL}/globals/styles`, data, {
+    headers: getHeaders(),
+  });
   return response.data;
 };
 

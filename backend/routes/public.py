@@ -85,6 +85,28 @@ def format_public_product(product):
         if (is_start and now < boundary) or (not is_start and now > boundary):
             sale_active = False
             break
+
+    # Resolve gallery
+    gallery = []
+    for entry in product.get("gallery", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        g_media_id = entry.get("media_id", "")
+        g_url = entry.get("url", "")
+        if g_media_id and ObjectId.is_valid(g_media_id):
+            g_media = media_collection.find_one({
+                "_id": ObjectId(g_media_id),
+                "is_deleted": {"$ne": True},
+            })
+            if g_media:
+                g_url = g_media.get("url", "") or g_url
+        if g_url:
+            gallery.append({
+                "media_id": g_media_id,
+                "url": g_url,
+                "alt": entry.get("alt", ""),
+            })
+
     return {
         "id": str(product["_id"]),
         "post_type": "products",
@@ -93,10 +115,11 @@ def format_public_product(product):
         "slug": product.get("slug", "") or str(product["_id"]),
         "content": description,
         "description": description,
+        "short_description": product.get("short_description", ""),
         "excerpt": product.get("short_description", "") or description[:200],
         "featured_image": image_url,
         "image": image_url,
-        "gallery": product.get("gallery", []),
+        "gallery": gallery,
         "price": sale_price if sale_active else regular_price,
         "regular_price": regular_price,
         "sale_price": sale_price,
@@ -107,10 +130,17 @@ def format_public_product(product):
             "in_stock" if product.get("quantity", 0) > 0 else "out_of_stock",
         ),
         "category": product.get("category", ""),
+        "categories": [product.get("category", "")] if product.get("category") else [],
         "tags": product.get("tags", []),
         "brand": product.get("brand", ""),
         "sku": product.get("sku", ""),
+        "barcode": product.get("barcode", ""),
+        "weight": product.get("weight", 0),
+        "dimensions": product.get("dimensions", {}),
+        "attributes": product.get("attributes", []),
+        "variations": product.get("variations", []),
         "status": product.get("status", "published"),
+        "menu_order": product.get("menu_order", 0),
     }
 
 
@@ -118,29 +148,18 @@ def format_public_product(product):
 
 @router.get("/homepage")
 def get_homepage():
-    """
-    Returns the resolved homepage based on Reading settings.
-    Public endpoint — no auth required.
-    """
     settings = settings_collection.find_one({"type": "reading"}) or {}
     homepage_type = settings.get("homepage_type", "latest_posts")
     homepage_id = settings.get("homepage_id", "")
 
-    if (
-        homepage_type == "static"
-        and homepage_id
-        and ObjectId.is_valid(homepage_id)
-    ):
-        # Try content page first
+    if homepage_type == "static" and homepage_id and ObjectId.is_valid(homepage_id):
         page = content_collection.find_one({
             "_id": ObjectId(homepage_id),
             "status": "published",
             "is_deleted": False,
         })
-
         if page:
             raw_slug = page.get("slug", "")
-            # 🆕 Treat "home" or "index" as root
             normalized_slug = "" if raw_slug in ["home", "index"] else raw_slug
             return {
                 "type": "page",
@@ -150,12 +169,10 @@ def get_homepage():
                 "post_type": page.get("post_type", "pages"),
             }
 
-        # Try builder page
         builder_page = pages_collection.find_one({
             "_id": ObjectId(homepage_id),
             "status": "published",
         })
-
         if builder_page:
             raw_slug = builder_page.get("slug", "")
             normalized_slug = "" if raw_slug in ["home", "index"] else raw_slug
@@ -166,43 +183,29 @@ def get_homepage():
                 "title": builder_page.get("title", ""),
             }
 
-    return {
-        "type": "latest_posts",
-        "slug": "",
-    }
+    return {"type": "latest_posts", "slug": ""}
 
 
 # ============ HOMEPAGE FULL DATA ============
 
 @router.get("/homepage-full")
 def get_homepage_full():
-    """
-    Returns full homepage data (layout, content, etc.) so frontend can
-    render it directly without redirect.
-    """
     settings = settings_collection.find_one({"type": "reading"}) or {}
     homepage_type = settings.get("homepage_type", "latest_posts")
     homepage_id = settings.get("homepage_id", "")
 
-    if (
-        homepage_type == "static"
-        and homepage_id
-        and ObjectId.is_valid(homepage_id)
-    ):
-        # Try content page first
+    if homepage_type == "static" and homepage_id and ObjectId.is_valid(homepage_id):
         page = content_collection.find_one({
             "_id": ObjectId(homepage_id),
             "status": "published",
             "is_deleted": False,
         })
-
         if page:
             builder_page = pages_collection.find_one({
                 "slug": page.get("slug", ""),
                 "status": "published",
                 "template_type": {"$in": ["page", None]},
             })
-
             if builder_page:
                 return {
                     "id": str(builder_page["_id"]),
@@ -213,17 +216,14 @@ def get_homepage_full():
                     "show_title": builder_page.get("show_title", True),
                     "source_type": "builder",
                 }
-
             formatted = format_content_item(page)
             formatted["source_type"] = "content"
             return formatted
 
-        # Try builder page
         builder_page = pages_collection.find_one({
             "_id": ObjectId(homepage_id),
             "status": "published",
         })
-
         if builder_page:
             return {
                 "id": str(builder_page["_id"]),
@@ -238,12 +238,14 @@ def get_homepage_full():
     return {"source_type": "latest_posts"}
 
 
-# ============ PERMALINK RESOLVER ============
+# ============ PUBLIC PRODUCTS ============
 
 @router.get("/products")
 def get_public_products(
     limit: int = Query(12, ge=1, le=100),
     category: Optional[str] = Query(None),
+    tag: Optional[str] = Query(None),
+    sort: Optional[str] = Query(None),
 ):
     query = {
         "is_deleted": {"$ne": True},
@@ -253,22 +255,114 @@ def get_public_products(
     }
     if category:
         query["category"] = category
+    if tag:
+        query["tags"] = tag
 
-    products = list(products_collection.find(query).sort("name", 1).limit(limit))
+    sort_field = [("name", 1)]
+    if sort == "recent":
+        sort_field = [("_id", -1)]
+    elif sort == "price_low":
+        sort_field = [("price", 1)]
+    elif sort == "price_high":
+        sort_field = [("price", -1)]
+
+    products = list(products_collection.find(query).sort(sort_field).limit(limit))
     return {"products": [format_public_product(product) for product in products]}
+
+
+@router.get("/products/{product_id}/related")
+def get_related_products(product_id: str, limit: int = Query(4, ge=1, le=20)):
+    if not ObjectId.is_valid(product_id):
+        raise HTTPException(status_code=400, detail="Invalid product ID")
+
+    product = products_collection.find_one({
+        "_id": ObjectId(product_id),
+        "is_deleted": {"$ne": True},
+    })
+    if not product:
+        return {"products": []}
+
+    base = {
+        "_id": {"$ne": ObjectId(product_id)},
+        "is_deleted": {"$ne": True},
+        "$or": [{"status": "published"}, {"status": {"$exists": False}}],
+    }
+
+    query = base
+    if product.get("category"):
+        query = {**base, "category": product.get("category")}
+
+    related = list(products_collection.find(query).limit(limit))
+    if len(related) < limit:
+        used_ids = [r["_id"] for r in related] + [ObjectId(product_id)]
+        more = list(products_collection.find({
+            **base,
+            "_id": {"$nin": used_ids},
+        }).limit(limit - len(related)))
+        related.extend(more)
+
+    return {"products": [format_public_product(p) for p in related]}
+
+
+# ============ PERMALINK RESOLVER ============
+
+def _find_matching_template(template_type: str, url_path: str, post_type: str, slug: str, specific_id: str = ""):
+    try:
+        from backend.routes.header_footer import build_page_context, template_matches
+    except Exception:
+        return None
+
+    ctx = build_page_context(url_path, post_type, slug)
+    if specific_id:
+        ctx["specific_id"] = specific_id
+        ctx["content_id"] = specific_id
+
+    templates = list(pages_collection.find({
+        "template_type": template_type,
+        "status": "published",
+    }).sort("conditions.priority", -1))
+
+    if not templates:
+        return None
+
+    best = None
+    best_priority = -999999
+    for t in templates:
+        try:
+            if template_matches(t, ctx):
+                p = (t.get("conditions") or {}).get("priority", 0)
+                if p > best_priority:
+                    best_priority = p
+                    best = t
+        except Exception:
+            continue
+
+    if not best:
+        best = next((t for t in templates if t.get("is_default")), None)
+
+    if not best:
+        return None
+
+    return {
+        "id": str(best["_id"]),
+        "title": best.get("title", ""),
+        "slug": best.get("slug", ""),
+        "layout": best.get("layout", []),
+        "globals": best.get("globals", {}),
+        "template_type": template_type,
+        "conditions": best.get("conditions", {}),
+    }
+
 
 @router.get("/resolve")
 def resolve_permalink(
     slug: str = Query(...),
     post_type: Optional[str] = Query(None),
 ):
-    """
-    Resolve a slug to actual content.
-    """
     if not slug:
         raise HTTPException(status_code=400, detail="Slug required")
 
-    # 1. Try builder page
+    # 1. Builder page
     builder = pages_collection.find_one({
         "slug": slug,
         "status": "published",
@@ -292,17 +386,27 @@ def resolve_permalink(
         }
 
     # 2. Content items
-    query = {
-        "slug": slug,
-        "status": "published",
-        "is_deleted": False,
-    }
+    query = {"slug": slug, "status": "published", "is_deleted": False}
     if post_type:
         query["post_type"] = post_type
 
     item = content_collection.find_one(query)
     if item:
-        return format_content_item(item)
+        formatted = format_content_item(item)
+        t_type = "single_post" if item.get("post_type") == "posts" else "single_page"
+        try:
+            tpl = _find_matching_template(
+                t_type,
+                f"/{item.get('post_type', '')}/{item.get('slug', '')}",
+                item.get("post_type", ""),
+                item.get("slug", ""),
+                specific_id=str(item["_id"]),
+            )
+            if tpl:
+                formatted["template"] = tpl
+        except Exception as e:
+            print("POST TPL ERROR:", e)
+        return formatted
 
     # 3. Products
     product = None
@@ -320,7 +424,20 @@ def resolve_permalink(
             })
 
     if product:
-        return format_public_product(product)
+        formatted = format_public_product(product)
+        try:
+            tpl = _find_matching_template(
+                "single_product",
+                f"/products/{product.get('slug', '')}",
+                "products",
+                product.get("slug", ""),
+                specific_id=str(product["_id"]),
+            )
+            if tpl:
+                formatted["template"] = tpl
+        except Exception as e:
+            print("PRODUCT TPL ERROR:", e)
+        return formatted
 
     raise HTTPException(status_code=404, detail="Content not found")
 
@@ -361,7 +478,6 @@ def get_public_pages():
             "is_deleted": False,
         }).sort("title", 1)
     )
-
     return {"pages": [format_content_item(p) for p in pages]}
 
 
@@ -373,10 +489,8 @@ def get_public_page_by_slug(slug: str):
         "status": "published",
         "is_deleted": False,
     })
-
     if not page:
         raise HTTPException(status_code=404, detail="Page not found")
-
     return format_content_item(page)
 
 
@@ -390,12 +504,7 @@ def get_public_posts(
     tag: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
 ):
-    query = {
-        "post_type": "posts",
-        "status": "published",
-        "is_deleted": False,
-    }
-
+    query = {"post_type": "posts", "status": "published", "is_deleted": False}
     if category:
         query["categories"] = category
     if tag:
@@ -410,10 +519,7 @@ def get_public_posts(
     skip = (page - 1) * limit
 
     posts = list(
-        content_collection.find(query)
-        .sort("created_at", -1)
-        .skip(skip)
-        .limit(limit)
+        content_collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
     )
 
     return {
@@ -433,11 +539,52 @@ def get_public_post_by_slug(slug: str):
         "status": "published",
         "is_deleted": False,
     })
-
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
 
-    return format_content_item(post)
+    formatted = format_content_item(post)
+    try:
+        tpl = _find_matching_template(
+            "single_post",
+            f"/posts/{post.get('slug', '')}",
+            "posts",
+            post.get("slug", ""),
+            specific_id=str(post["_id"]),
+        )
+        if tpl:
+            formatted["template"] = tpl
+    except Exception as e:
+        print("SINGLE POST TPL ERROR:", e)
+    return formatted
+
+
+@router.get("/posts/{slug}/related")
+def get_related_posts(slug: str, limit: int = Query(3, ge=1, le=10)):
+    post = content_collection.find_one({
+        "post_type": "posts",
+        "slug": slug,
+        "status": "published",
+    })
+    if not post:
+        return {"posts": []}
+
+    related = list(content_collection.find({
+        "post_type": "posts",
+        "_id": {"$ne": post["_id"]},
+        "categories": {"$in": post.get("categories", [])},
+        "status": "published",
+    }).limit(limit))
+
+    if len(related) < limit:
+        used = [r["_id"] for r in related] + [post["_id"]]
+        more = list(content_collection.find({
+            "post_type": "posts",
+            "_id": {"$nin": used},
+            "status": "published",
+        }).limit(limit - len(related)))
+        related.extend(more)
+
+    return {"posts": [format_content_item(p) for p in related]}
 
 
 # ============ PUBLIC CUSTOM ITEMS ============
@@ -453,17 +600,12 @@ def get_public_items(
         "status": "published",
         "is_deleted": False,
     }
-
     total = content_collection.count_documents(query)
     skip = (page - 1) * limit
 
     items = list(
-        content_collection.find(query)
-        .sort("created_at", -1)
-        .skip(skip)
-        .limit(limit)
+        content_collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
     )
-
     return {
         "items": [format_content_item(i) for i in items],
         "total": total,
@@ -480,22 +622,73 @@ def get_public_item_by_slug(post_type_slug: str, slug: str):
         "status": "published",
         "is_deleted": False,
     })
-
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-
     return format_content_item(item)
+
+
+# ============ ARCHIVE LISTING ============
+
+@router.get("/archive/{post_type}")
+def archive_listing(
+    post_type: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(12, ge=1, le=100),
+    category: Optional[str] = Query(None),
+    tag: Optional[str] = Query(None),
+):
+    if post_type in ("products", "product"):
+        query = {
+            "is_deleted": {"$ne": True},
+            "$or": [{"status": "published"}, {"status": {"$exists": False}}],
+        }
+        if category:
+            query["category"] = category
+        if tag:
+            query["tags"] = tag
+
+        total = products_collection.count_documents(query)
+        items = list(
+            products_collection.find(query)
+            .skip((page - 1) * limit)
+            .limit(limit)
+        )
+        return {
+            "items": [format_public_product(p) for p in items],
+            "total": total,
+            "page": page,
+            "pages": (total + limit - 1) // limit,
+        }
+
+    query = {"post_type": post_type, "status": "published", "is_deleted": False}
+    if category:
+        query["categories"] = category
+    if tag:
+        query["tags"] = tag
+
+    total = content_collection.count_documents(query)
+    items = list(
+        content_collection.find(query)
+        .sort("created_at", -1)
+        .skip((page - 1) * limit)
+        .limit(limit)
+    )
+    return {
+        "items": [format_content_item(i) for i in items],
+        "total": total,
+        "page": page,
+        "pages": (total + limit - 1) // limit,
+    }
 
 
 # ============ PUBLIC HEADER/FOOTER ============
 
-from backend.routes.header_footer import (
-    build_page_context,
-    template_matches,
-)
-
-
 def _get_active_template(template_type, url_path, post_type, slug):
+    try:
+        from backend.routes.header_footer import build_page_context, template_matches
+    except Exception:
+        return {"template": None}
+
     ctx = build_page_context(url_path, post_type, slug)
 
     templates = list(pages_collection.find({
@@ -510,17 +703,17 @@ def _get_active_template(template_type, url_path, post_type, slug):
     best_priority = -999999
 
     for t in templates:
-        if template_matches(t, ctx):
-            p = t.get("conditions", {}).get("priority", 0)
-            if p > best_priority:
-                best_priority = p
-                best = t
+        try:
+            if template_matches(t, ctx):
+                p = (t.get("conditions") or {}).get("priority", 0)
+                if p > best_priority:
+                    best_priority = p
+                    best = t
+        except Exception:
+            continue
 
     if not best:
-        best = next(
-            (t for t in templates if t.get("is_default")),
-            templates[0] if templates else None,
-        )
+        best = next((t for t in templates if t.get("is_default")), templates[0] if templates else None)
 
     if not best:
         return {"template": None}
@@ -566,7 +759,6 @@ def get_public_categories(post_type_slug: str):
             "is_deleted": False,
         }).sort("name", 1)
     )
-
     return {
         "categories": [
             {
@@ -589,7 +781,6 @@ def get_public_tags(post_type_slug: str):
             "is_deleted": False,
         }).sort("name", 1)
     )
-
     return {
         "tags": [
             {

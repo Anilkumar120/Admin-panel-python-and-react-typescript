@@ -35,22 +35,16 @@ const PublicPageView = () => {
   const [currentPath, setCurrentPath] = useState(location.pathname);
   const device = useDevice();
 
-  // 🆕 Listen to manual pushState navigation
   useEffect(() => {
-    const handlePopState = () => {
-      setCurrentPath(window.location.pathname);
-    };
-
+    const handlePopState = () => setCurrentPath(window.location.pathname);
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  // 🆕 React to React Router location changes
   useEffect(() => {
     setCurrentPath(location.pathname);
   }, [location.pathname]);
 
-  // Derive slug & postType from current path
   const pathParts = currentPath.split("/").filter(Boolean);
   let slug = params.slug;
   let postType = params.postType;
@@ -87,19 +81,26 @@ const PublicPageView = () => {
         if (data.type === "builder") {
           setPage({ type: "builder", data });
         } else if (data.post_type === "products") {
-          let template = null;
-          try {
-            template = await fetchActiveTemplate(
-              "single_product",
-              currentPath,
-              "products",
-              data.slug || slug,
-            );
-          } catch (templateError) {
-            console.error("PUBLIC PRODUCT TEMPLATE LOAD ERROR:", templateError);
+          // Backend attached template if matched
+          let template = data.template || null;
+
+          // Client fallback
+          if (!template) {
+            try {
+              template = await fetchActiveTemplate(
+                "single_product",
+                currentPath,
+                "products",
+                data.slug || slug,
+              );
+            } catch (templateError) {
+              console.error("PUBLIC PRODUCT TEMPLATE LOAD ERROR:", templateError);
+            }
           }
           if (!active) return;
           setPage({ type: "product", data, template });
+        } else if (data.template) {
+          setPage({ type: "content", data, template: data.template });
         } else {
           setPage({ type: "content", data });
         }
@@ -151,9 +152,7 @@ const PublicPageView = () => {
         </p>
         <button
           type="button"
-          onClick={() => {
-            navigate("/");
-          }}
+          onClick={() => navigate("/")}
           style={{
             color: "#0c2f55",
             textDecoration: "underline",
@@ -171,6 +170,7 @@ const PublicPageView = () => {
     );
   }
 
+  // ===== BUILDER PAGE =====
   if (page.type === "builder") {
     const showTitle = page.data.show_title !== false;
     return (
@@ -183,27 +183,40 @@ const PublicPageView = () => {
         <BuilderRenderer
           layout={page.data.layout}
           device={device}
-          pageId={String(page.data.id || page.data.page_id || page.data.slug || currentPath)}
+          pageId={String(
+            page.data.id || page.data.page_id || page.data.slug || currentPath,
+          )}
           pageTitle={page.data.title || ""}
         />
       </div>
     );
   }
 
+  // ===== PRODUCT PAGE =====
   if (page.type === "product") {
     const product = page.data as ProductData;
+
+    // ✅ Template first
     if (page.template?.layout?.length) {
       return (
-        <BuilderRenderer
-          layout={page.template.layout}
-          device={device}
-          pageId={product.id}
-          pageTitle={product.title}
-          product={product}
-        />
+        <div className="public-builder-view">
+          <BuilderRenderer
+            layout={page.template.layout}
+            device={device}
+            pageId={product.id}
+            pageTitle={product.title}
+            product={product}
+          />
+        </div>
       );
     }
 
+    // Content-based template fallback
+    if (page.template?.content) {
+      return <ContentRenderer layout={page.template.content} />;
+    }
+
+    // Default product layout
     return (
       <article
         className="public-product-view"
@@ -228,7 +241,11 @@ const PublicPageView = () => {
           <p style={{ fontSize: 24, fontWeight: 700, color: "#0c2f55" }}>
             ₹{Number(product.price || 0).toFixed(2)}
           </p>
-          <p>{product.quantity > 0 ? `In stock (${product.quantity})` : "Out of stock"}</p>
+          <p>
+            {product.quantity > 0
+              ? `In stock (${product.quantity})`
+              : "Out of stock"}
+          </p>
           {product.brand && <p>Brand: {product.brand}</p>}
           {product.category && <p>Category: {product.category}</p>}
           <p>{product.description}</p>
@@ -237,14 +254,24 @@ const PublicPageView = () => {
     );
   }
 
+  // ===== CONTENT PAGE (post/page with template) =====
+  if (page.template?.layout?.length) {
+    return (
+      <div className="public-builder-view">
+        <BuilderRenderer
+          layout={page.template.layout}
+          device={device}
+          pageId={String(page.data.id || page.data.slug)}
+          pageTitle={page.data.title || ""}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className="public-content-view"
-      style={{
-        padding: "40px 20px",
-        maxWidth: 900,
-        margin: "0 auto",
-      }}
+      style={{ padding: "40px 20px", maxWidth: 900, margin: "0 auto" }}
     >
       <h1 style={{ color: "#0c2f55" }}>{page.data.title}</h1>
 

@@ -72,6 +72,7 @@ def build_page_context(url_path, post_type=None, slug=None):
         "is_search": False,
         "is_blog": False,
         "content_id": None,
+        "specific_id": "",
         "taxonomy": None,
     }
 
@@ -125,6 +126,7 @@ def build_page_context(url_path, post_type=None, slug=None):
 
         if item:
             ctx["content_id"] = str(item["_id"])
+            ctx["specific_id"] = str(item["_id"])
 
     return ctx
 
@@ -164,27 +166,28 @@ def condition_matches(condition, ctx):
 
 
 def template_matches(template, ctx):
-    c = template.get("conditions", {})
-    include = c.get("include", [])
-    exclude = c.get("exclude", [])
-    specific_pages = c.get("specific_pages", [])
-    specific_posts = c.get("specific_posts", [])
-    specific_products = c.get("specific_products", [])
-    specific_items = c.get("specific_items", [])
-    post_types = c.get("post_types", [])
-    singles = c.get("singles", [])
-    archives = c.get("archives", [])
-    taxonomies = c.get("taxonomies", [])
+    c = template.get("conditions", {}) or {}
+    include = c.get("include", []) or []
+    exclude = c.get("exclude", []) or []
+    specific_pages = c.get("specific_pages", []) or []
+    specific_posts = c.get("specific_posts", []) or []
+    specific_products = c.get("specific_products", []) or []
+    specific_items = c.get("specific_items", []) or []
+    post_types = c.get("post_types", []) or []
+    singles = c.get("singles", []) or []
+    archives = c.get("archives", []) or []
+    taxonomies = c.get("taxonomies", []) or []
 
-    content_id = ctx.get("content_id")
-    if content_id:
-        if content_id in specific_pages:
+    # ✅ Check both specific_id and content_id
+    match_id = ctx.get("specific_id") or ctx.get("content_id")
+    if match_id:
+        if match_id in specific_pages:
             return True
-        if content_id in specific_posts:
+        if match_id in specific_posts:
             return True
-        if content_id in specific_products:
+        if match_id in specific_products:
             return True
-        if content_id in specific_items:
+        if match_id in specific_items:
             return True
 
     if post_types and ctx.get("post_type") in post_types:
@@ -404,11 +407,17 @@ def get_active_template(
     url_path: str = Query("/"),
     post_type: Optional[str] = Query(None),
     slug: Optional[str] = Query(None),
+    specific_id: Optional[str] = Query(None),
 ):
     if template_type not in TEMPLATE_TYPES:
         raise HTTPException(status_code=400, detail="Invalid type")
 
     ctx = build_page_context(url_path, post_type, slug)
+
+    # ✅ NEW: override specific_id if provided
+    if specific_id:
+        ctx["specific_id"] = specific_id
+        ctx["content_id"] = specific_id
 
     templates = list(pages_collection.find({
         "template_type": template_type,
@@ -422,7 +431,7 @@ def get_active_template(
     best_priority = -999999
     for t in templates:
         if template_matches(t, ctx):
-            p = t.get("conditions", {}).get("priority", 0)
+            p = (t.get("conditions") or {}).get("priority", 0)
             if p > best_priority:
                 best_priority = p
                 best = t

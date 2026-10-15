@@ -45,7 +45,11 @@ const InteractiveTabs = ({
       <div
         role="tablist"
         aria-label="Content tabs"
-        style={{ display: "flex", flexWrap: "wrap", borderBottom: "1px solid #e0e0e0" }}
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          borderBottom: "1px solid #e0e0e0",
+        }}
       >
         {items.map((item, index) => (
           <button
@@ -59,7 +63,10 @@ const InteractiveTabs = ({
             style={{
               padding: "10px 20px",
               border: 0,
-              borderBottom: index === activeIndex ? `2px solid ${color}` : "2px solid transparent",
+              borderBottom:
+                index === activeIndex
+                  ? `2px solid ${color}`
+                  : "2px solid transparent",
               background: "transparent",
               color: index === activeIndex ? color : "#666",
               fontWeight: index === activeIndex ? 700 : 500,
@@ -82,7 +89,7 @@ const InteractiveTabs = ({
   );
 };
 
-// ============ HOVER + ANIMATION HELPER ============
+// ============ HOVER + ANIMATION ============
 const getHoverAndAnimation = (style: any, widgetId: string) => {
   const hasHover =
     style?.hoverBackgroundColor ||
@@ -112,7 +119,7 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
 
     if (style.hoverBackgroundColor)
       hoverRules.push(
-        `background-color: ${style.hoverBackgroundColor} !important;`
+        `background-color: ${style.hoverBackgroundColor} !important;`,
       );
     if (style.hoverColor)
       hoverRules.push(`color: ${style.hoverColor} !important;`);
@@ -181,7 +188,7 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
 // ============ STYLE RENDERER ============
 export const renderWidgetStyles = (
   style: WidgetStyle,
-  device: ResponsiveDevice
+  device: ResponsiveDevice,
 ): React.CSSProperties => {
   const rs = style.responsive?.[device] || {};
 
@@ -202,19 +209,36 @@ export const renderWidgetStyles = (
     | string
     | undefined;
 
+  const effectiveDirection =
+    resolvedDisplay === "flex"
+      ? resolvedFlexDirection || "row"
+      : resolvedFlexDirection;
+
   const isFlexOrGrid =
     resolvedDisplay === "flex" || resolvedDisplay === "grid";
 
+  const normalizeGap = (val: unknown): string | undefined => {
+    if (val === undefined || val === null || val === "") return undefined;
+    if (typeof val === "number") return `${val}px`;
+    const str = String(val).trim();
+    if (!str) return undefined;
+    if (/^-?\d*\.?\d+(px|em|rem|%|vh|vw)$/i.test(str)) return str;
+    if (/^-?\d*\.?\d+$/.test(str)) return `${str}px`;
+    return str;
+  };
+
   const computeGap = (): string | undefined => {
-    if (rs.gap !== undefined) return `${rs.gap}px`;
-    if (style.gap !== undefined) return `${style.gap}px`;
+    const rg = normalizeGap(rs.gap);
+    if (rg) return rg;
+    const g = normalizeGap(style.gap);
+    if (g) return g;
     if (isFlexOrGrid) return "20px";
     return undefined;
   };
 
   const responsiveStyle: React.CSSProperties = {
     display: resolvedDisplay as any,
-    flexDirection: resolvedFlexDirection as any,
+    flexDirection: effectiveDirection as any,
     flexWrap: (rs.flexWrap || style.flexWrap) as any,
     justifyContent: rs.justifyContent || style.justifyContent,
     alignItems: rs.alignItems || style.alignItems,
@@ -307,7 +331,6 @@ const CanvasMenuWidget = ({
   void isEditMode;
   void onOpenMedia;
 
-  // Auto-close menu when device changes
   useEffect(() => {
     setMenuOpen(false);
     setOpenSubmenus({});
@@ -356,7 +379,6 @@ const CanvasMenuWidget = ({
     }
     .${uid}-list > li > a:hover { color: ${hoverColor}; }
 
-    /* Submenu (hover dropdown in canvas) */
     .${uid}-submenu {
       position: absolute;
       top: 100%;
@@ -465,13 +487,11 @@ const CanvasMenuWidget = ({
         {hasChildren && (
           <ul
             className={`${uid}-submenu ${
-              openSubmenus[`${widget.id}-${item.id || itemKey}`]
-                ? "open"
-                : ""
+              openSubmenus[`${widget.id}-${item.id || itemKey}`] ? "open" : ""
             }`}
           >
             {item.children.map((child: any) =>
-              renderMenuItem(child, depth + 1)
+              renderMenuItem(child, depth + 1),
             )}
           </ul>
         )}
@@ -546,6 +566,53 @@ const CanvasMenuWidget = ({
         </ul>
       </div>
     </>
+  );
+};
+
+// ============ INLINE DROP ZONE (for inserting between items) ============
+const InlineDropZone = ({
+  parentId,
+  index,
+  activeDragType,
+}: {
+  parentId: string | null;
+  index: number;
+  activeDragType: string | null;
+}) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `inline-${parentId || "root"}-${index}`,
+    data: { type: "inline-drop", parentId, index },
+  });
+
+  const isDraggingNew = activeDragType?.startsWith("library-");
+  const isDraggingExisting =
+    activeDragType && !activeDragType.startsWith("library-");
+  const visible = isDraggingNew || isDraggingExisting;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`inline-drop-zone ${isOver ? "active" : ""} ${
+        visible ? "visible" : ""
+      }`}
+      style={{
+        height: isOver ? 36 : visible ? 8 : 0,
+        margin: isOver ? "4px 0" : 0,
+        border: isOver ? "2px dashed #93003c" : "2px dashed transparent",
+        borderRadius: 4,
+        transition: "height 0.15s, margin 0.15s, border 0.15s",
+        background: isOver ? "rgba(147, 0, 60, 0.06)" : "transparent",
+        pointerEvents: visible ? "auto" : "none",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "#93003c",
+        fontSize: 11,
+        fontWeight: 600,
+      }}
+    >
+      {isOver ? "⬇ Drop here" : ""}
+    </div>
   );
 };
 
@@ -685,7 +752,6 @@ const WidgetContent = ({
   };
 
   switch (widget.type) {
-    // ===== HEADING =====
     case "heading": {
       const tag = (s.htmlTag || "h2").toLowerCase();
       const validTags = ["h1", "h2", "h3", "h4", "h5", "h6", "p", "div", "span"];
@@ -725,7 +791,6 @@ const WidgetContent = ({
       );
     }
 
-    // ===== TEXT =====
     case "text": {
       const textAlignVal = (rs.textAlign ?? s.textAlign ?? "left") as any;
       const hover = getHoverAndAnimation(s, widget.id);
@@ -755,7 +820,6 @@ const WidgetContent = ({
       );
     }
 
-    // ===== BUTTON =====
     case "button": {
       const btnTextAlign = (rs.textAlign ?? s.textAlign ?? "left") as
         | "left"
@@ -835,7 +899,6 @@ const WidgetContent = ({
       );
     }
 
-    // ===== IMAGE =====
     case "image": {
       const hover = getHoverAndAnimation(s, widget.id);
 
@@ -895,7 +958,6 @@ const WidgetContent = ({
       );
     }
 
-    // ===== SITE LOGO =====
     case "site_logo": {
       const hover = getHoverAndAnimation(s, widget.id);
 
@@ -954,7 +1016,6 @@ const WidgetContent = ({
       );
     }
 
-    // ===== SITE TITLE =====
     case "site_title": {
       const titleAlign = (rs.textAlign ?? s.textAlign ?? "left") as any;
       return (
@@ -975,7 +1036,6 @@ const WidgetContent = ({
       );
     }
 
-    // ===== SITE TAGLINE =====
     case "site_tagline": {
       const taglineAlign = (rs.textAlign ?? s.textAlign ?? "left") as any;
       return (
@@ -995,7 +1055,6 @@ const WidgetContent = ({
       );
     }
 
-    // ===== COPYRIGHT =====
     case "copyright": {
       const copyrightAlign = (rs.textAlign ?? s.textAlign ?? "center") as any;
       return (
@@ -1016,7 +1075,6 @@ const WidgetContent = ({
       );
     }
 
-    // ===== NAV MENU / FOOTER MENU / MENU =====
     case "menu":
     case "nav_menu":
     case "footer_menu":
@@ -1033,7 +1091,6 @@ const WidgetContent = ({
         />
       );
 
-    // ===== VIDEO =====
     case "video":
       return widget.url ? (
         <div
@@ -1083,7 +1140,6 @@ const WidgetContent = ({
         />
       );
 
-    // ===== ICON =====
     case "icon_list":
       return (
         <ul
@@ -1168,7 +1224,6 @@ const WidgetContent = ({
         </MaybeLink>
       );
 
-    // ===== ICON BOX =====
     case "icon_box":
       return (
         <MaybeLink widget={widget}>
@@ -1193,17 +1248,19 @@ const WidgetContent = ({
               {widget.content || "★"}
             </div>
             <h3 style={{ margin: "0 0 8px", fontSize: 20, color }}>
-              {widget.items?.[0]?.title || widget.settings?.items?.[0]?.title || "Feature Title"}
+              {widget.items?.[0]?.title ||
+                widget.settings?.items?.[0]?.title ||
+                "Feature Title"}
             </h3>
             <p style={{ margin: 0, color, fontSize: 14, opacity: 0.75 }}>
-              {widget.items?.[0]?.content || widget.settings?.items?.[0]?.content ||
+              {widget.items?.[0]?.content ||
+                widget.settings?.items?.[0]?.content ||
                 "Add feature description here."}
             </p>
           </div>
         </MaybeLink>
       );
 
-    // ===== GALLERY =====
     case "image_box":
       return (
         <div
@@ -1272,7 +1329,9 @@ const WidgetContent = ({
             border:
               bioLayout === "business_card" ? "1px solid #dce2e8" : undefined,
             boxShadow:
-              bioLayout === "showcase" ? "0 12px 30px rgba(12, 47, 85, 0.12)" : undefined,
+              bioLayout === "showcase"
+                ? "0 12px 30px rgba(12, 47, 85, 0.12)"
+                : undefined,
             color: color || "#17202a",
             textAlign: "center",
             boxSizing: "border-box",
@@ -1301,16 +1360,22 @@ const WidgetContent = ({
                 key={item.id}
                 href={item.link?.url || "#"}
                 target={item.link?.target || "_self"}
-                rel={item.link?.target === "_blank" ? "noopener noreferrer" : undefined}
+                rel={
+                  item.link?.target === "_blank"
+                    ? "noopener noreferrer"
+                    : undefined
+                }
                 style={{
                   display: "block",
                   padding: "12px 16px",
                   borderRadius:
-                    bioLayout === "links"
-                      ? 999
-                      : s.borderRadius ?? 8,
-                  background: bioLayout === "minimalist" ? "transparent" : "#ffffff",
-                  border: bioLayout === "minimalist" ? "none" : "1px solid #dce2e8",
+                    bioLayout === "links" ? 999 : (s.borderRadius ?? 8),
+                  background:
+                    bioLayout === "minimalist" ? "transparent" : "#ffffff",
+                  border:
+                    bioLayout === "minimalist"
+                      ? "none"
+                      : "1px solid #dce2e8",
                   color: color || "#17202a",
                   textDecoration: "none",
                   fontWeight: 600,
@@ -1371,7 +1436,6 @@ const WidgetContent = ({
         />
       );
 
-    // ===== CAROUSEL / SLIDER =====
     case "carousel":
     case "slider": {
       const images = widget.settings?.images || [];
@@ -1494,6 +1558,48 @@ const WidgetContent = ({
                   {firstItem.content}
                 </p>
               )}
+
+              {(firstItem?.button1Text || firstItem?.button2Text) && (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    marginTop: 8,
+                    flexWrap: "wrap",
+                    justifyContent: alignContent,
+                  }}
+                >
+                  {firstItem?.button1Text && (
+                    <span
+                      style={{
+                        padding: "10px 22px",
+                        background: "#0c2f55",
+                        color: "#fff",
+                        borderRadius: 6,
+                        fontWeight: 600,
+                        fontSize: 14,
+                      }}
+                    >
+                      {firstItem.button1Text}
+                    </span>
+                  )}
+                  {firstItem?.button2Text && (
+                    <span
+                      style={{
+                        padding: "10px 22px",
+                        background: "transparent",
+                        color: "#fff",
+                        border: "2px solid #fff",
+                        borderRadius: 6,
+                        fontWeight: 600,
+                        fontSize: 14,
+                      }}
+                    >
+                      {firstItem.button2Text}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -1596,7 +1702,6 @@ const WidgetContent = ({
       );
     }
 
-    // ===== SPACER =====
     case "spacer":
       return (
         <div
@@ -1619,7 +1724,6 @@ const WidgetContent = ({
         </div>
       );
 
-    // ===== DIVIDER =====
     case "divider":
       return (
         <hr
@@ -1634,7 +1738,6 @@ const WidgetContent = ({
         />
       );
 
-    // ===== ALERT =====
     case "alert":
       return (
         <div
@@ -1655,7 +1758,6 @@ const WidgetContent = ({
         </div>
       );
 
-    // ===== ACCORDION / TOGGLE =====
     case "accordion":
     case "toggle":
       return (widget.items || []).length > 0 ? (
@@ -1679,10 +1781,19 @@ const WidgetContent = ({
               }}
               open={i === (widget.settings?.defaultActiveItem ?? 0)}
             >
-              <summary style={{ padding: "14px 16px", fontWeight: 600, background: "#f8f9fc", cursor: "pointer" }}>
+              <summary
+                style={{
+                  padding: "14px 16px",
+                  fontWeight: 600,
+                  background: "#f8f9fc",
+                  cursor: "pointer",
+                }}
+              >
                 {item.title}
               </summary>
-              <div style={{ padding: "12px 16px", color: "#666", fontSize: 14 }}>
+              <div
+                style={{ padding: "12px 16px", color: "#666", fontSize: 14 }}
+              >
                 {item.content}
               </div>
             </details>
@@ -1696,7 +1807,6 @@ const WidgetContent = ({
         />
       );
 
-    // ===== TABS =====
     case "tabs":
       return (widget.items || []).length > 0 ? (
         <InteractiveTabs
@@ -1712,7 +1822,6 @@ const WidgetContent = ({
         />
       );
 
-    // ===== TESTIMONIAL =====
     case "testimonial":
       return (
         <div
@@ -1742,7 +1851,6 @@ const WidgetContent = ({
         </div>
       );
 
-    // ===== COUNTER =====
     case "counter":
       return (
         <div
@@ -1761,15 +1869,18 @@ const WidgetContent = ({
               lineHeight: 1,
             }}
           >
-            {widget.items?.[0]?.content || widget.settings?.items?.[0]?.content || "1000"}
+            {widget.items?.[0]?.content ||
+              widget.settings?.items?.[0]?.content ||
+              "1000"}
           </div>
           <div style={{ color, marginTop: 12, fontSize: 15, opacity: 0.75 }}>
-            {widget.items?.[0]?.title || widget.settings?.items?.[0]?.title || "Happy Clients"}
+            {widget.items?.[0]?.title ||
+              widget.settings?.items?.[0]?.title ||
+              "Happy Clients"}
           </div>
         </div>
       );
 
-    // ===== PROGRESS BAR =====
     case "progress_bar":
       return (
         <div style={{ padding: "8px 0", width: "100%", alignSelf: "stretch" }}>
@@ -1806,7 +1917,6 @@ const WidgetContent = ({
         </div>
       );
 
-    // ===== FORM =====
     case "form":
       return (
         <div
@@ -1874,7 +1984,6 @@ const WidgetContent = ({
         </div>
       );
 
-    // ===== SEARCH =====
     case "search":
       return (
         <div
@@ -1915,7 +2024,6 @@ const WidgetContent = ({
         </div>
       );
 
-    // ===== SOCIAL ICONS =====
     case "social_icons":
       return (
         <div
@@ -1954,7 +2062,6 @@ const WidgetContent = ({
         </div>
       );
 
-    // ===== POST GRID =====
     case "post_grid":
       return (
         <div
@@ -2004,7 +2111,6 @@ const WidgetContent = ({
         </div>
       );
 
-    // ===== POST LIST =====
     case "post_list":
       return (
         <div style={{ width: "100%", alignSelf: "stretch" }}>
@@ -2042,11 +2148,22 @@ const WidgetContent = ({
         </div>
       );
 
+    // ============ PRODUCT WIDGETS (canvas preview) ============
     case "product_title":
-      return <div style={{ ...baseStyle, fontWeight: 600 }}>{productPreview?.title || "Choose a product preview"}</div>;
+      return (
+        <div style={{ ...baseStyle, fontWeight: 600 }}>
+          {productPreview?.title || "Choose a product preview"}
+        </div>
+      );
 
     case "product_price":
-      return <div style={{ ...baseStyle, fontWeight: 700 }}>{productPreview ? `₹${Number(productPreview.price || 0).toFixed(2)}` : "Product Price"}</div>;
+      return (
+        <div style={{ ...baseStyle, fontWeight: 700 }}>
+          {productPreview
+            ? `₹${Number(productPreview.price || 0).toFixed(2)}`
+            : "Product Price"}
+        </div>
+      );
 
     case "product_image":
       return productPreview?.image ? (
@@ -2062,54 +2179,271 @@ const WidgetContent = ({
           }}
         />
       ) : (
-        <div style={{ ...baseStyle, minHeight: 160, display: "grid", placeItems: "center", background: "#f3f4f6" }}>
+        <div
+          style={{
+            ...baseStyle,
+            minHeight: 160,
+            display: "grid",
+            placeItems: "center",
+            background: "#f3f4f6",
+          }}
+        >
           Choose a product preview in Content settings to show its image
         </div>
       );
 
     case "product_gallery":
       return productPreview?.gallery?.length ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(88px, 1fr))", gap: 8 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(88px, 1fr))",
+            gap: 8,
+          }}
+        >
           {productPreview.gallery.map((image, index) => (
             <img
               key={`${image.url}-${index}`}
               src={getImageUrl(image.url)}
               alt={image.alt || productPreview.title}
-              style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6 }}
+              style={{
+                width: "100%",
+                aspectRatio: "1",
+                objectFit: "cover",
+                borderRadius: 6,
+              }}
             />
           ))}
         </div>
       ) : productPreview?.image ? (
-        <img src={getImageUrl(productPreview.image)} alt={productPreview.title} style={{ display: "block", width: "100%", maxHeight: 360, objectFit: "contain" }} />
+        <img
+          src={getImageUrl(productPreview.image)}
+          alt={productPreview.title}
+          style={{
+            display: "block",
+            width: "100%",
+            maxHeight: 360,
+            objectFit: "contain",
+          }}
+        />
       ) : (
-        <div style={{ ...baseStyle, minHeight: 160, display: "grid", placeItems: "center", background: "#f3f4f6" }}>
+        <div
+          style={{
+            ...baseStyle,
+            minHeight: 160,
+            display: "grid",
+            placeItems: "center",
+            background: "#f3f4f6",
+          }}
+        >
           Choose a product preview to show its gallery
         </div>
       );
 
     case "product_short_description":
-      return <div style={baseStyle}>{productPreview?.short_description || "Product Short Description"}</div>;
-
-    case "product_categories":
-      return <div style={baseStyle}>{productPreview?.category || "Product Categories"}</div>;
-
-    case "product_tags":
-      return <div style={baseStyle}>{productPreview?.tags?.join(", ") || "Product Tags"}</div>;
+      return (
+        <div style={baseStyle}>
+          {productPreview?.short_description || "Product Short Description"}
+        </div>
+      );
 
     case "product_description":
-      return <div style={baseStyle}>{productPreview?.description || "Product Description"}</div>;
+      return (
+        <div style={baseStyle}>
+          {productPreview?.description || "Product Description"}
+        </div>
+      );
+
+    case "product_sku":
+      return (
+        <div style={baseStyle}>{productPreview?.sku || "Product SKU"}</div>
+      );
+
+    case "product_categories":
+      return (
+        <div style={baseStyle}>
+          {productPreview?.category || "Product Categories"}
+        </div>
+      );
+
+    case "product_tags":
+      return (
+        <div style={baseStyle}>
+          {productPreview?.tags?.join(", ") || "Product Tags"}
+        </div>
+      );
 
     case "product_stock":
-      return <div style={baseStyle}>{productPreview ? (productPreview.quantity ? `In stock (${productPreview.quantity})` : "Out of stock") : "Product Stock"}</div>;
+      return (
+        <div style={baseStyle}>
+          {productPreview
+            ? productPreview.quantity
+              ? `In stock (${productPreview.quantity})`
+              : "Out of stock"
+            : "Product Stock"}
+        </div>
+      );
+
+    case "product_attributes":
+      return productPreview?.attributes?.length ? (
+        <table
+          style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}
+        >
+          <tbody>
+            {productPreview.attributes.map((attr, i) => (
+              <tr key={i}>
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "8px 12px",
+                    background: "#f8f9fc",
+                    border: "1px solid #e5e7eb",
+                    width: "30%",
+                  }}
+                >
+                  {attr.name}
+                </th>
+                <td
+                  style={{
+                    padding: "8px 12px",
+                    border: "1px solid #e5e7eb",
+                  }}
+                >
+                  {Array.isArray(attr.options) ? attr.options.join(", ") : ""}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <div style={baseStyle}>Product Attributes</div>
+      );
+
+    case "product_variations":
+      return productPreview?.variations?.length ? (
+        <table
+          style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}
+        >
+          <thead>
+            <tr style={{ background: "#f8f9fc" }}>
+              <th
+                style={{
+                  padding: "8px 12px",
+                  border: "1px solid #e5e7eb",
+                  textAlign: "left",
+                }}
+              >
+                SKU
+              </th>
+              <th
+                style={{
+                  padding: "8px 12px",
+                  border: "1px solid #e5e7eb",
+                  textAlign: "left",
+                }}
+              >
+                Price
+              </th>
+              <th
+                style={{
+                  padding: "8px 12px",
+                  border: "1px solid #e5e7eb",
+                  textAlign: "left",
+                }}
+              >
+                Stock
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {productPreview.variations.map((v, i) => (
+              <tr key={i}>
+                <td
+                  style={{ padding: "8px 12px", border: "1px solid #e5e7eb" }}
+                >
+                  {v.sku || "—"}
+                </td>
+                <td
+                  style={{ padding: "8px 12px", border: "1px solid #e5e7eb" }}
+                >
+                  ₹{v.price ?? 0}
+                </td>
+                <td
+                  style={{ padding: "8px 12px", border: "1px solid #e5e7eb" }}
+                >
+                  {v.quantity ?? 0}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <div style={baseStyle}>Product Variations</div>
+      );
+
+    case "quantity":
+      return (
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <span
+            style={{
+              width: 32,
+              height: 32,
+              textAlign: "center",
+              lineHeight: "32px",
+              border: "1px solid #ddd",
+              borderRadius: 4,
+            }}
+          >
+            −
+          </span>
+          <input
+            type="number"
+            value={1}
+            readOnly
+            style={{
+              width: 64,
+              padding: 8,
+              textAlign: "center",
+              border: "1px solid #ddd",
+              borderRadius: 4,
+            }}
+          />
+          <span
+            style={{
+              width: 32,
+              height: 32,
+              textAlign: "center",
+              lineHeight: "32px",
+              border: "1px solid #ddd",
+              borderRadius: 4,
+            }}
+          >
+            +
+          </span>
+        </div>
+      );
 
     case "add_to_cart":
       return (
-        <button type="button" disabled={!productPreview || productPreview.quantity === 0 && productPreview.manage_stock !== false} style={{ padding: "10px 18px", opacity: 0.8 }}>
+        <button
+          type="button"
+          disabled={!productPreview}
+          style={{
+            padding: "10px 18px",
+            opacity: 0.8,
+            background: "#0c2f55",
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            cursor: "pointer",
+          }}
+        >
           Add to Cart
         </button>
       );
 
-    // ===== PRODUCTS =====
+    case "related_products":
+    case "recent_products":
     case "products":
     case "product_grid":
       return (
@@ -2139,15 +2473,13 @@ const WidgetContent = ({
                 style={{ width: "100%" }}
               />
               <div style={{ padding: 12 }}>
-                <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Product {i}</h4>
+                <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>
+                  Product {i}
+                </h4>
                 <div
-                  style={{
-                    color: "#0c2f55",
-                    fontWeight: 700,
-                    fontSize: 14,
-                  }}
+                  style={{ color: "#0c2f55", fontWeight: 700, fontSize: 14 }}
                 >
-                  $99.00
+                  ₹99.00
                 </div>
               </div>
             </div>
@@ -2155,7 +2487,6 @@ const WidgetContent = ({
         </div>
       );
 
-    // ===== HTML =====
     case "html":
       return (
         <div
@@ -2176,7 +2507,11 @@ const WidgetContent = ({
           style={{ width: "100%", minHeight: 320, border: 0, borderRadius: 8 }}
         />
       ) : (
-        <WidgetEmptyState icon="⌖" title="Set Map Location" subtitle="Enter an address in the Content tab" />
+        <WidgetEmptyState
+          icon="⌖"
+          title="Set Map Location"
+          subtitle="Enter an address in the Content tab"
+        />
       );
     }
 
@@ -2190,14 +2525,24 @@ const WidgetContent = ({
           style={{ width: "100%", height: 166, border: 0 }}
         />
       ) : (
-        <WidgetEmptyState icon="♫" title="Add a SoundCloud Track" subtitle="Paste its URL in the Content tab" />
+        <WidgetEmptyState
+          icon="♫"
+          title="Add a SoundCloud Track"
+          subtitle="Paste its URL in the Content tab"
+        />
       );
 
     case "shortcode":
-      return <code className="builder-shortcode">{widget.content || "[shortcode]"}</code>;
+      return (
+        <code className="builder-shortcode">
+          {widget.content || "[shortcode]"}
+        </code>
+      );
 
     case "menu_anchor": {
-      const anchorId = (widget.content || "").trim().replace(/[^a-zA-Z0-9_-]/g, "-");
+      const anchorId = (widget.content || "")
+        .trim()
+        .replace(/[^a-zA-Z0-9_-]/g, "-");
       return anchorId ? <span id={anchorId} aria-hidden="true" /> : null;
     }
 
@@ -2219,7 +2564,6 @@ const WidgetContent = ({
       return (
         <a
           href={widget.link?.url || widget.url || "#"}
-          target={widget.link?.target || "_self"}
           onClick={(event) => event.preventDefault()}
           style={{
             display: "inline-block",
@@ -2237,7 +2581,11 @@ const WidgetContent = ({
     case "rating": {
       const rating = Math.max(0, Math.min(5, widget.settings?.rating ?? 4));
       return (
-        <div role="img" aria-label={`${rating} out of 5 stars`} style={{ color: "#f0b429" }}>
+        <div
+          role="img"
+          aria-label={`${rating} out of 5 stars`}
+          style={{ color: "#f0b429" }}
+        >
           {"★".repeat(Math.floor(rating))}
           {rating % 1 ? "½" : ""}
           {"☆".repeat(5 - Math.ceil(rating))}
@@ -2257,7 +2605,11 @@ const WidgetContent = ({
             <path id={`text-path-${widget.id}`} d="M 20,145 Q 160,-20 300,145" />
           </defs>
           <text fill={color || "#0c2f55"} fontSize={fontSize || 22}>
-            <textPath href={`#text-path-${widget.id}`} startOffset="50%" textAnchor="middle">
+            <textPath
+              href={`#text-path-${widget.id}`}
+              startOffset="50%"
+              textAnchor="middle"
+            >
               {widget.content || "Text on a path"}
             </textPath>
           </text>
@@ -2272,7 +2624,15 @@ const WidgetContent = ({
             <thead>
               <tr>
                 {headers.map((header, index) => (
-                  <th key={`${header}-${index}`} scope="col" style={{ textAlign: "left", padding: 10, borderBottom: "2px solid #d9dee7" }}>
+                  <th
+                    key={`${header}-${index}`}
+                    scope="col"
+                    style={{
+                      textAlign: "left",
+                      padding: 10,
+                      borderBottom: "2px solid #d9dee7",
+                    }}
+                  >
                     {header}
                   </th>
                 ))}
@@ -2281,8 +2641,21 @@ const WidgetContent = ({
             <tbody>
               {(widget.items || []).map((item) => (
                 <tr key={item.id}>
-                  <td style={{ padding: 10, borderBottom: "1px solid #e5e7eb" }}>{item.title}</td>
-                  {headers.length > 1 && <td style={{ padding: 10, borderBottom: "1px solid #e5e7eb" }}>{item.content}</td>}
+                  <td
+                    style={{ padding: 10, borderBottom: "1px solid #e5e7eb" }}
+                  >
+                    {item.title}
+                  </td>
+                  {headers.length > 1 && (
+                    <td
+                      style={{
+                        padding: 10,
+                        borderBottom: "1px solid #e5e7eb",
+                      }}
+                    >
+                      {item.content}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -2291,7 +2664,6 @@ const WidgetContent = ({
       );
     }
 
-    // ===== DEFAULT =====
     default:
       return (
         <WidgetEmptyState
@@ -2316,6 +2688,8 @@ interface CanvasRendererProps {
   device: ResponsiveDevice;
   isPreview: boolean;
   activeDragType?: string | null;
+  parentId?: string | null;
+  index?: number;
 }
 
 const CanvasRenderer = ({
@@ -2329,6 +2703,8 @@ const CanvasRenderer = ({
   device,
   isPreview,
   activeDragType = null,
+  parentId = null,
+  index = 0,
 }: CanvasRendererProps) => {
   const {
     attributes,
@@ -2482,6 +2858,15 @@ const CanvasRenderer = ({
         } ${widget.children?.length ? "has-children" : "no-children"}`}
         onClick={handleClick}
       >
+        {/* ✅ Inline drop zone — above each element while dragging */}
+        {!isPreview && activeDragType && (
+          <InlineDropZone
+            parentId={parentId}
+            index={index}
+            activeDragType={activeDragType}
+          />
+        )}
+
         {isSelected && !isPreview && !isContainer && (
           <ResizeHandles
             onResize={handleResize}
@@ -2538,10 +2923,12 @@ const CanvasRenderer = ({
                 items={(widget.children || []).map((c) => c.id)}
                 strategy={verticalListSortingStrategy}
               >
-                {widget.children?.map((child) => (
+                {widget.children?.map((child, childIndex) => (
                   <CanvasRenderer
                     key={child.id}
                     widget={child}
+                    parentId={widget.id}
+                    index={childIndex}
                     selectedId={selectedId}
                     onSelect={onSelect}
                     onDelete={onDelete}

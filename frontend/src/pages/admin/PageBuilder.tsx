@@ -73,7 +73,16 @@ const getLayerIcon = (type: WidgetType): string => {
     posts: "▤", post_grid: "⊞", post_list: "☰", products: "▦",
     product_grid: "⊞", product_title: "T", product_price: "$",
     product_image: "▧", product_gallery: "▦",
-    product_description: "¶", product_stock: "✓", add_to_cart: "+",
+    product_description: "¶", product_short_description: "≡",
+    product_stock: "✓", add_to_cart: "+",
+    product_sku: "⌗",
+    product_categories: "▤",
+    product_tags: "#",
+    product_attributes: "▥",
+    product_variations: "⊟",
+    quantity: "#",
+    related_products: "↻",
+    recent_products: "⏱",
     html: "<>", search: "⌕", menu: "☰", social_icons: "◉",
     site_logo: "🖼", site_title: "T", site_tagline: "t",
     nav_menu: "☰", footer_menu: "☰", copyright: "©",
@@ -107,6 +116,15 @@ const getWidgetLabel = (type: WidgetType): string => {
     product_image: "Product Image", product_gallery: "Product Gallery",
     product_description: "Product Description", product_stock: "Product Stock",
     add_to_cart: "Add to Cart",
+    product_short_description: "Product Short Description",
+    product_sku: "Product SKU",
+    product_categories: "Product Categories",
+    product_tags: "Product Tags",
+    product_attributes: "Product Attributes",
+    product_variations: "Product Variations",
+    quantity: "Quantity",
+    related_products: "Related Products",
+    recent_products: "Recent Products",
     search: "Search", menu: "Menu", social_icons: "Social Icons",
     site_logo: "Site Logo", site_title: "Site Title",
     site_tagline: "Site Tagline", nav_menu: "Nav Menu",
@@ -328,6 +346,33 @@ const DEFAULT_STYLES: Record<string, WidgetStyle> = {
     padding: { top: 8, right: 0, bottom: 8, left: 0 },
     margin: { top: 0, right: 0, bottom: 0, left: 0 },
   },
+  product_sku: {
+    color: "#4a4a5a", fontSize: 14, textAlign: "left",
+    margin: { top: 4, right: 0, bottom: 4, left: 0 },
+  },
+  product_categories: {
+    color: "#4a4a5a", fontSize: 14, textAlign: "left",
+    margin: { top: 4, right: 0, bottom: 4, left: 0 },
+  },
+  product_tags: {
+    color: "#4a4a5a", fontSize: 14, textAlign: "left",
+    margin: { top: 4, right: 0, bottom: 4, left: 0 },
+  },
+  product_attributes: {
+    margin: { top: 8, right: 0, bottom: 8, left: 0 },
+  },
+  product_variations: {
+    margin: { top: 8, right: 0, bottom: 8, left: 0 },
+  },
+  quantity: {
+    margin: { top: 8, right: 0, bottom: 8, left: 0 },
+  },
+  related_products: {
+    margin: { top: 16, right: 0, bottom: 16, left: 0 },
+  },
+  recent_products: {
+    margin: { top: 16, right: 0, bottom: 16, left: 0 },
+  },
 };
 
 const createWidget = (type: WidgetType): PageWidget => {
@@ -440,6 +485,15 @@ const createWidget = (type: WidgetType): PageWidget => {
     product_image: { content: "Product Image" },
     product_gallery: { content: "Product Gallery" },
     product_description: { content: "Product Description" },
+    product_short_description: { content: "Product Short Description" },
+    product_sku: { content: "Product SKU" },
+    product_categories: { content: "Product Categories" },
+    product_tags: { content: "Product Tags" },
+    product_attributes: { content: "Product Attributes" },
+    product_variations: { content: "Product Variations" },
+    quantity: { content: "1" },
+    related_products: { settings: { postsPerPage: 4, columns: 4 } },
+    recent_products: { settings: { postsPerPage: 4, columns: 4 } },
     product_stock: { content: "Product Stock" },
     add_to_cart: { content: "Add to Cart" },
     html: { content: "<p>Custom HTML content</p>" },
@@ -452,7 +506,6 @@ const createWidget = (type: WidgetType): PageWidget => {
         { id: createId(), title: "Instagram", icon: "instagram", link: { url: "#" } },
       ],
     },
-    // ============ HEADER/FOOTER WIDGETS ============
     site_logo: { url: "", content: "Site Logo" },
     site_title: { content: "Site Title" },
     site_tagline: { content: "Your site tagline here" },
@@ -709,7 +762,6 @@ const PageBuilder = ({
     layoutRef.current = layout;
   }, [layout]);
 
-  // Switch left panel to settings when a widget is selected
   useEffect(() => {
     if (selectedId) {
       setLeftPanelMode("settings");
@@ -718,7 +770,7 @@ const PageBuilder = ({
   }, [selectedId]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
   useEffect(() => {
@@ -733,7 +785,6 @@ const PageBuilder = ({
     void loadGlobals();
   }, []);
 
-  // ============ TEMPLATE MODE LOADER ============
   useEffect(() => {
     if (mode !== "template" || !loadHandler) return;
     let active = true;
@@ -762,7 +813,6 @@ const PageBuilder = ({
     };
   }, [mode, templateId, loadHandler]);
 
-  // ============ PAGE MODE LOADER ============
   useEffect(() => {
     if (mode === "template") return;
     if (pageId) {
@@ -821,13 +871,13 @@ const PageBuilder = ({
             `/admin/appearance/page-builder?id=${newPageId}&contentId=${contentId}&postType=${
               urlPostType || ""
             }`,
-            { replace: true }
+            { replace: true },
           );
 
           setMessage(
             result.existing
               ? "Loaded existing builder page."
-              : "Content converted to builder page. Start editing!"
+              : "Content converted to builder page. Start editing!",
           );
         } catch (err) {
           console.error("CONVERT ERROR:", err);
@@ -852,7 +902,7 @@ const PageBuilder = ({
       });
       setHistoryIndex((prev) => Math.min(prev + 1, 49));
     },
-    [historyIndex]
+    [historyIndex],
   );
 
   const undo = useCallback(() => {
@@ -897,7 +947,7 @@ const PageBuilder = ({
       }
       return undefined;
     },
-    []
+    [],
   );
 
   const updateWidget = useCallback(
@@ -913,7 +963,7 @@ const PageBuilder = ({
         return widget;
       });
     },
-    []
+    [],
   );
 
   const deleteWidgetById = useCallback(
@@ -925,7 +975,7 @@ const PageBuilder = ({
           children: w.children ? deleteWidgetById(w.children, id) : undefined,
         }));
     },
-    []
+    [],
   );
 
   const duplicateWidgetById = useCallback(
@@ -947,7 +997,7 @@ const PageBuilder = ({
       }
       return result;
     },
-    []
+    [],
   );
 
   const addWidget = useCallback(
@@ -970,7 +1020,7 @@ const PageBuilder = ({
       setSelectedId(widget.id);
       setMessage("");
     },
-    [layout, findWidget, updateWidget, pushHistory]
+    [layout, findWidget, updateWidget, pushHistory],
   );
 
   useEffect(() => {
@@ -1012,7 +1062,7 @@ const PageBuilder = ({
       setSelectedId(widget.id);
       setMessage("");
     },
-    [layout, findWidget, updateWidget, pushHistory]
+    [layout, findWidget, updateWidget, pushHistory],
   );
 
   const findParentAndIndex = useCallback(
@@ -1033,7 +1083,7 @@ const PageBuilder = ({
       }
       return null;
     },
-    []
+    [],
   );
 
   const handleDelete = useCallback(
@@ -1043,7 +1093,7 @@ const PageBuilder = ({
       pushHistory(newLayout);
       if (selectedId === id) setSelectedId(null);
     },
-    [layout, deleteWidgetById, selectedId, pushHistory]
+    [layout, deleteWidgetById, selectedId, pushHistory],
   );
 
   const handleDuplicate = useCallback(
@@ -1052,7 +1102,7 @@ const PageBuilder = ({
       setLayout(newLayout);
       pushHistory(newLayout);
     },
-    [layout, duplicateWidgetById, pushHistory]
+    [layout, duplicateWidgetById, pushHistory],
   );
 
   const handleResize = useCallback(
@@ -1063,7 +1113,7 @@ const PageBuilder = ({
       const newLayout = updateWidget(layout, id, { style: newStyle });
       setLayout(newLayout);
     },
-    [layout, findWidget, updateWidget]
+    [layout, findWidget, updateWidget],
   );
 
   const handleUpdateWidget = useCallback(
@@ -1074,7 +1124,7 @@ const PageBuilder = ({
       setLayout(newLayout);
       pushHistory(newLayout);
     },
-    [layout, findWidget, updateWidget, pushHistory]
+    [layout, findWidget, updateWidget, pushHistory],
   );
 
   const handleCanvasDragEnd = useCallback(
@@ -1113,6 +1163,50 @@ const PageBuilder = ({
           pushHistory(newLayout);
         }
         return;
+      }
+
+      // ============ INLINE DROP HANDLING ============
+      if (overId.startsWith("inline-")) {
+        const overData = over.data.current;
+
+        if (activeData?.type === "new-widget") {
+          const widgetType = activeData.widgetType as WidgetType;
+          const pId = overData?.parentId ?? null;
+          const insertIndex = overData?.index ?? 0;
+          addWidgetAtPosition(widgetType, pId, insertIndex);
+          return;
+        }
+
+        // Existing widget moved to inline position
+        if (activeId && !activeId.startsWith("library-")) {
+          const pId = overData?.parentId ?? null;
+          const insertIndex = overData?.index ?? 0;
+
+          const draggedWidget = findWidget(layout, activeId);
+          if (!draggedWidget) return;
+
+          const removed = deleteWidgetById(layout, activeId);
+
+          if (pId) {
+            const parent = findWidget(removed, pId);
+            if (!parent) return;
+            const children = [...(parent.children || [])];
+            const safeIndex = Math.max(0, Math.min(insertIndex, children.length));
+            children.splice(safeIndex, 0, draggedWidget);
+            const newLayout = updateWidget(removed, pId, { children });
+            setLayout(newLayout);
+            pushHistory(newLayout);
+            setSelectedId(draggedWidget.id);
+          } else {
+            const newLayout = [...removed];
+            const safeIndex = Math.max(0, Math.min(insertIndex, newLayout.length));
+            newLayout.splice(safeIndex, 0, draggedWidget);
+            setLayout(newLayout);
+            pushHistory(newLayout);
+            setSelectedId(draggedWidget.id);
+          }
+          return;
+        }
       }
 
       if (overId === "canvas-root-drop") {
@@ -1186,7 +1280,7 @@ const PageBuilder = ({
         if (isDescendant(draggedWidget, containerId)) return;
 
         const removed = JSON.parse(
-          JSON.stringify(deleteWidgetById(layout, activeId))
+          JSON.stringify(deleteWidgetById(layout, activeId)),
         ) as PageWidget[];
 
         const updatedContainer = findWidget(removed, containerId);
@@ -1225,7 +1319,7 @@ const PageBuilder = ({
     [
       layout, findWidget, updateWidget, deleteWidgetById, pushHistory,
       addWidget, addWidgetAtPosition, findParentAndIndex,
-    ]
+    ],
   );
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -1236,7 +1330,6 @@ const PageBuilder = ({
 
   const selectedWidget = selectedId ? findWidget(layout, selectedId) : undefined;
 
-  // ============ FIXED: updateSelectedStyle ============
   const updateSelectedStyle = useCallback(
     (changes: Partial<WidgetStyle>, forDevice?: ResponsiveDevice) => {
       if (!selectedId) return;
@@ -1245,9 +1338,6 @@ const PageBuilder = ({
 
       let newStyle: WidgetStyle;
 
-      // Special case: if changes contain "responsive" key directly (from
-      // Responsive Visibility checkboxes), merge into base style.responsive
-      // WITHOUT nesting under device bucket.
       if ("responsive" in changes) {
         newStyle = {
           ...current.style,
@@ -1257,7 +1347,6 @@ const PageBuilder = ({
           },
         };
       } else if (forDevice && forDevice !== "desktop") {
-        // Device-specific styling (e.g., tablet font size)
         const responsive: any = { ...(current.style.responsive || {}) };
         responsive[forDevice] = {
           ...(responsive[forDevice] || {}),
@@ -1265,7 +1354,6 @@ const PageBuilder = ({
         };
         newStyle = { ...current.style, responsive };
       } else {
-        // Desktop/base styling
         newStyle = { ...current.style, ...changes };
       }
 
@@ -1273,7 +1361,7 @@ const PageBuilder = ({
       setLayout(newLayout);
       pushHistory(newLayout);
     },
-    [selectedId, layout, findWidget, updateWidget, pushHistory]
+    [selectedId, layout, findWidget, updateWidget, pushHistory],
   );
 
   const updateSelectedContent = useCallback(
@@ -1283,7 +1371,7 @@ const PageBuilder = ({
       setLayout(newLayout);
       pushHistory(newLayout);
     },
-    [selectedId, layout, updateWidget, pushHistory]
+    [selectedId, layout, updateWidget, pushHistory],
   );
 
   const updateSelectedUrl = useCallback(
@@ -1293,7 +1381,7 @@ const PageBuilder = ({
       setLayout(newLayout);
       pushHistory(newLayout);
     },
-    [selectedId, layout, updateWidget, pushHistory]
+    [selectedId, layout, updateWidget, pushHistory],
   );
 
   const updateSelectedSettings = useCallback(
@@ -1333,7 +1421,7 @@ const PageBuilder = ({
       setLayout(newLayout);
       pushHistory(newLayout);
     },
-    [selectedId, layout, findWidget, updateWidget, pushHistory]
+    [selectedId, layout, findWidget, updateWidget, pushHistory],
   );
 
   const updateSelectedItems = useCallback(
@@ -1343,7 +1431,7 @@ const PageBuilder = ({
       setLayout(newLayout);
       pushHistory(newLayout);
     },
-    [selectedId, layout, updateWidget, pushHistory]
+    [selectedId, layout, updateWidget, pushHistory],
   );
 
   const handleSave = useCallback(
@@ -1361,7 +1449,6 @@ const PageBuilder = ({
       setSaving(true);
       setMessage("");
 
-      // ===== TEMPLATE MODE SAVE (Header/Footer) =====
       if (saveHandler) {
         try {
           await saveHandler({
@@ -1382,7 +1469,6 @@ const PageBuilder = ({
         return;
       }
 
-      // ===== PAGE MODE SAVE =====
       const pageData: {
         title: string;
         slug: string;
@@ -1413,7 +1499,7 @@ const PageBuilder = ({
               `/admin/appearance/page-builder?id=${result.id}${
                 contentId ? `&contentId=${contentId}` : ""
               }${urlPostType ? `&postType=${urlPostType}` : ""}`,
-              { replace: true }
+              { replace: true },
             );
           }
         }
@@ -1421,7 +1507,7 @@ const PageBuilder = ({
         setMessage(
           publish
             ? "✅ Page published successfully."
-            : "✅ Page saved successfully."
+            : "✅ Page saved successfully.",
         );
       } catch (error: any) {
         console.error("SAVE ERROR:", error?.response?.data);
@@ -1433,7 +1519,7 @@ const PageBuilder = ({
     [
       title, slug, status, globals, showTitle, pageId, contentId,
       urlPostType, navigate, saveHandler, mode,
-    ]
+    ],
   );
 
   useEffect(() => {
@@ -1471,7 +1557,6 @@ const PageBuilder = ({
 
   return (
     <div className="page-builder">
-      {/* ============ TOP BAR ============ */}
       <header className="builder-topbar">
         <button
           type="button"
@@ -1663,7 +1748,6 @@ const PageBuilder = ({
 
       {message && <div className="builder-message">{message}</div>}
 
-      {/* ============ WORKSPACE ============ */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -1804,10 +1888,12 @@ const PageBuilder = ({
                     items={layout.map((w) => w.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    {layout.map((widget) => (
+                    {layout.map((widget, index) => (
                       <CanvasRenderer
                         key={widget.id}
                         widget={widget}
+                        parentId={null}
+                        index={index}
                         selectedId={selectedId}
                         onSelect={setSelectedId}
                         onDelete={handleDelete}
