@@ -8,6 +8,8 @@ from fastapi.staticfiles import StaticFiles
 from backend.database.connection import client
 
 from backend.routes.products import router as product_router
+from backend.routes.product_taxonomies import router as product_taxonomies_router
+from backend.routes.orders import router as orders_router
 from backend.routes.auth import router as auth_router
 from backend.routes.users import router as users_router
 from backend.routes.profile import router as profile_router
@@ -15,15 +17,15 @@ from backend.routes.dashboard import router as dashboard_router
 from backend.routes.content import router as content_router
 from backend.routes.settings import router as settings_router
 from backend.routes.menus import router as menus_router
-from backend.routes.header_footer import router as header_footer_router
 from backend.routes.media import router as media_router
 from backend.routes.page_builder import router as page_builder_router
 from backend.routes.public import router as public_router
+from backend.routes.forms import router as forms_router
+from backend.routes import header_footer
 
 
 app = FastAPI()
 
-# Maximum request size: 25 MB
 MAX_REQUEST_SIZE = 25 * 1024 * 1024
 
 
@@ -39,10 +41,7 @@ app.add_middleware(
 )
 
 
-# Project root
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Upload directory
 UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
 
 os.makedirs(UPLOADS_DIR, exist_ok=True)
@@ -79,19 +78,21 @@ app.mount(
 )
 
 
-# Register API routers
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(profile_router)
 app.include_router(product_router)
+app.include_router(product_taxonomies_router)
+app.include_router(orders_router)
 app.include_router(dashboard_router)
 app.include_router(content_router)
 app.include_router(settings_router)
 app.include_router(menus_router)
-app.include_router(header_footer_router)
 app.include_router(media_router)
 app.include_router(page_builder_router)
 app.include_router(public_router)
+app.include_router(forms_router)
+app.include_router(header_footer.router)
 
 
 @app.get("/")

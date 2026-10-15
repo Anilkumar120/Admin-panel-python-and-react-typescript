@@ -54,15 +54,49 @@ const Sidebar = () => {
           Users
         </NavLink>
 
-        <NavLink
-          to="/admin/products"
-          className={({ isActive }) =>
-            isActive ? "nav-link active" : "nav-link"
-          }
-        >
-          <span>📦</span>
-          Products
-        </NavLink>
+        <div className="sidebar-section products-sidebar-section">
+          <NavLink
+            to="/admin/products"
+            className={({ isActive }) =>
+              isActive ? "sidebar-section-title active" : "sidebar-section-title"
+            }
+          >
+            <span>📦</span>
+            Products
+          </NavLink>
+          <div className="products-submenu">
+            <NavLink to="/admin/products" end className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span>▦</span>All Products
+            </NavLink>
+            <NavLink to="/admin/products/create" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span>＋</span>Add New Product
+            </NavLink>
+            <NavLink to="/admin/products/categories" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span>▤</span>Categories
+            </NavLink>
+            <NavLink to="/admin/products/tags" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span>#</span>Tags
+            </NavLink>
+            <NavLink to="/admin/products/attributes" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span>⚙</span>Attributes
+            </NavLink>
+            <NavLink to="/admin/products/brands" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span>◆</span>Brands
+            </NavLink>
+            <NavLink to="/admin/appearance/header-footer?template=single_product" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span>▣</span>Single Product Template
+            </NavLink>
+            <NavLink to="/admin/orders" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span>🧾</span>Orders
+            </NavLink>
+            <NavLink to="/admin/orders/trash" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span>🗑</span>Trash Orders
+            </NavLink>
+            <NavLink to="/admin/products/trash" className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}>
+              <span>🗑</span>Trash Products
+            </NavLink>
+          </div>
+        </div>
 
         <NavLink
           to="/admin/media"
@@ -109,6 +143,15 @@ const Sidebar = () => {
             <span>📃</span>
             Pages
           </NavLink>
+          <NavLink
+            to="/admin/content/form-submissions"
+            className={({ isActive }) =>
+              isActive ? "nav-link active" : "nav-link"
+            }
+          >
+            <span>✉️</span>
+            Form Submissions
+          </NavLink>
 
           {customPostTypes.map((postType) => (
             <NavLink
@@ -150,15 +193,14 @@ const Sidebar = () => {
             <span>🧭</span>
             Menus
           </NavLink>
-
           <NavLink
             to="/admin/appearance/header-footer"
             className={({ isActive }) =>
               isActive ? "nav-link active" : "nav-link"
             }
           >
-            <span>🖼️</span>
-            Header & Footer
+            <span>🔝</span>
+            Header &amp; Footer
           </NavLink>
 
           {/* ✅ NEW: Page Builder Link */}

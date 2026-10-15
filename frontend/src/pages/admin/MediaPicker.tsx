@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   getMedia,
   uploadMedia,
@@ -21,6 +22,7 @@ interface MediaPickerProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (media: PickedMedia | PickedMedia[]) => void;
+  onError?: (error: unknown) => void;
   multiple?: boolean;
   fileType?: "image" | "video" | "all";
 }
@@ -29,6 +31,7 @@ const MediaPicker = ({
   isOpen,
   onClose,
   onSelect,
+  onError,
   multiple = false,
   fileType = "image",
 }: MediaPickerProps) => {
@@ -56,6 +59,7 @@ const MediaPicker = ({
         console.error("Media load error:", err);
         setError("Failed to load media.");
         setMedia([]);
+        onError?.(err);
       } finally {
         setLoading(false);
       }
@@ -66,7 +70,7 @@ const MediaPicker = ({
     }, search ? 300 : 0);
 
     return () => clearTimeout(timer);
-  }, [isOpen, search, fileType]);
+  }, [isOpen, search, fileType, onError]);
 
   // Reset on open
   useEffect(() => {
@@ -104,6 +108,7 @@ const MediaPicker = ({
     } catch (err) {
       console.error("Upload error:", err);
       setError("Upload failed. Please try again.");
+      onError?.(err);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -144,7 +149,7 @@ const MediaPicker = ({
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="media-picker-overlay" onClick={onClose}>
       <div className="media-picker" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
@@ -216,6 +221,15 @@ const MediaPicker = ({
                       <div
                         key={item._id}
                         className={`media-item ${isSelected ? "selected" : ""}`}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={isSelected}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            toggleSelect(item);
+                          }
+                        }}
                         onClick={() => toggleSelect(item)}
                       >
                         {isImage ? (
@@ -309,7 +323,8 @@ const MediaPicker = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

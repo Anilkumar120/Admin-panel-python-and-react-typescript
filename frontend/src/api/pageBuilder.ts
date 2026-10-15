@@ -19,7 +19,7 @@ const getHeaders = () => {
 export type WidgetType =
   | "container" | "grid" | "section" | "column"
   | "heading" | "text" | "image" | "button" | "spacer"
-  | "icon" | "icon_box" | "divider" | "alert"
+  | "icon" | "icon_box" | "icon_list" | "image_box" | "divider" | "alert"
   | "gallery" | "carousel" | "slider" | "video" | "map"
   | "accordion" | "tabs" | "toggle" | "testimonial"
   | "progress_bar" | "counter" | "countdown" | "rating"
@@ -29,13 +29,19 @@ export type WidgetType =
   | "post_meta" | "post_image" | "author_box"
   | "products" | "product_grid" | "product_list"
   | "product_title" | "product_price" | "product_image"
-  | "product_gallery" | "product_description"
+  | "product_gallery" | "product_description" | "product_short_description"
+  | "product_categories" | "product_tags"
   | "add_to_cart" | "product_rating" | "product_stock"
   | "related_products" | "cart" | "checkout" | "my_account"
-  | "html" | "shortcode" | "table" | "breadcrumbs"
+  | "html" | "shortcode" | "table" | "tablepress" | "text_path" | "menu_anchor" | "sidebar" | "read_more" | "soundcloud" | "map" | "breadcrumbs"
+  | "link_bio_minimalist" | "link_bio_classic" | "link_bio_showcase"
+  | "link_bio_links" | "link_bio_services" | "link_bio_portfolio" | "link_bio_business_card"
   | "pagination" | "site_logo" | "site_title"
   | "site_tagline" | "archive_title" | "archive_description"
-  | "featured_image";
+  | "featured_image"
+  | "nav_menu"
+  | "footer_menu"
+  | "copyright";
 
 export type PageStatus = "draft" | "published";
 export type CSSUnit = "px" | "%" | "vh" | "vw" | "em" | "rem" | "auto";
@@ -119,6 +125,8 @@ export interface WidgetStyle {
   backgroundImage?: string;
   backgroundSize?: string;
   backgroundPosition?: string;
+  iconSize?: number;
+  iconColor?: string;
   backgroundRepeat?: string;
   backgroundAttachment?: "scroll" | "fixed" | "local";
   backgroundGradient?: string;
@@ -210,6 +218,21 @@ export interface WidgetStyle {
   htmlTag?: string;
   ariaLabel?: string;
   customClasses?: string;
+  hoverTranslateY?: number;
+  hoverTextDecoration?: string;
+  animationDelay?: number;
+  animationEasing?: "ease" | "ease-in" | "ease-out" | "ease-in-out" | "linear";
+  transitionProperty?: string;
+  objectFit?: "cover" | "contain" | "fill" | "none" | "scale-down";
+  objectPosition?: string;
+  mobileBreakpoint?: "tablet" | "mobile";
+  mobileMenuStyle?: "dropdown" | "slide" | "fullscreen";
+  mobileMenuBgColor?: string;
+  hamburgerColor?: string;
+  menuAnimation?: "slide" | "fade" | "scale";
+  // 🆕 Additional fields used by menu/header-footer widgets
+  activeColor?: string;
+  hoverUnderline?: boolean;
 }
 
 export interface LinkSettings {
@@ -231,6 +254,7 @@ export interface MediaItem {
   height?: number;
 }
 
+// ============ 🆕 WIDGET ITEM (with submenu support) ============
 export interface WidgetItem {
   id: string;
   title: string;
@@ -247,6 +271,15 @@ export interface WidgetItem {
   contentTextAlign?: string;
   contentColor?: string;
   customStyle?: boolean;
+
+  // 🆕 For menu submenus (nested items)
+  children?: WidgetItem[];
+
+  // 🆕 Alternate fields from menu API
+  url?: string;
+  label?: string;
+  target?: string;
+  parent_id?: string;
 }
 
 export interface QuerySettings {
@@ -291,6 +324,8 @@ export interface GlobalStyleReference {
 
 export interface WidgetSettings {
   columns?: number;
+  title?: string;
+  description?: string;
   customClasses?: string;
   htmlTag?: string;
   autoplay?: boolean;
@@ -324,6 +359,14 @@ export interface WidgetSettings {
   loop?: boolean;
   iconName?: string;
   iconLibrary?: string;
+  rating?: number;
+  mapAddress?: string;
+  profileName?: string;
+  profileDescription?: string;
+  profileImage?: string;
+  profileButtonText?: string;
+  tableHeaders?: string[];
+  shortcode?: string;
   iconPosition?: "before" | "after" | "top" | "left" | "right";
   allowMultipleOpen?: boolean;
   defaultActiveItem?: number;
@@ -339,6 +382,20 @@ export interface WidgetSettings {
   dynamicSource?: string;
   dynamicField?: string;
   altText?: string;
+  previewProductId?: string;
+  previewProduct?: {
+    id: string;
+    title: string;
+    price: number;
+    image?: string;
+    description?: string;
+    short_description?: string;
+    quantity?: number;
+    manage_stock?: boolean;
+    category?: string;
+    tags?: string[];
+    gallery?: MediaItem[];
+  };
 
   sliderName?: string;
   sliderHeight?: number;
@@ -356,6 +413,10 @@ export interface WidgetSettings {
   titleHtmlTag?: string;
   descriptionHtmlTag?: string;
   buttonStyle?: "solid" | "outline" | "text";
+
+  // 🆕 Menu-specific
+  selectedMenuId?: string;
+  menuName?: string;
 }
 
 export interface PageWidget {

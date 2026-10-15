@@ -2,6 +2,43 @@ import { useMemo } from "react";
 import { getImageUrl } from "../../api/config";
 import type { PageWidget, ResponsiveDevice } from "../../types/pageBuilder";
 
+// ============================================================
+// CONTENT RENDERER — Renders HTML string content
+// ============================================================
+
+interface ContentRendererProps {
+  layout: string | any;
+}
+
+const ContentRenderer = ({ layout }: ContentRendererProps) => {
+  const safeLayout = useMemo(() => {
+    if (typeof layout === "string") return layout;
+    if (layout === null || layout === undefined) return "";
+    console.warn(
+      "ContentRenderer: layout is not a string. Received:",
+      typeof layout,
+    );
+    return String(layout);
+  }, [layout]);
+
+  if (!safeLayout) {
+    return null;
+  }
+
+  return (
+    <div
+      className="content-renderer"
+      dangerouslySetInnerHTML={{ __html: safeLayout }}
+    />
+  );
+};
+
+export default ContentRenderer;
+
+// ============================================================
+// BUILDER RENDERER — Renders array of PageWidget
+// ============================================================
+
 interface BuilderRendererProps {
   layout: PageWidget[];
   device?: ResponsiveDevice;
@@ -118,7 +155,6 @@ const WidgetRenderer = ({
     widget.type,
   );
 
-  // Containers — recursive render
   if (isContainer) {
     return (
       <div style={renderStyles(widget.style, device)}>
@@ -129,7 +165,6 @@ const WidgetRenderer = ({
     );
   }
 
-  // Individual widgets
   switch (widget.type) {
     case "heading":
       return (
@@ -166,10 +201,8 @@ const WidgetRenderer = ({
         </a>
       );
 
-    // ✅ IMAGE — Full URL fix
     case "image":
       if (!widget.url) return null;
-
       return (
         <img
           src={getImageUrl(widget.url)}
@@ -189,7 +222,6 @@ const WidgetRenderer = ({
 
     case "video":
       if (!widget.url) return null;
-
       return (
         <div
           style={{
@@ -270,7 +302,6 @@ const WidgetRenderer = ({
         </div>
       );
 
-    // ✅ GALLERY — full URL
     case "gallery":
       return (
         <div
@@ -296,7 +327,6 @@ const WidgetRenderer = ({
         </div>
       );
 
-    // ✅ CAROUSEL / SLIDER
     case "carousel":
     case "slider":
       return widget.settings?.images && widget.settings.images.length > 0 ? (
@@ -327,13 +357,7 @@ const WidgetRenderer = ({
       ) : null;
 
     case "spacer":
-      return (
-        <div
-          style={{
-            minHeight: `${s.padding?.top || 40}px`,
-          }}
-        />
-      );
+      return <div style={{ minHeight: `${s.padding?.top || 40}px` }} />;
 
     case "divider":
       return (
@@ -349,11 +373,7 @@ const WidgetRenderer = ({
 
     case "html":
       return (
-        <div
-          dangerouslySetInnerHTML={{
-            __html: widget.content || "",
-          }}
-        />
+        <div dangerouslySetInnerHTML={{ __html: widget.content || "" }} />
       );
 
     case "alert":
@@ -675,20 +695,30 @@ const WidgetRenderer = ({
       );
 
     default:
-      // Log unknown widget types
       console.warn("⚠️ Unknown widget type:", widget.type, widget);
       return null;
   }
 };
 
-// ============ MAIN RENDERER ============
-const BuilderRenderer = ({
+// ============ MAIN BUILDER RENDERER ============
+export const BuilderRenderer = ({
   layout,
   device = "desktop",
 }: BuilderRendererProps) => {
-  const memoizedLayout = useMemo(() => layout || [], [layout]);
+  // ✅ Defensive: guarantee layout is always an array
+  const safeLayout = useMemo(() => {
+    if (Array.isArray(layout)) return layout;
+    if (layout === null || layout === undefined) return [];
+    console.warn(
+      "⚠️ BuilderRenderer: layout is not an array. Received type:",
+      typeof layout,
+      "Value:",
+      layout,
+    );
+    return [];
+  }, [layout]);
 
-  if (!memoizedLayout.length) {
+  if (!safeLayout.length) {
     return (
       <div style={{ padding: 40, textAlign: "center", color: "#999" }}>
         No content
@@ -698,11 +728,9 @@ const BuilderRenderer = ({
 
   return (
     <div className="builder-renderer">
-      {memoizedLayout.map((widget) => (
+      {safeLayout.map((widget) => (
         <WidgetRenderer key={widget.id} widget={widget} device={device} />
       ))}
     </div>
   );
 };
-
-export default BuilderRenderer;

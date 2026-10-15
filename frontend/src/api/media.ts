@@ -227,15 +227,15 @@ export const getMediaUrl = (url?: string | null) => {
   }
 
   const path = url.startsWith("/") ? url : `/${url}`;
+  const apiOrigin = API_BASE.endsWith("/api")
+    ? API_BASE.slice(0, -4)
+    : API_BASE;
 
   // The backend may already return /api/media/file/<id>.
   if (path.startsWith("/api/")) {
-    if (API_BASE.endsWith("/api")) {
-      return `${API_BASE.slice(0, -4)}${path}`;
-    }
-
-    return path;
+    return `${apiOrigin}${path}`;
   }
 
-  return `${API_BASE}${path}`;
+  // Legacy uploads are served from the backend root, outside its /api routes.
+  return `${apiOrigin}${path}`;
 };

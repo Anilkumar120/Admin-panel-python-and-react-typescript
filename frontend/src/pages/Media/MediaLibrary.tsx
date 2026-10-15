@@ -6,17 +6,13 @@ import {
   uploadMedia,
   deleteMedia,
   bulkDeleteMedia,
+  getMediaUrl,
   type MediaItem,
 } from "../../api/media";
 
 import MediaDetails from "../../components/Media/MediaDetails";
 
 const MediaLibrary = () => {
-  const API_URL = String(import.meta.env.VITE_API_URL || "/api").replace(
-    /\/+$/,
-    "",
-  );
-
   const navigate = useNavigate();
 
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -41,29 +37,6 @@ const MediaLibrary = () => {
   const [uploadCompleted, setUploadCompleted] = useState(0);
   const [uploadSuccess, setUploadSuccess] = useState(0);
   const [uploadFailed, setUploadFailed] = useState(0);
-
-  // Convert relative media URLs into valid URLs.
-  const getMediaUrl = (url?: string | null) => {
-    if (!url) return "";
-
-    if (/^https?:\/\//i.test(url) || url.startsWith("data:")) {
-      return url;
-    }
-
-    // GridFS URLs returned by the backend already contain /api.
-    if (url.startsWith("/api/")) {
-      return url;
-    }
-
-    // VITE_API_URL may be /api or a full backend URL ending in /api.
-    const path = url.startsWith("/") ? url : `/${url}`;
-
-    if (API_URL.endsWith("/api") && path.startsWith("/api/")) {
-      return `${API_URL.slice(0, -4)}${path}`;
-    }
-
-    return `${API_URL}${path}`;
-  };
 
   // Load media from the API.
   const loadMedia = useCallback(async () => {

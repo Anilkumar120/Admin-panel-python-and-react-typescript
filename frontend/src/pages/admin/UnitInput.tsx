@@ -53,10 +53,10 @@ const UnitInput = ({
           type="text"
           inputMode="decimal"
           value={unit === "auto" ? "" : number}
-          placeholder={placeholder}
+          placeholder={unit === "auto" ? "Auto" : placeholder}
           onChange={(e) => handleNumberChange(e.target.value)}
           className="unit-input-number"
-          disabled={unit === "auto"}
+          aria-label={label}
         />
         <select
           value={unit}

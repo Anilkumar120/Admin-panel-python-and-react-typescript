@@ -143,17 +143,32 @@ const AdminLayout = () => {
             Users
           </Link>
 
-          <Link
-            to="/admin/products"
-            className={
-              location.pathname.startsWith("/admin/products")
-                ? "nav-link active"
-                : "nav-link"
-            }
-          >
-            <span>📦</span>
-            Products
-          </Link>
+          <div className="sidebar-section products-sidebar-section">
+            <Link
+              to="/admin/products"
+              className={
+                location.pathname.startsWith("/admin/products") ||
+                location.pathname.startsWith("/admin/orders")
+                  ? "sidebar-section-title active"
+                  : "sidebar-section-title"
+              }
+            >
+              <span>📦</span>
+              Products
+            </Link>
+            <div className="products-submenu">
+              <Link to="/admin/products" className={`nav-link${location.pathname === "/admin/products" ? " active" : ""}`}><span>▦</span>All Products</Link>
+              <Link to="/admin/products/create" className={`nav-link${location.pathname === "/admin/products/create" ? " active" : ""}`}><span>＋</span>Add New Product</Link>
+              <Link to="/admin/products/categories" className={`nav-link${location.pathname === "/admin/products/categories" ? " active" : ""}`}><span>▤</span>Categories</Link>
+              <Link to="/admin/products/tags" className={`nav-link${location.pathname === "/admin/products/tags" ? " active" : ""}`}><span>#</span>Tags</Link>
+              <Link to="/admin/products/attributes" className={`nav-link${location.pathname === "/admin/products/attributes" ? " active" : ""}`}><span>⚙</span>Attributes</Link>
+              <Link to="/admin/products/brands" className={`nav-link${location.pathname === "/admin/products/brands" ? " active" : ""}`}><span>◆</span>Brands</Link>
+              <Link to="/admin/appearance/header-footer?template=single_product" className={`nav-link${location.pathname === "/admin/appearance/header-footer" ? " active" : ""}`}><span>▣</span>Single Product Template</Link>
+              <Link to="/admin/orders" className={`nav-link${location.pathname === "/admin/orders" ? " active" : ""}`}><span>🧾</span>Orders</Link>
+              <Link to="/admin/orders/trash" className={`nav-link${location.pathname === "/admin/orders/trash" ? " active" : ""}`}><span>🗑</span>Trash Orders</Link>
+              <Link to="/admin/products/trash" className={`nav-link${location.pathname === "/admin/products/trash" ? " active" : ""}`}><span>🗑</span>Trash Products</Link>
+            </div>
+          </div>
 
           <Link
             to="/admin/media"
@@ -257,18 +272,6 @@ const AdminLayout = () => {
               Menus
             </Link>
 
-            <Link
-              to="/admin/appearance/header-footer"
-              className={
-                location.pathname.startsWith("/admin/appearance/header-footer")
-                  ? "nav-link active"
-                  : "nav-link"
-              }
-            >
-              <span>🖼️</span>
-              Header &amp; Footer
-            </Link>
-
             {/* ✅ NEW: Page Builder Link */}
             <Link
               to="/admin/appearance/page-builder"
@@ -282,6 +285,20 @@ const AdminLayout = () => {
               Page Builder
             </Link>
             {/* ✅ END NEW */}
+
+            {/* ✅ NEW: Header & Footer Link */}
+            <Link
+              to="/admin/appearance/header-footer"
+              className={
+                location.pathname.startsWith("/admin/appearance/header-footer")
+                  ? "nav-link active"
+                  : "nav-link"
+              }
+            >
+              <span>🔝</span>
+              Header &amp; Footer
+            </Link>
+            {/* ✅ END NEW */}
           </div>
 
           <div className="sidebar-section">
@@ -293,13 +310,24 @@ const AdminLayout = () => {
             <Link
               to="/admin/settings/reading"
               className={
-                location.pathname.startsWith("/admin/settings")
+                location.pathname === "/admin/settings/reading"
                   ? "nav-link active"
                   : "nav-link"
               }
             >
               <span>📖</span>
               Reading
+            </Link>
+            <Link
+              to="/admin/settings/site-identity"
+              className={
+                location.pathname === "/admin/settings/site-identity"
+                  ? "nav-link active"
+                  : "nav-link"
+              }
+            >
+              <span>🖼️</span>
+              Site Identity
             </Link>
           </div>
         </nav>

@@ -32,6 +32,7 @@ const MediaSelector = ({
   const [search, setSearch] = useState("");
 
   const [activeTab, setActiveTab] = useState<"library" | "upload">("library");
+  const [errorMessage, setErrorMessage] = useState("");
 
   const loadMedia = async () => {
     try {
@@ -42,6 +43,7 @@ const MediaSelector = ({
       setMedia(response.items || []);
     } catch (error) {
       console.error("MEDIA SELECTOR LOAD ERROR:", error);
+      setErrorMessage("Unable to load media. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -74,8 +76,9 @@ const MediaSelector = ({
 
     try {
       setUploading(true);
+      setErrorMessage("");
 
-      const response = await uploadMedia(files);
+      const response = await uploadMedia(files.slice(0, 1));
 
       let uploadedMedia: MediaItem | null = null;
 
@@ -100,6 +103,7 @@ const MediaSelector = ({
       setActiveTab("library");
     } catch (error) {
       console.error("MEDIA SELECTOR UPLOAD ERROR:", error);
+      setErrorMessage("Unable to upload the image. Please try again.");
     } finally {
       setUploading(false);
 
@@ -109,6 +113,7 @@ const MediaSelector = ({
 
   return (
     <div
+      className="media-selector-overlay"
       style={{
         position: "fixed",
 
@@ -128,6 +133,7 @@ const MediaSelector = ({
       }}
     >
       <div
+        className="media-selector-dialog"
         style={{
           width: "100%",
 
@@ -317,7 +323,6 @@ const MediaSelector = ({
                 <input
                   type="file"
                   accept=".jpg,.jpeg,.png,.webp,.gif"
-                  multiple
                   onChange={handleUpload}
                   disabled={uploading}
                   style={{
@@ -325,6 +330,12 @@ const MediaSelector = ({
                   }}
                 />
               </label>
+            </div>
+          )}
+
+          {errorMessage && (
+            <div role="alert" className="media-selector-error">
+              {errorMessage}
             </div>
           )}
 

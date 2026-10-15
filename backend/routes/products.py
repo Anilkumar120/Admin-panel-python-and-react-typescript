@@ -1,5 +1,8 @@
 import os 
+import re
 import uuid 
+import unicodedata
+import json
  
 from bson import ObjectId 
 from fastapi import (APIRouter, UploadFile, File, Form, HTTPException, Query, Request, Depends) 
@@ -21,6 +24,84 @@ BASE_DIR = os.path.dirname(
 # IMAGE UPLOAD FOLDER 
  
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads","products" ) 
+
+
+def make_product_slug(name: str, exclude_id: ObjectId | None = None) -> str:
+    normalized = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    base_slug = re.sub(r"[^a-z0-9]+", "-", normalized.lower()).strip("-") or "product"
+    slug = base_slug
+    suffix = 2
+    while True:
+        query = {"slug": slug}
+        if exclude_id is not None:
+            query["_id"] = {"$ne": exclude_id}
+        if not products_collection.find_one(query):
+            return slug
+        slug = f"{base_slug}-{suffix}"
+        suffix += 1
+
+
+PRODUCT_DATA_FIELDS = {
+    "slug", "image", "short_description", "regular_price", "sale_price", "sale_start",
+    "sale_end", "purchase_cost", "sku", "barcode", "product_type", "status",
+    "visibility", "catalog_visibility", "stock_status", "manage_stock",
+    "allow_backorders", "sold_individually", "low_stock_threshold",
+    "min_quantity", "max_quantity", "quantity_step", "weight", "dimensions",
+    "shipping_class", "tags", "gallery", "attributes", "variations",
+    "upsells", "cross_sells", "purchase_note", "menu_order",
+    "reviews_enabled", "external_url", "button_text", "virtual",
+    "downloadable", "download_limit", "download_expiry", "publish_date",
+    "tax_class",
+}
+
+
+def parse_product_data(raw_data: str) -> dict:
+    try:
+        data = json.loads(raw_data or "{}")
+    except json.JSONDecodeError as error:
+        raise HTTPException(status_code=400, detail="Invalid product data") from error
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Product data must be an object")
+
+    result = {key: value for key, value in data.items() if key in PRODUCT_DATA_FIELDS}
+    gallery = result.get("gallery")
+    if gallery is not None:
+        if not isinstance(gallery, list):
+            raise HTTPException(status_code=400, detail="Product gallery must be a list")
+        normalized_gallery = []
+        for entry in gallery:
+            if not isinstance(entry, dict):
+                continue
+            media_id = entry.get("media_id", "")
+            image_url = str(entry.get("url", ""))
+            if media_id:
+                if not ObjectId.is_valid(media_id):
+                    raise HTTPException(status_code=400, detail="Invalid gallery media ID")
+                media = media_collection.find_one({
+                    "_id": ObjectId(media_id),
+                    "is_deleted": {"$ne": True},
+                })
+                if media is None:
+                    raise HTTPException(status_code=404, detail="Gallery image not found")
+                image_url = media.get("url", "") or image_url
+            if image_url:
+                normalized_gallery.append({
+                    "media_id": media_id,
+                    "url": image_url,
+                    "alt": str(entry.get("alt", "")),
+                })
+        result["gallery"] = normalized_gallery
+    for key in ("tags", "upsells", "cross_sells"):
+        if key in result and not isinstance(result[key], list):
+            raise HTTPException(status_code=400, detail=f"{key} must be a list")
+    for key in ("attributes", "variations"):
+        if key in result and not isinstance(result[key], list):
+            raise HTTPException(status_code=400, detail=f"{key} must be a list")
+    return result
+
+
+def product_data_fields(product: dict) -> dict:
+    return {key: product[key] for key in PRODUCT_DATA_FIELDS if key in product}
  
 # CREATE PRODUCT 
  
@@ -33,16 +114,17 @@ async def create_product(
     quantity: int = Form(...), 
     category: str = Form(...), 
     brand: str = Form(""), 
-    media_id: str = Form(...),
+    media_id: str = Form(""),
+    product_data: str = Form("{}"),
     current_user=Depends(require_permission("products.create"))
 ): 
  
     # Price validation 
  
-    if price <= 0: 
+    if price < 0:
         raise HTTPException( 
             status_code=400, 
-            detail="Price must be greater than 0" 
+            detail="Price cannot be negative"
         ) 
  
     # Quantity validation 
@@ -55,22 +137,22 @@ async def create_product(
  
     # Media validation 
  
-    if not ObjectId.is_valid(media_id): 
+    if media_id and not ObjectId.is_valid(media_id):
         raise HTTPException( 
             status_code=400, 
             detail="Invalid media ID" 
         ) 
  
-    media = media_collection.find_one( 
-        { 
-            "_id": ObjectId(media_id), 
-            "is_deleted": { 
-                "$ne": True 
-            } 
-        } 
-    ) 
+    media = None
+    if media_id:
+        media = media_collection.find_one(
+            {
+                "_id": ObjectId(media_id),
+                "is_deleted": {"$ne": True},
+            }
+        )
  
-    if media is None: 
+    if media_id and media is None:
         raise HTTPException( 
             status_code=404, 
             detail="Selected media not found" 
@@ -78,22 +160,40 @@ async def create_product(
  
     # Product data 
  
-    product_data = { 
+    additional_data = parse_product_data(product_data)
+    requested_status = additional_data.get("status", "published")
+    if requested_status not in {"draft", "published", "private"}:
+        raise HTTPException(status_code=400, detail="Invalid product status")
+    sku = str(additional_data.get("sku", "")).strip()
+    if sku and products_collection.find_one({
+        "sku": {"$regex": f"^{re.escape(sku)}$", "$options": "i"},
+        "is_deleted": {"$ne": True},
+    }):
+        raise HTTPException(status_code=409, detail="A product with this SKU already exists")
+    if sku:
+        additional_data["sku"] = sku
+    price = float(additional_data.get("regular_price", price))
+    if price < 0:
+        raise HTTPException(status_code=400, detail="Regular price cannot be negative")
+    product_record = {
+        **additional_data,
         "name": name, 
+        "slug": make_product_slug(additional_data.get("slug") or name),
         "description": description, 
         "price": price, 
         "quantity": quantity, 
         "category": category, 
         "brand": brand, 
-        "media_id": media_id,
-        "image": media.get("url", ""),
+        "media_id": media_id or "",
+        "image": media.get("url", "") if media else "",
+        "status": requested_status,
         "is_deleted": False 
     } 
  
     # MongoDB insert 
  
     try: 
-        result = products_collection.insert_one(product_data) 
+        result = products_collection.insert_one(product_record)
  
     except Exception as error: 
  
@@ -104,7 +204,7 @@ async def create_product(
  
     product_id = str(result.inserted_id) 
  
-    image_path = media.get("url", "") 
+    image_path = media.get("url", "") if media else ""
  
     # Response 
  
@@ -211,6 +311,7 @@ def get_products(
                     image_path = media.get("url", "") 
  
             product_list.append({ 
+                **product_data_fields(product),
                 "id": str(product["_id"]), 
                 "name": product.get("name", ""), 
                 "description": product.get("description",""), 
@@ -426,6 +527,7 @@ def get_product(
     # Return product 
  
     return { 
+        **product_data_fields(product),
         "id": str(product["_id"]), 
         "name": product.get("name", ""), 
         "description": product.get("description",""), 
@@ -456,6 +558,7 @@ async def update_product(
     category: str | None = Form(None), 
     brand: str | None = Form(None), 
     media_id: str | None = Form(None),
+    product_data: str = Form("{}"),
     image: UploadFile | None = File(None),
     current_user=Depends(require_permission("products.edit"))
 ): 
@@ -581,11 +684,11 @@ async def update_product(
  
     # Price validation 
  
-    if updated_price <= 0: 
+    if updated_price < 0:
  
         raise HTTPException( 
             status_code=400, 
-            detail="Price must be greater than 0" 
+            detail="Price cannot be negative"
         ) 
  
     # Quantity validation 
@@ -599,7 +702,11 @@ async def update_product(
 
     # Media validation
 
-    if media_id is not None:
+    if media_id == "":
+        updated_media_id = ""
+        updated_image_path = ""
+
+    elif media_id is not None:
 
         if not ObjectId.is_valid(media_id):
 
@@ -651,10 +758,31 @@ async def update_product(
                     ""
                 )
  
+    additional_data = parse_product_data(product_data)
+    if "status" in additional_data and additional_data["status"] not in {"draft", "published", "private"}:
+        raise HTTPException(status_code=400, detail="Invalid product status")
+    sku = str(additional_data.get("sku", "")).strip()
+    if sku and products_collection.find_one({
+        "sku": {"$regex": f"^{re.escape(sku)}$", "$options": "i"},
+        "_id": {"$ne": ObjectId(product_id)},
+        "is_deleted": {"$ne": True},
+    }):
+        raise HTTPException(status_code=409, detail="A product with this SKU already exists")
+    if sku:
+        additional_data["sku"] = sku
+    if "regular_price" in additional_data:
+        updated_price = float(additional_data["regular_price"])
+        if updated_price < 0:
+            raise HTTPException(status_code=400, detail="Regular price cannot be negative")
+
     # Updated data 
  
     updated_data = { 
         "name": updated_name, 
+        "slug": make_product_slug(
+            additional_data.get("slug") or updated_name,
+            ObjectId(product_id),
+        ),
         "description": updated_description, 
         "price": updated_price, 
         "quantity": updated_quantity, 
@@ -663,6 +791,12 @@ async def update_product(
         "media_id": updated_media_id,
         "image": updated_image_path
     } 
+    updated_data.update(additional_data)
+    updated_data["price"] = updated_price
+    updated_data["slug"] = make_product_slug(
+        additional_data.get("slug") or updated_name,
+        ObjectId(product_id),
+    )
  
     # Update MongoDB 
  

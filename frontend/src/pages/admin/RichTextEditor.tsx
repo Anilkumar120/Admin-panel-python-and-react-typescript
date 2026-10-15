@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import MediaPicker, { type PickedMedia } from "./MediaPicker";
 
 interface RichTextEditorProps {
   value: string;
@@ -17,7 +18,52 @@ const RichTextEditor = ({
   const codeRef = useRef<HTMLTextAreaElement>(null);
   const isInternalChange = useRef(false);
   const [mode, setMode] = useState<"visual" | "code">("visual");
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>({});
+  const savedRange = useRef<Range | null>(null);
+  const savedCodeSelection = useRef<{ start: number; end: number } | null>(null);
+
+  const handleMediaSelect = (media: PickedMedia | PickedMedia[]) => {
+    const picked = Array.isArray(media) ? media[0] : media;
+    if (!picked) return;
+
+    const imageHtml = `<img src="${picked.url}" alt="${picked.alt.replace(/"/g, "&quot;")}" />`;
+    if (mode === "code") {
+      const textarea = codeRef.current;
+      const selection = savedCodeSelection.current;
+      if (!textarea || !selection) return;
+      const currentValue = textarea.value;
+      const nextValue =
+        currentValue.slice(0, selection.start) +
+        imageHtml +
+        currentValue.slice(selection.end);
+      onChange(nextValue);
+      requestAnimationFrame(() => {
+        textarea.focus();
+        const cursor = selection.start + imageHtml.length;
+        textarea.setSelectionRange(cursor, cursor);
+      });
+    } else {
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.focus();
+      const selection = window.getSelection();
+      if (savedRange.current && editor.contains(savedRange.current.commonAncestorContainer)) {
+        selection?.removeAllRanges();
+        selection?.addRange(savedRange.current);
+      } else if (selection) {
+        const range = document.createRange();
+        range.selectNodeContents(editor);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      document.execCommand("insertImage", false, picked.url);
+      isInternalChange.current = true;
+      onChange(editor.innerHTML);
+    }
+    setMediaPickerOpen(false);
+  };
 
   // ============ SYNC VALUE ============
   useEffect(() => {
@@ -124,14 +170,19 @@ const RichTextEditor = ({
           type="button"
           className="rte-add-media"
           onClick={() => {
-            const url = window.prompt("Enter image URL:");
-            if (url) {
-              if (mode === "code") {
-                insertInCode(`<img src="${url}" alt="" />`);
-              } else {
-                exec("insertImage", url);
-              }
+            if (mode === "code" && codeRef.current) {
+              savedCodeSelection.current = {
+                start: codeRef.current.selectionStart,
+                end: codeRef.current.selectionEnd,
+              };
+            } else {
+              const selection = window.getSelection();
+              savedRange.current =
+                selection && selection.rangeCount > 0
+                  ? selection.getRangeAt(0).cloneRange()
+                  : null;
             }
+            setMediaPickerOpen(true);
           }}
         >
           <span className="rte-media-icon">🖼</span> Add Media
@@ -510,6 +561,12 @@ const RichTextEditor = ({
         </span>
         <span className="rte-footer-resize">◢</span>
       </div>
+      <MediaPicker
+        isOpen={mediaPickerOpen}
+        onClose={() => setMediaPickerOpen(false)}
+        onSelect={handleMediaSelect}
+        fileType="image"
+      />
     </div>
   );
 };

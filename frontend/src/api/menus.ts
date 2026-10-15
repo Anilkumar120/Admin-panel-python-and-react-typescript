@@ -72,3 +72,38 @@ export const deleteMenu = async (menuId: string) => {
 
   return response.data;
 };
+
+// ============ 🆕 FOR HEADER/FOOTER BUILDER ============
+
+export interface MenuForDropdown {
+  id: string;
+  name: string;
+  items: any[];
+}
+
+/**
+ * Get menus as a simple dropdown list (used by Header/Footer builder
+ * to populate the "Select Menu" dropdown, like Elementor).
+ */
+export const getMenusForDropdown = async (): Promise<MenuForDropdown[]> => {
+  const menus = await getMenus();
+
+  // Backend may return {menus: [...]} or directly [...]
+  const rawList = Array.isArray(menus)
+    ? menus
+    : Array.isArray((menus as any)?.menus)
+      ? (menus as any).menus
+      : [];
+
+  return rawList
+    .filter((menu: any) => (menu?.id ?? menu?._id) && menu?.name)
+    .map((menu: any) => ({
+      id: String(menu.id ?? menu._id),
+      name: String(menu.name),
+      items: Array.isArray(menu.items)
+        ? menu.items
+        : Array.isArray(menu.menu_items)
+          ? menu.menu_items
+          : [],
+    }));
+};

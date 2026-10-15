@@ -1,16 +1,491 @@
-import { useEffect, useMemo, useState, useRef, useCallback } from "react";
-import { getImageUrl } from "../../api/config";
+import { useEffect, useMemo, useState, useRef, useCallback, type FormEvent } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import axios from "axios";
+import { API_URL, getImageUrl } from "../../api/config";
 import type { PageWidget, ResponsiveDevice } from "../../types/pageBuilder";
+import { submitForm } from "../../api/forms";
+import { addToCart } from "../../api/cart";
 
 interface BuilderRendererProps {
   layout: PageWidget[];
   device?: ResponsiveDevice;
+  pageId?: string;
+  pageTitle?: string;
+  product?: ProductData;
 }
+
+export interface ProductData {
+  id: string;
+  title: string;
+  name: string;
+  slug: string;
+  description: string;
+  excerpt: string;
+  image: string;
+  featured_image: string;
+  gallery?: { media_id?: string; url: string; alt?: string }[];
+  price: number;
+  quantity: number;
+  manage_stock?: boolean;
+  stock_status: string;
+  category: string;
+  tags?: string[];
+  brand: string;
+  sku: string;
+}
+
+const ProductGridWidget = ({
+  limit,
+  columns,
+}: {
+  limit: number;
+  columns: number;
+}) => {
+  const [products, setProducts] = useState<ProductData[]>([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    axios
+      .get<{ products: ProductData[] }>(`${API_URL}/api/public/products`, {
+        params: { limit },
+      })
+      .then(({ data }) => {
+        if (active) setProducts(Array.isArray(data.products) ? data.products : []);
+      })
+      .catch((loadError) => {
+        console.error("PUBLIC PRODUCT GRID LOAD ERROR:", loadError);
+        if (active) setError("Products could not be loaded.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [limit]);
+
+  if (error) return <p role="alert">{error}</p>;
+  if (!products.length) return <p>No products available.</p>;
+  const cardMinWidth = Math.max(160, Math.floor(1200 / Math.max(1, Math.min(columns, 6))));
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${cardMinWidth}px), 1fr))`,
+        gap: 16,
+      }}
+    >
+      {products.map((product) => (
+        <a
+          key={product.id}
+          href={`/products/${encodeURIComponent(product.slug || product.id)}`}
+          style={{
+            border: "1px solid #e0e0e0",
+            borderRadius: 8,
+            overflow: "hidden",
+            color: "inherit",
+            textAlign: "center",
+            textDecoration: "none",
+            background: "#fff",
+          }}
+        >
+          {product.image && (
+            <img
+              src={getImageUrl(product.image)}
+              alt={product.title}
+              loading="lazy"
+              style={{ display: "block", width: "100%", aspectRatio: "1", objectFit: "cover" }}
+            />
+          )}
+          <div style={{ padding: 12 }}>
+            <h3 style={{ margin: "0 0 6px", fontSize: 15 }}>{product.title}</h3>
+            <strong style={{ color: "#0c2f55" }}>₹{Number(product.price || 0).toFixed(2)}</strong>
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+};
+
+// ============ STYLE INJECTOR ============
+const StyleInjector = ({ css }: { css: string }) => {
+  if (!css) return null;
+  return (
+    <style dangerouslySetInnerHTML={{ __html: css }} data-builder-style="true" />
+  );
+};
+
+const InteractiveTabs = ({
+  items,
+  widgetId,
+  color,
+}: {
+  items: NonNullable<PageWidget["items"]>;
+  widgetId: string;
+  color: string;
+}) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeItem = items[activeIndex] || items[0];
+  if (!activeItem) return null;
+
+  return (
+    <div>
+      <div
+        role="tablist"
+        aria-label="Content tabs"
+        style={{ display: "flex", flexWrap: "wrap", borderBottom: "1px solid #e0e0e0" }}
+      >
+        {items.map((item, index) => (
+          <button
+            key={item.id}
+            id={`${widgetId}-tab-${index}`}
+            type="button"
+            role="tab"
+            aria-selected={index === activeIndex}
+            aria-controls={`${widgetId}-panel`}
+            onClick={() => setActiveIndex(index)}
+            style={{
+              padding: "10px 20px",
+              border: 0,
+              borderBottom: index === activeIndex ? `2px solid ${color}` : "2px solid transparent",
+              background: "transparent",
+              color: index === activeIndex ? color : "#666",
+              fontWeight: index === activeIndex ? 700 : 500,
+              cursor: "pointer",
+            }}
+          >
+            {item.title}
+          </button>
+        ))}
+      </div>
+      <div
+        id={`${widgetId}-panel`}
+        role="tabpanel"
+        aria-labelledby={`${widgetId}-tab-${activeIndex}`}
+        style={{ padding: 12, color: "#666" }}
+      >
+        {activeItem.content}
+      </div>
+    </div>
+  );
+};
+
+const PublicFormWidget = ({
+  widget,
+  pageId,
+  pageTitle,
+  background,
+}: {
+  widget: PageWidget;
+  pageId: string;
+  pageTitle: string;
+  background?: string;
+}) => {
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setSubmitting(true);
+    setMessage("");
+    setError("");
+
+    const formData = new FormData(event.currentTarget);
+    const website = String(formData.get("website") || "");
+    const fields = Object.fromEntries(
+      Array.from(formData.entries())
+        .filter(([name, value]) => name !== "website" && typeof value === "string")
+        .map(([name, value]) => [name, String(value)]),
+    );
+
+    try {
+      await submitForm({
+        page_id: pageId,
+        page_title: pageTitle,
+        widget_id: widget.id,
+        fields,
+        website,
+      });
+      setMessage(widget.settings?.successMessage || "Thank you. Your message has been received.");
+      form.reset();
+    } catch (submitError) {
+      console.error("PUBLIC FORM SUBMISSION ERROR:", submitError);
+      setError("Your message could not be sent. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form
+      onSubmit={(event) => void handleSubmit(event)}
+      style={{
+        padding: 24,
+        background: background || "#f8f9fc",
+        borderRadius: 12,
+      }}
+    >
+      <input
+        type="text"
+        name="website"
+        tabIndex={-1}
+        autoComplete="off"
+        aria-hidden="true"
+        style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}
+      />
+      <label style={{ display: "block", marginBottom: 12 }}>
+        <span>Name</span>
+        <input
+          type="text"
+          name="name"
+          autoComplete="name"
+          required
+          maxLength={200}
+          style={{ width: "100%", padding: 12, marginTop: 4, border: "1px solid #ddd", borderRadius: 6, boxSizing: "border-box" }}
+        />
+      </label>
+      <label style={{ display: "block", marginBottom: 12 }}>
+        <span>Email</span>
+        <input
+          type="email"
+          name="email"
+          autoComplete="email"
+          required
+          maxLength={320}
+          style={{ width: "100%", padding: 12, marginTop: 4, border: "1px solid #ddd", borderRadius: 6, boxSizing: "border-box" }}
+        />
+      </label>
+      <label style={{ display: "block", marginBottom: 12 }}>
+        <span>Message</span>
+        <textarea
+          name="message"
+          rows={4}
+          required
+          maxLength={5000}
+          style={{ width: "100%", padding: 12, marginTop: 4, border: "1px solid #ddd", borderRadius: 6, boxSizing: "border-box" }}
+        />
+      </label>
+      <button
+        type="submit"
+        disabled={submitting}
+        style={{
+          padding: "12px 24px",
+          background: "#0c2f55",
+          color: "#fff",
+          border: 0,
+          borderRadius: 6,
+          fontWeight: 600,
+          cursor: submitting ? "wait" : "pointer",
+        }}
+      >
+        {submitting ? "Sending..." : widget.settings?.submitText || "Submit"}
+      </button>
+      {message && <p role="status">{message}</p>}
+      {error && <p role="alert" style={{ color: "#b42318" }}>{error}</p>}
+    </form>
+  );
+};
+
+// ============ HOVER + ANIMATION HELPER ============
+const getHoverAndAnimation = (style: any, widgetId: string) => {
+  const hasHover =
+    style?.hoverBackgroundColor ||
+    style?.hoverColor ||
+    style?.hoverBorderColor ||
+    style?.hoverBoxShadow ||
+    (style?.hoverScale && style.hoverScale !== 1) ||
+    (style?.hoverOpacity !== undefined && style.hoverOpacity !== 1) ||
+    style?.hoverTranslateY;
+
+  const hasAnimation = style?.animation && style.animation !== "none";
+
+  if (!hasHover && !hasAnimation) {
+    return { className: "", cssText: "" };
+  }
+
+  const uid = `w-${widgetId.replace(/[^a-z0-9]/gi, "")}`;
+  const cssParts: string[] = [];
+  const classes: string[] = [];
+
+  if (hasHover) {
+    const hoverClass = `${uid}-hover`;
+    classes.push(hoverClass);
+
+    const duration = style.transitionDuration || 300;
+    const hoverRules: string[] = [];
+
+    if (style.hoverBackgroundColor)
+      hoverRules.push(
+        `background-color: ${style.hoverBackgroundColor} !important;`
+      );
+    if (style.hoverColor)
+      hoverRules.push(`color: ${style.hoverColor} !important;`);
+    if (style.hoverBorderColor)
+      hoverRules.push(`border-color: ${style.hoverBorderColor} !important;`);
+    if (style.hoverBoxShadow)
+      hoverRules.push(`box-shadow: ${style.hoverBoxShadow} !important;`);
+
+    const transforms: string[] = [];
+    if (style.hoverScale && style.hoverScale !== 1)
+      transforms.push(`scale(${style.hoverScale})`);
+    if (style.hoverTranslateY)
+      transforms.push(`translateY(${style.hoverTranslateY}px)`);
+    if (transforms.length)
+      hoverRules.push(`transform: ${transforms.join(" ")} !important;`);
+
+    if (style.hoverOpacity !== undefined && style.hoverOpacity !== 1)
+      hoverRules.push(`opacity: ${style.hoverOpacity} !important;`);
+
+    cssParts.push(`
+      .${hoverClass} {
+        transition: all ${duration}ms ease-in-out;
+      }
+      .${hoverClass}:hover {
+        ${hoverRules.join("\n")}
+      }
+    `);
+  }
+
+  if (hasAnimation) {
+    const animClass = `${uid}-anim`;
+    classes.push(animClass);
+
+    const duration = style.animationDuration || 600;
+    const delay = style.animationDelay || 0;
+    const easing = style.animationEasing || "ease";
+
+    const keyframesMap: Record<string, string> = {
+      fadeIn: `from { opacity: 0; } to { opacity: 1; }`,
+      slideUp: `from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); }`,
+      slideDown: `from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); }`,
+      slideLeft: `from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); }`,
+      slideRight: `from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); }`,
+      zoomIn: `from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); }`,
+      bounce: `0%,20%,50%,80%,100% { transform: translateY(0); } 40% { transform: translateY(-15px); } 60% { transform: translateY(-8px); }`,
+      pulse: `0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); }`,
+    };
+
+    const kfName = `${uid}-kf`;
+    const kfBody = keyframesMap[style.animation] || keyframesMap.fadeIn;
+
+    cssParts.push(`
+      @keyframes ${kfName} { ${kfBody} }
+      .${animClass} {
+        animation: ${kfName} ${duration}ms ${easing} ${delay}ms both;
+      }
+    `);
+  }
+
+  return {
+    className: classes.join(" "),
+    cssText: cssParts.join("\n"),
+  };
+};
+
+const ProductGalleryWidget = ({ product }: { product?: ProductData }) => {
+  const images = product
+    ? [
+        ...(product.image ? [{ url: product.image, alt: product.title }] : []),
+        ...(product.gallery || []),
+      ].filter((image, index, all) =>
+        all.findIndex((candidate) => candidate.url === image.url) === index,
+      )
+    : [];
+  const [selectedImage, setSelectedImage] = useState("");
+
+  useEffect(() => {
+    setSelectedImage(images[0]?.url || "");
+  }, [product?.id, product?.image, product?.gallery]);
+
+  if (!product) return <div>Product Gallery preview — select a product in the builder.</div>;
+  if (!images.length) return <div>Product has no gallery images.</div>;
+
+  return (
+    <div className="product-gallery-widget">
+      <img
+        src={getImageUrl(selectedImage)}
+        alt={images.find((image) => image.url === selectedImage)?.alt || product.title}
+        style={{ display: "block", width: "100%", maxHeight: 640, objectFit: "contain" }}
+      />
+      {images.length > 1 && (
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", marginTop: 10 }}>
+          {images.map((image, index) => (
+            <button
+              key={image.media_id || `${image.url}-${index}`}
+              type="button"
+              aria-label={`Show product image ${index + 1}`}
+              aria-pressed={selectedImage === image.url}
+              onClick={() => setSelectedImage(image.url)}
+              style={{
+                flex: "0 0 72px",
+                padding: 2,
+                border: selectedImage === image.url ? "2px solid #2563eb" : "1px solid #ddd",
+                background: "white",
+                cursor: "pointer",
+              }}
+            >
+              <img src={getImageUrl(image.url)} alt={image.alt || ""} style={{ display: "block", width: "100%", aspectRatio: "1", objectFit: "cover" }} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ProductAddToCart = ({ product }: { product?: ProductData }) => {
+  const [quantity, setQuantity] = useState(1);
+  const [message, setMessage] = useState("");
+  const available = Boolean(product && product.stock_status !== "out_of_stock" && (!product.manage_stock || product.quantity > 0));
+
+  return (
+    <div>
+      {available && (
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 8, marginRight: 10 }}>
+          <span>Qty</span>
+          <input
+            type="number"
+            min={1}
+            max={product?.quantity}
+            value={quantity}
+            onChange={(event) => setQuantity(Math.min(product?.quantity || 1, Math.max(1, Number(event.target.value) || 1)))}
+            style={{ width: 64, padding: 8 }}
+          />
+        </label>
+      )}
+      <button
+        type="button"
+        disabled={!available}
+        onClick={() => {
+          if (!product) return;
+          try {
+            addToCart({
+              product_id: product.id,
+              name: product.title,
+              slug: product.slug,
+              price: product.price,
+              image: product.image,
+            }, quantity);
+            setMessage("Added to cart.");
+          } catch (error) {
+            console.error("Unable to add product to cart:", error);
+            setMessage("Could not add this product to cart.");
+          }
+        }}
+        style={{ padding: "10px 18px", cursor: available ? "pointer" : "not-allowed" }}
+      >
+        {available ? "Add to Cart" : "Out of stock"}
+      </button>
+      {message && <span role="status" style={{ marginLeft: 10 }}>{message}</span>}
+    </div>
+  );
+};
 
 // ============ STYLE RENDERER ============
 const renderStyles = (
   style: any,
-  device: ResponsiveDevice,
+  device: ResponsiveDevice
 ): React.CSSProperties => {
   const rs = style.responsive?.[device] || {};
 
@@ -26,12 +501,10 @@ const renderStyles = (
     return `${m.top || 0}px ${m.right || 0}px ${m.bottom || 0}px ${m.left || 0}px`;
   };
 
-  // ✅ Compute resolved display / direction once
   const resolvedDisplay = (rs.display || style.display) as string | undefined;
   const isFlexOrGrid =
     resolvedDisplay === "flex" || resolvedDisplay === "grid";
 
-  // ✅ ALWAYS emit gap for flex/grid containers (fallback 20px)
   const computeGap = (): string | undefined => {
     if (rs.gap !== undefined) return `${rs.gap}px`;
     if (style.gap !== undefined) return `${style.gap}px`;
@@ -148,7 +621,6 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
       const unit = settings.sliderHeightUnit || "px";
       return `${settings.sliderHeight}${unit}`;
     }
-
     switch (settings.sliderHeight as any) {
       case "small":
         return "300px";
@@ -156,7 +628,6 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
         return "700px";
       case "full":
         return "100vh";
-      case "medium":
       default:
         return "500px";
     }
@@ -182,28 +653,16 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
 
   useEffect(() => {
     if (settings.autoplay === false || isPaused || totalSlides <= 1) return;
-
-    autoplayRef.current = setInterval(
-      nextSlide,
-      settings.autoplaySpeed || 5000,
-    );
-
+    autoplayRef.current = setInterval(nextSlide, settings.autoplaySpeed || 5000);
     return () => {
       if (autoplayRef.current) clearInterval(autoplayRef.current);
     };
-  }, [
-    settings.autoplay,
-    settings.autoplaySpeed,
-    isPaused,
-    totalSlides,
-    nextSlide,
-  ]);
+  }, [settings.autoplay, settings.autoplaySpeed, isPaused, totalSlides, nextSlide]);
 
   if (totalSlides === 0) return null;
 
   const currentImage = images[currentSlide];
   const currentItem = slides[currentSlide];
-
   const imageUrl = currentImage?.url || currentItem?.image || "";
 
   const horizontalAlign = currentItem?.contentPosition || "center";
@@ -216,7 +675,6 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
 
   const contentAlign = currentItem?.contentTextAlign || "center";
   const contentColor = currentItem?.contentColor || "#ffffff";
-
   const overlayColor = widget.style?.overlayColor || "#000000";
   const overlayOpacity = widget.style?.overlayOpacity ?? 0.5;
 
@@ -252,7 +710,6 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
           }}
         />
       )}
-
       <div
         style={{
           position: "absolute",
@@ -262,7 +719,6 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
           pointerEvents: "none",
         }}
       />
-
       <div
         style={{
           position: "absolute",
@@ -291,68 +747,6 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
               {currentItem.title}
             </h2>
           )}
-
-          {currentItem?.content && (
-            <p
-              style={{
-                fontSize: 20,
-                margin: "0 0 28px",
-                color: contentColor,
-                lineHeight: 1.5,
-                opacity: 0.95,
-              }}
-            >
-              {currentItem.content}
-            </p>
-          )}
-
-          {(currentItem?.button1Text || currentItem?.button2Text) && (
-            <div
-              style={{
-                display: "flex",
-                gap: 16,
-                justifyContent: contentJustify,
-                flexWrap: "wrap",
-              }}
-            >
-              {currentItem.button1Text && (
-                <a
-                  href={currentItem.button1Link || "#"}
-                  style={{
-                    padding: "14px 32px",
-                    backgroundColor: "#f0b429",
-                    color: "#0c2f55",
-                    borderRadius: 6,
-                    fontWeight: 600,
-                    fontSize: 16,
-                    textDecoration: "none",
-                    display: "inline-block",
-                  }}
-                >
-                  {currentItem.button1Text}
-                </a>
-              )}
-
-              {currentItem.button2Text && (
-                <a
-                  href={currentItem.button2Link || "#"}
-                  style={{
-                    padding: "14px 32px",
-                    backgroundColor: "transparent",
-                    color: contentColor,
-                    borderRadius: 6,
-                    fontWeight: 600,
-                    fontSize: 16,
-                    textDecoration: "none",
-                    display: "inline-block",
-                    border: `2px solid ${contentColor}`,
-                  }}
-                >
-                  {currentItem.button2Text}
-                </a>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
@@ -379,9 +773,7 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
               alignItems: "center",
               justifyContent: "center",
               zIndex: 10,
-              boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
             }}
-            aria-label="Previous slide"
           >
             ‹
           </button>
@@ -406,9 +798,7 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
               alignItems: "center",
               justifyContent: "center",
               zIndex: 10,
-              boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
             }}
-            aria-label="Next slide"
           >
             ›
           </button>
@@ -437,12 +827,9 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
                 height: 12,
                 borderRadius: 6,
                 border: "none",
-                background:
-                  i === currentSlide ? "#fff" : "rgba(255,255,255,0.5)",
+                background: i === currentSlide ? "#fff" : "rgba(255,255,255,0.5)",
                 cursor: "pointer",
-                transition: "all 0.2s",
               }}
-              aria-label={`Go to slide ${i + 1}`}
             />
           ))}
         </div>
@@ -451,16 +838,404 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
   );
 };
 
+// ============ MENU RENDERER (with SPA navigation) ============
+const MenuRenderer = ({
+  widget,
+  color,
+  fontSize,
+  s,
+  rs,
+}: {
+  widget: PageWidget;
+  color: string;
+  fontSize: number;
+  s: any;
+  rs: any;
+}) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const items =
+    widget.items && widget.items.length > 0
+      ? widget.items
+      : [
+          { id: "1", title: "Home", link: { url: "/" } },
+          { id: "2", title: "About", link: { url: "/about" } },
+          { id: "3", title: "Contact", link: { url: "/contact" } },
+        ];
+
+  const menuGap = s.gap ?? 24;
+  const menuJustify = (rs.justifyContent || s.justifyContent || "center") as any;
+  const hamburgerColor = s.hamburgerColor || color || "#0c2f55";
+  const mobileMenuBg = s.mobileMenuBgColor || "#ffffff";
+  const breakpoint = s.mobileBreakpoint === "tablet" ? 1024 : 768;
+  const uid = `nav-${widget.id.replace(/[^a-z0-9]/gi, "")}`;
+  const menuFontSize = s.fontSize || fontSize || 15;
+  const menuFontWeight = s.fontWeight || 500;
+  const hoverColor = s.hoverColor || "#f0b429";
+
+  const cssText = `
+    .${uid}-wrapper { display: flex; align-items: center; justify-content: space-between; width: 100%; position: relative; }
+    .${uid}-toggle { display: none; }
+    .${uid}-list { display: flex; gap: ${menuGap}px; justify-content: ${menuJustify}; align-items: center; flex-wrap: wrap; margin: 0; padding: 0; list-style: none; }
+    .${uid}-list > li { position: relative; }
+    .${uid}-list > li > a {
+      color: ${color || "#1a1a2e"};
+      text-decoration: none;
+      font-weight: ${menuFontWeight};
+      font-size: ${menuFontSize}px;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 0;
+      cursor: pointer;
+    }
+    .${uid}-list > li > a:hover {
+      color: ${hoverColor};
+      text-decoration: ${s.hoverTextDecoration || "none"};
+    }
+
+    .${uid}-submenu {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      min-width: 200px;
+      background: ${mobileMenuBg};
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      border-radius: 6px;
+      padding: 8px 0;
+      margin: 0;
+      list-style: none;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(8px);
+      transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+      z-index: 100;
+      pointer-events: none;
+    }
+    .${uid}-list > li:hover > .${uid}-submenu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .${uid}-submenu li { position: relative; }
+    .${uid}-submenu a {
+      display: block;
+      padding: 10px 20px;
+      color: ${color || "#1a1a2e"};
+      font-size: ${Math.max(menuFontSize - 1, 12)}px;
+      font-weight: 400;
+      white-space: nowrap;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .${uid}-submenu a:hover {
+      background: rgba(12, 47, 85, 0.08);
+      color: ${hoverColor};
+    }
+    .${uid}-submenu .${uid}-submenu { top: 0; left: 100%; transform: translateX(8px); }
+    .${uid}-submenu li:hover > .${uid}-submenu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(0);
+    }
+
+    .${uid}-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 999;
+    }
+
+    @media (max-width: ${breakpoint}px) {
+      .${uid}-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        z-index: 1001;
+        margin-left: auto;
+      }
+      .${uid}-toggle span,
+      .${uid}-toggle span::before,
+      .${uid}-toggle span::after {
+        display: block;
+        width: 24px;
+        height: 2px;
+        background: ${hamburgerColor};
+        transition: all 0.3s;
+        position: relative;
+      }
+      .${uid}-toggle span::before,
+      .${uid}-toggle span::after {
+        content: "";
+        position: absolute;
+        left: 0;
+      }
+      .${uid}-toggle span::before { top: -8px; }
+      .${uid}-toggle span::after { top: 8px; }
+
+      .${uid}-list {
+        display: flex;
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 300px;
+        max-width: 85vw;
+        height: 100vh;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: flex-start;
+        gap: 0;
+        padding: 80px 24px 24px;
+        background: ${mobileMenuBg};
+        box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+        z-index: 1000;
+        transform: translateX(100%);
+        transition: transform 0.3s ease-out;
+        overflow-y: auto;
+        flex-wrap: nowrap;
+      }
+      .${uid}-list.open { transform: translateX(0); }
+      .${uid}-list > li { width: 100%; }
+      .${uid}-list > li > a {
+        width: 100%;
+        padding: 14px 0;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
+        font-size: 16px;
+        display: flex;
+        justify-content: space-between;
+        white-space: normal;
+      }
+
+      .${uid}-submenu {
+        position: static;
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        background: transparent;
+        box-shadow: none;
+        padding: 0 0 0 16px;
+        display: none;
+        pointer-events: auto;
+      }
+      .${uid}-submenu.open { display: block; }
+      .${uid}-submenu a {
+        color: ${color || "#1a1a2e"};
+        font-size: 14px;
+        padding: 10px 0;
+      }
+
+      .${uid}-backdrop.open { display: block; }
+    }
+  `;
+
+  const handleMenuItemClick = (
+    e: React.MouseEvent<HTMLAnchorElement>,
+    url: string,
+    hasChildren: boolean,
+  ) => {
+    if (hasChildren && window.innerWidth <= breakpoint) {
+      e.preventDefault();
+      const submenu = e.currentTarget.nextElementSibling as HTMLElement;
+      submenu?.classList.toggle("open");
+      return;
+    }
+
+    if (url && url !== "#" && url.startsWith("/")) {
+      if (url === location.pathname) {
+        e.preventDefault();
+        return;
+      }
+      e.preventDefault();
+      navigate(url);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const renderMenuItem = (item: any, depth: number = 0): React.ReactNode => {
+    const hasChildren =
+      item.children && Array.isArray(item.children) && item.children.length > 0;
+    const itemKey = item.id || `${depth}-${item.title}`;
+    const itemUrl = item.link?.url || item.url || "#";
+
+    return (
+      <li key={itemKey}>
+        <a
+          href={itemUrl}
+          onClick={(e) => handleMenuItemClick(e, itemUrl, hasChildren)}
+        >
+          {item.title}
+          {hasChildren && (
+            <span style={{ marginLeft: 6, fontSize: "0.7em", opacity: 0.7 }}>
+              ▾
+            </span>
+          )}
+        </a>
+
+        {hasChildren && (
+          <ul className={`${uid}-submenu`}>
+            {item.children.map((child: any) =>
+              renderMenuItem(child, depth + 1),
+            )}
+          </ul>
+        )}
+      </li>
+    );
+  };
+
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: cssText }} />
+      <div className={`${uid}-wrapper nav-menu-widget-wrapper`}>
+        <button
+          type="button"
+          className={`${uid}-toggle`}
+          aria-label="Toggle menu"
+          onClick={(e) => {
+            e.stopPropagation();
+            document.querySelector(`.${uid}-list`)?.classList.toggle("open");
+            document
+              .querySelector(`.${uid}-backdrop`)
+              ?.classList.toggle("open");
+          }}
+        >
+          <span />
+        </button>
+
+        <ul className={`${uid}-list nav-menu-widget`}>
+          {items.map((item) => renderMenuItem(item, 0))}
+        </ul>
+
+        <div
+          className={`${uid}-backdrop`}
+          onClick={(e) => {
+            e.stopPropagation();
+            document.querySelector(`.${uid}-list`)?.classList.remove("open");
+            document
+              .querySelector(`.${uid}-backdrop`)
+              ?.classList.remove("open");
+          }}
+        />
+      </div>
+    </>
+  );
+};
+
+// ============ SITE LOGO RENDERER (with SPA navigation) ============
+const SiteLogoRenderer = ({
+  widget,
+  s,
+  fontSize,
+  color,
+}: {
+  widget: PageWidget;
+  s: any;
+  fontSize: number;
+  color: string;
+}) => {
+  const navigate = useNavigate();
+  const hover = getHoverAndAnimation(s, widget.id);
+  const linkUrl = widget.link?.url || "/";
+
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (widget.link?.target === "_blank" || !linkUrl.startsWith("/")) return;
+    e.preventDefault();
+    navigate(linkUrl);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  return (
+    <>
+      <StyleInjector css={hover.cssText} />
+      <a
+        href={linkUrl}
+        target={widget.link?.target || "_self"}
+        rel={
+          widget.link?.noFollow
+            ? "nofollow noopener"
+            : widget.link?.target === "_blank"
+              ? "noopener noreferrer"
+              : undefined
+        }
+        onClick={handleClick}
+        className={`site-logo-widget ${hover.className}`.trim()}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          textDecoration: "none",
+          width: "auto",
+          cursor: "pointer",
+        }}
+      >
+        {widget.url ? (
+          <img
+            src={getImageUrl(widget.url)}
+            alt={widget.accessibility?.altText || "Logo"}
+            style={{
+              width: s.width || "auto",
+              height: s.height || "auto",
+              maxHeight: s.maxHeight || "50px",
+              maxWidth: s.maxWidth || "none",
+              objectFit: (s.objectFit as any) || "contain",
+              objectPosition: s.objectPosition || "center",
+              display: "block",
+              pointerEvents: "none",
+            }}
+          />
+        ) : (
+          <span
+            style={{
+              fontSize: `${fontSize || 22}px`,
+              fontWeight: s.fontWeight || 700,
+              color: color || "#0c2f55",
+            }}
+          >
+            {widget.content || "Site Logo"}
+          </span>
+        )}
+      </a>
+    </>
+  );
+};
+
 // ============ WIDGET RENDERER ============
 const WidgetRenderer = ({
   widget,
   device,
+  pageId,
+  pageTitle,
+  product,
 }: {
   widget: PageWidget;
   device: ResponsiveDevice;
+  pageId: string;
+  pageTitle: string;
+  product?: ProductData;
 }) => {
   const s = widget.style;
   const rs = s.responsive?.[device] || {};
+
+  const isHiddenOnDevice = (() => {
+    const currentRs = s.responsive?.[device];
+    if (currentRs?.hide === true) return true;
+    if (device === "desktop" && s.responsive?.desktop?.hide === true) return true;
+    if (device === "tablet" && s.responsive?.tablet?.hide === true) return true;
+    if (device === "mobile" && s.responsive?.mobile?.hide === true) return true;
+    return false;
+  })();
+
+  if (isHiddenOnDevice) {
+    return null;
+  }
 
   const fontSize = rs.fontSize ?? s.fontSize ?? 16;
   const textAlign = rs.textAlign ?? s.textAlign ?? "left";
@@ -477,13 +1252,11 @@ const WidgetRenderer = ({
   };
 
   const isContainer = ["container", "section", "column", "grid"].includes(
-    widget.type,
+    widget.type
   );
 
-  // ✅ Containers — compute layout class
   if (isContainer) {
     const styles = renderStyles(widget.style, device);
-
     const displayValue = (rs.display || s.display) as string | undefined;
     const flexDirectionValue = (rs.flexDirection || s.flexDirection) as
       | string
@@ -502,127 +1275,292 @@ const WidgetRenderer = ({
         className={`public-widget public-widget-${widget.type} ${layoutClass}`}
         data-widget-type={widget.type}
         data-widget-id={widget.id}
-        data-layout={layoutClass}
       >
         {widget.children?.map((child) => (
-          <WidgetRenderer key={child.id} widget={child} device={device} />
+          <WidgetRenderer
+            key={child.id}
+            widget={child}
+            device={device}
+            pageId={pageId}
+            pageTitle={pageTitle}
+            product={product}
+          />
         ))}
       </div>
     );
   }
 
   switch (widget.type) {
-    // ============ HEADING ============
+    case "product_title":
+      return <div style={baseStyle}>{product?.title || "Product Title"}</div>;
+
+    case "product_price":
+      return (
+        <div style={{ ...baseStyle, fontWeight: 700 }}>
+          {product ? `₹${Number(product.price || 0).toFixed(2)}` : "Product Price"}
+        </div>
+      );
+
+    case "product_image":
+      return product?.image ? (
+        <img
+          src={getImageUrl(product.image)}
+          alt={product.title}
+          style={{
+            display: "block",
+            width: s.width || "100%",
+            height: s.height || "auto",
+            maxWidth: "100%",
+            objectFit: s.objectFit || "contain",
+          }}
+        />
+      ) : (
+        <div style={{ ...baseStyle, padding: 24 }}>Product Image</div>
+      );
+
+    case "product_gallery":
+      return <ProductGalleryWidget product={product} />;
+
+    case "product_description":
+      return <div style={baseStyle}>{product?.description || "Product Description"}</div>;
+
+    case "product_short_description":
+      return <div style={baseStyle}>{product?.excerpt || "Product Short Description"}</div>;
+
+    case "product_categories":
+      return <div style={baseStyle}>{product?.category || "Product Categories"}</div>;
+
+    case "product_tags":
+      return (
+        <div style={baseStyle}>
+          {product?.tags?.length ? product.tags.join(", ") : "Product Tags"}
+        </div>
+      );
+
+    case "product_stock":
+      return (
+        <div style={baseStyle}>
+          {product
+            ? product.stock_status === "out_of_stock"
+              ? "Out of stock"
+              : product.manage_stock === false
+                ? "In stock"
+                : product.quantity > 0
+                  ? `In stock (${product.quantity})`
+                  : "Out of stock"
+            : "Product Stock"}
+        </div>
+      );
+
+    case "add_to_cart":
+      return <ProductAddToCart product={product} />;
+
+    case "products":
+    case "product_grid":
+      return (
+        <ProductGridWidget
+          limit={widget.settings?.postsPerPage || 8}
+          columns={widget.settings?.columns || 4}
+        />
+      );
+
     case "heading": {
       const tag = (s.htmlTag || "h2").toLowerCase();
-      const validTags = [
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "h6",
-        "p",
-        "div",
-        "span",
-      ];
+      const validTags = ["h1", "h2", "h3", "h4", "h5", "h6", "p", "div", "span"];
       const HeadingTag = (validTags.includes(tag) ? tag : "h2") as any;
       const headingTextAlign = (rs.textAlign || s.textAlign || "left") as any;
+      const hover = getHoverAndAnimation(s, widget.id);
 
       return (
-        <MaybeLink widget={widget}>
-          <div style={{ width: "100%", textAlign: headingTextAlign }}>
-            <HeadingTag
+        <>
+          <StyleInjector css={hover.cssText} />
+          <MaybeLink widget={widget}>
+            <div style={{ width: "100%", textAlign: headingTextAlign }}>
+              <HeadingTag
+                className={hover.className}
+                style={{
+                  ...baseStyle,
+                  textAlign: headingTextAlign,
+                  margin: 0,
+                  padding: 0,
+                  display: "block",
+                  width: s.width || undefined,
+                  maxWidth: s.maxWidth || undefined,
+                }}
+                dangerouslySetInnerHTML={{ __html: widget.content || "" }}
+              />
+            </div>
+          </MaybeLink>
+        </>
+      );
+    }
+
+    case "text": {
+      const textTextAlign = (rs.textAlign || s.textAlign || "left") as any;
+      const hover = getHoverAndAnimation(s, widget.id);
+
+      return (
+        <>
+          <StyleInjector css={hover.cssText} />
+          <MaybeLink widget={widget}>
+            <div
+              className={hover.className}
               style={{
                 ...baseStyle,
-                textAlign: headingTextAlign,
+                textAlign: textTextAlign,
+                width: "100%",
+                display: "block",
                 margin: 0,
                 padding: 0,
-                display: "block",
               }}
               dangerouslySetInnerHTML={{ __html: widget.content || "" }}
             />
-          </div>
-        </MaybeLink>
+          </MaybeLink>
+        </>
       );
     }
 
-    // ============ TEXT ============
-    case "text": {
-      const textTextAlign = (rs.textAlign || s.textAlign || "left") as any;
-
-      return (
-        <MaybeLink widget={widget}>
-          <div
-            style={{
-              ...baseStyle,
-              textAlign: textTextAlign,
-              width: "100%",
-              display: "block",
-              margin: 0,
-              padding: 0,
-            }}
-            dangerouslySetInnerHTML={{ __html: widget.content || "" }}
-          />
-        </MaybeLink>
-      );
-    }
-
-    // ============ BUTTON ============
     case "button": {
       const btnTextAlign = (rs.textAlign || s.textAlign || "left") as any;
+      const hover = getHoverAndAnimation(s, widget.id);
 
+      return (
+        <>
+          <StyleInjector css={hover.cssText} />
+          <div style={{ textAlign: btnTextAlign, width: "100%" }}>
+            <a
+              href={widget.link?.url || widget.url || "#"}
+              target={widget.link?.target || "_self"}
+              className={hover.className}
+              style={{
+                ...baseStyle,
+                textAlign: btnTextAlign,
+                backgroundColor: bgColor || "#0c2f55",
+                color: color || "#ffffff",
+                padding: "12px 24px",
+                borderRadius: s.borderRadius ? `${s.borderRadius}px` : "6px",
+                display: "inline-block",
+                fontWeight: s.fontWeight || 600,
+                textDecoration: "none",
+              }}
+            >
+              {widget.content}
+            </a>
+          </div>
+        </>
+      );
+    }
+
+    case "image": {
+      if (!widget.url) return null;
+      const hover = getHoverAndAnimation(s, widget.id);
+
+      return (
+        <>
+          <StyleInjector css={hover.cssText} />
+          <MaybeLink widget={widget}>
+            <img
+              src={getImageUrl(widget.url)}
+              alt={widget.accessibility?.altText || widget.label}
+              className={hover.className}
+              style={{
+                width: s.width || "100%",
+                height: s.height || "auto",
+                minWidth: s.minWidth,
+                maxWidth: s.maxWidth || "100%",
+                minHeight: s.minHeight,
+                maxHeight: s.maxHeight,
+                display: "block",
+                borderRadius: s.borderRadius ? `${s.borderRadius}px` : "8px",
+                objectFit: (s.objectFit as any) || "cover",
+                objectPosition: s.objectPosition || "center",
+                boxShadow: s.boxShadow,
+              }}
+            />
+          </MaybeLink>
+        </>
+      );
+    }
+
+    case "site_logo":
+      return (
+        <SiteLogoRenderer
+          widget={widget}
+          s={s}
+          fontSize={fontSize}
+          color={color}
+        />
+      );
+
+    case "site_title": {
+      const siteTitleAlign = (rs.textAlign || s.textAlign || "left") as any;
+      return (
+        <h1
+          style={{
+            ...baseStyle,
+            margin: 0,
+            padding: 0,
+            fontSize: `${fontSize || 24}px`,
+            fontWeight: s.fontWeight || 700,
+            textAlign: siteTitleAlign,
+          }}
+        >
+          {widget.content || "Site Title"}
+        </h1>
+      );
+    }
+
+    case "site_tagline": {
+      const taglineAlign = (rs.textAlign || s.textAlign || "left") as any;
+      return (
+        <p
+          style={{
+            ...baseStyle,
+            margin: 0,
+            fontSize: `${fontSize || 14}px`,
+            opacity: 0.75,
+            textAlign: taglineAlign,
+          }}
+        >
+          {widget.content || "Your site tagline here"}
+        </p>
+      );
+    }
+
+    case "nav_menu":
+    case "footer_menu":
+    case "menu":
+      return (
+        <MenuRenderer
+          widget={widget}
+          color={color}
+          fontSize={fontSize}
+          s={s}
+          rs={rs}
+        />
+      );
+
+    case "copyright": {
+      const copyrightAlign = (rs.textAlign || s.textAlign || "center") as any;
       return (
         <div
           style={{
-            textAlign: btnTextAlign,
+            ...baseStyle,
+            fontSize: `${fontSize || 14}px`,
+            textAlign: copyrightAlign,
+            padding: "8px 0",
             width: "100%",
-            display: "block",
+            opacity: s.opacity ?? 0.9,
           }}
         >
-          <a
-            href={widget.link?.url || widget.url || "#"}
-            target={widget.link?.target || "_self"}
-            rel={widget.link?.noFollow ? "nofollow noopener" : undefined}
-            style={{
-              ...baseStyle,
-              textAlign: btnTextAlign,
-              backgroundColor: bgColor || "#0c2f55",
-              color: color || "#ffffff",
-              padding: "12px 24px",
-              borderRadius: s.borderRadius ? `${s.borderRadius}px` : "6px",
-              display: "inline-block",
-              fontWeight: s.fontWeight || 600,
-              textDecoration: "none",
-            }}
-          >
-            {widget.content}
-          </a>
+          {widget.content || `© ${new Date().getFullYear()} All rights reserved.`}
         </div>
       );
     }
 
-    // ============ IMAGE ============
-    case "image":
-      return widget.url ? (
-        <MaybeLink widget={widget}>
-          <img
-            src={getImageUrl(widget.url)}
-            alt={widget.accessibility?.altText || widget.label}
-            style={{
-              width: s.width || "100%",
-              height: s.height || "auto",
-              display: "block",
-              borderRadius: s.borderRadius ? `${s.borderRadius}px` : "8px",
-              objectFit: (widget.settings?.imageFit as any) || "cover",
-            }}
-          />
-        </MaybeLink>
-      ) : null;
-
-    // ============ VIDEO ============
-    case "video":
-      return widget.url ? (
+    case "video": {
+      if (!widget.url) return null;
+      return (
         <div
           style={{
             position: "relative",
@@ -630,6 +1568,7 @@ const WidgetRenderer = ({
             height: 0,
             borderRadius: s.borderRadius ? `${s.borderRadius}px` : "8px",
             overflow: "hidden",
+            width: s.width || "100%",
           }}
         >
           {widget.url.match(/\.(mp4|webm|ogg)$/i) ? (
@@ -657,9 +1596,94 @@ const WidgetRenderer = ({
             />
           )}
         </div>
-      ) : null;
+      );
+    }
 
-    // ============ ICON ============
+    case "icon_list":
+      return (
+        <ul
+          className="builder-icon-list"
+          style={{
+            listStyle: "none",
+            display: "flex",
+            flexDirection: (s.flexDirection as "row" | "column") || "column",
+            gap: `${s.gap ?? 12}px`,
+            padding: 0,
+            margin: 0,
+          }}
+        >
+          {(widget.items || []).map((item) => {
+            const itemContent = (
+              <>
+                {item.image ? (
+                  <img
+                    src={getImageUrl(item.image)}
+                    alt=""
+                    aria-hidden="true"
+                    style={{
+                      width: `${s.iconSize || 20}px`,
+                      height: `${s.iconSize || 20}px`,
+                      objectFit: "contain",
+                      flex: "0 0 auto",
+                    }}
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      color: s.iconColor || color || "#0c2f55",
+                      fontSize: `${s.iconSize || 20}px`,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {item.icon || "✓"}
+                  </span>
+                )}
+                <span>{item.title || item.content}</span>
+              </>
+            );
+
+            return (
+              <li key={item.id}>
+                {item.link?.url ? (
+                  <a
+                    href={item.link.url}
+                    target={item.link.target || "_self"}
+                    rel={
+                      item.link.noFollow
+                        ? "nofollow noopener"
+                        : item.link.target === "_blank"
+                          ? "noopener noreferrer"
+                          : undefined
+                    }
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 10,
+                      color: s.color || color || "inherit",
+                      textDecoration: "none",
+                    }}
+                  >
+                    {itemContent}
+                  </a>
+                ) : (
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 10,
+                      color: s.color || color || "inherit",
+                    }}
+                  >
+                    {itemContent}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      );
+
     case "icon":
       return (
         <MaybeLink widget={widget}>
@@ -671,12 +1695,24 @@ const WidgetRenderer = ({
               lineHeight: 1,
             }}
           >
-            {widget.content || "★"}
+            {widget.url ? (
+              <img
+                src={getImageUrl(widget.url)}
+                alt={widget.accessibility?.altText || ""}
+                style={{
+                  width: `${fontSize || 48}px`,
+                  height: `${fontSize || 48}px`,
+                  objectFit: "contain",
+                  verticalAlign: "middle",
+                }}
+              />
+            ) : (
+              widget.content || "★"
+            )}
           </div>
         </MaybeLink>
       );
 
-    // ============ ICON BOX ============
     case "icon_box":
       return (
         <MaybeLink widget={widget}>
@@ -699,16 +1735,131 @@ const WidgetRenderer = ({
               {widget.content || "★"}
             </div>
             <h3 style={{ margin: "0 0 8px", fontSize: 20, color }}>
-              {widget.settings?.items?.[0]?.title}
+              {widget.items?.[0]?.title || widget.settings?.items?.[0]?.title || "Feature Title"}
             </h3>
             <p style={{ margin: 0, color, fontSize: 14, opacity: 0.75 }}>
-              {widget.settings?.items?.[0]?.content}
+              {widget.items?.[0]?.content || widget.settings?.items?.[0]?.content || "Add feature description here."}
             </p>
           </div>
         </MaybeLink>
       );
 
-    // ============ GALLERY ============
+    case "image_box":
+      return (
+        <MaybeLink widget={widget}>
+          <div
+            style={{
+              overflow: "hidden",
+              background: bgColor || "transparent",
+              borderRadius: s.borderRadius ? `${s.borderRadius}px` : 8,
+              textAlign: textAlign as React.CSSProperties["textAlign"],
+            }}
+          >
+            {widget.url && (
+              <img
+                src={getImageUrl(widget.url)}
+                alt={widget.accessibility?.altText || ""}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  maxHeight: s.maxHeight || "320px",
+                  objectFit: s.objectFit || "cover",
+                }}
+              />
+            )}
+            <div style={{ padding: 20 }}>
+              <h3 style={{ margin: "0 0 8px", color }}>
+                {widget.settings?.title || "Image Box Title"}
+              </h3>
+              <p style={{ margin: 0, color }}>{widget.content}</p>
+            </div>
+          </div>
+        </MaybeLink>
+      );
+
+    case "link_bio_minimalist":
+    case "link_bio_classic":
+    case "link_bio_showcase":
+    case "link_bio_links":
+    case "link_bio_services":
+    case "link_bio_portfolio":
+    case "link_bio_business_card": {
+      const bioLayout = widget.type.replace("link_bio_", "");
+      return (
+        <section
+          className={`builder-link-bio builder-link-bio-${bioLayout}`}
+          style={{
+            maxWidth: 480,
+            width: "100%",
+            margin: "0 auto",
+            padding: 24,
+            borderRadius: s.borderRadius ?? 16,
+            background:
+              bgColor ||
+              (bioLayout === "minimalist"
+                ? "transparent"
+                : bioLayout === "portfolio"
+                  ? "#f8f4ef"
+                  : bioLayout === "services"
+                    ? "#eff8f5"
+                    : bioLayout === "showcase"
+                      ? "#eef4ff"
+                      : "#f7f8fa"),
+            border:
+              bioLayout === "business_card" ? "1px solid #dce2e8" : undefined,
+            boxShadow:
+              bioLayout === "showcase" ? "0 12px 30px rgba(12, 47, 85, 0.12)" : undefined,
+            color: color || "#17202a",
+            textAlign: "center",
+            boxSizing: "border-box",
+          }}
+        >
+          {widget.url && (
+            <img
+              src={getImageUrl(widget.url)}
+              alt=""
+              style={{
+                width: 96,
+                height: 96,
+                borderRadius: bioLayout === "business_card" ? 12 : "50%",
+                objectFit: "cover",
+                margin: "0 auto 14px",
+              }}
+            />
+          )}
+          <h2 style={{ margin: "0 0 8px", fontSize: 24 }}>
+            {widget.settings?.profileName || "Your Name"}
+          </h2>
+          {widget.content && <p style={{ margin: "0 0 20px" }}>{widget.content}</p>}
+          <div style={{ display: "grid", gap: 10 }}>
+            {(widget.items || []).map((item) => (
+              <a
+                key={item.id}
+                href={item.link?.url || "#"}
+                target={item.link?.target || "_self"}
+                rel={item.link?.target === "_blank" ? "noopener noreferrer" : undefined}
+                style={{
+                  display: "block",
+                  padding: "12px 16px",
+                  borderRadius:
+                    bioLayout === "links"
+                      ? 999
+                      : s.borderRadius ?? 8,
+                  background: bioLayout === "minimalist" ? "transparent" : "#ffffff",
+                  border: bioLayout === "minimalist" ? "none" : "1px solid #dce2e8",
+                  color: color || "#17202a",
+                  textDecoration: "none",
+                  fontWeight: 600,
+                }}
+              >
+                {item.title}
+              </a>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
     case "gallery":
       return (
         <div
@@ -734,23 +1885,14 @@ const WidgetRenderer = ({
         </div>
       );
 
-    // ============ SLIDER / CAROUSEL ============
     case "carousel":
     case "slider":
     case "post_carousel":
       return <SliderRenderer widget={widget} />;
 
-    // ============ SPACER ============
     case "spacer":
-      return (
-        <div
-          style={{
-            minHeight: `${s.padding?.top || 40}px`,
-          }}
-        />
-      );
+      return <div style={{ minHeight: `${s.padding?.top || 40}px` }} />;
 
-    // ============ DIVIDER ============
     case "divider":
       return (
         <hr
@@ -763,17 +1905,137 @@ const WidgetRenderer = ({
         />
       );
 
-    // ============ HTML ============
     case "html":
-      return (
-        <div
-          dangerouslySetInnerHTML={{
-            __html: widget.content || "",
-          }}
+      return <div dangerouslySetInnerHTML={{ __html: widget.content || "" }} />;
+
+    case "map": {
+      const address = widget.settings?.mapAddress || widget.content || "";
+      return address ? (
+        <iframe
+          title={`Map: ${address}`}
+          src={`https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          style={{ width: "100%", minHeight: 320, border: 0, borderRadius: 8 }}
         />
+      ) : null;
+    }
+
+    case "soundcloud":
+      return widget.url ? (
+        <iframe
+          title="SoundCloud player"
+          src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(widget.url)}`}
+          allow="autoplay"
+          loading="lazy"
+          style={{ width: "100%", height: 166, border: 0 }}
+        />
+      ) : null;
+
+    case "shortcode":
+      return <code className="builder-shortcode">{widget.content || "[shortcode]"}</code>;
+
+    case "menu_anchor": {
+      const anchorId = (widget.content || "").trim().replace(/[^a-zA-Z0-9_-]/g, "-");
+      return anchorId ? <span id={anchorId} aria-hidden="true" /> : null;
+    }
+
+    case "sidebar":
+      return (
+        <aside>
+          {widget.content && <h3>{widget.content}</h3>}
+          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            {(widget.items || []).map((item) => (
+              <li key={item.id} style={{ padding: "8px 0" }}>
+                <a href={item.link?.url || "#"}>{item.title}</a>
+              </li>
+            ))}
+          </ul>
+        </aside>
       );
 
-    // ============ ALERT ============
+    case "read_more":
+      return (
+        <a
+          href={widget.link?.url || widget.url || "#"}
+          target={widget.link?.target || "_self"}
+          rel={widget.link?.target === "_blank" ? "noopener noreferrer" : undefined}
+          style={{
+            display: "inline-block",
+            padding: "10px 18px",
+            borderRadius: s.borderRadius ?? 6,
+            background: bgColor || "#0c2f55",
+            color: color || "#ffffff",
+            textDecoration: "none",
+          }}
+        >
+          {widget.content || "Read More"}
+        </a>
+      );
+
+    case "rating": {
+      const rating = Math.max(0, Math.min(5, widget.settings?.rating ?? 4));
+      return (
+        <div role="img" aria-label={`${rating} out of 5 stars`} style={{ color: "#f0b429" }}>
+          {"★".repeat(Math.floor(rating))}
+          {rating % 1 ? "½" : ""}
+          {"☆".repeat(5 - Math.ceil(rating))}
+        </div>
+      );
+    }
+
+    case "text_path":
+      return (
+        <svg
+          viewBox="0 0 320 180"
+          role="img"
+          aria-label={widget.content || "Text on a path"}
+          style={{ width: "100%", overflow: "visible" }}
+        >
+          <defs>
+            <path id={`text-path-${widget.id}`} d="M 20,145 Q 160,-20 300,145" />
+          </defs>
+          <text fill={color || "#0c2f55"} fontSize={fontSize || 22}>
+            <textPath href={`#text-path-${widget.id}`} startOffset="50%" textAnchor="middle">
+              {widget.content || "Text on a path"}
+            </textPath>
+          </text>
+        </svg>
+      );
+
+    case "tablepress": {
+      const headers = widget.settings?.tableHeaders || ["Name", "Role"];
+      return (
+        <div style={{ width: "100%", overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                {headers.map((header, index) => (
+                  <th
+                    key={`${header}-${index}`}
+                    scope="col"
+                    style={{ textAlign: "left", padding: 10, borderBottom: "2px solid #d9dee7" }}
+                  >
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(widget.items || []).map((item) => (
+                <tr key={item.id}>
+                  <td style={{ padding: 10, borderBottom: "1px solid #e5e7eb" }}>{item.title}</td>
+                  {headers.length > 1 && (
+                    <td style={{ padding: 10, borderBottom: "1px solid #e5e7eb" }}>{item.content}</td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
     case "alert":
       return (
         <div
@@ -788,7 +2050,6 @@ const WidgetRenderer = ({
         </div>
       );
 
-    // ============ ACCORDION / TOGGLE ============
     case "accordion":
     case "toggle":
       return (widget.items || []).length > 0 ? (
@@ -800,7 +2061,7 @@ const WidgetRenderer = ({
           }}
         >
           {widget.items?.map((item, i) => (
-            <div
+            <details
               key={item.id}
               style={{
                 borderBottom:
@@ -808,59 +2069,28 @@ const WidgetRenderer = ({
                     ? "1px solid #e0e0e0"
                     : "none",
               }}
+              open={i === (widget.settings?.defaultActiveItem ?? 0)}
             >
-              <div
-                style={{
-                  padding: "14px 16px",
-                  fontWeight: 600,
-                  background: "#f8f9fc",
-                }}
-              >
+              <summary style={{ padding: "14px 16px", fontWeight: 600, background: "#f8f9fc", cursor: "pointer" }}>
                 {item.title}
-              </div>
-              <div
-                style={{ padding: "12px 16px", color: "#666", fontSize: 14 }}
-              >
+              </summary>
+              <div style={{ padding: "12px 16px", color: "#666", fontSize: 14 }}>
                 {item.content}
               </div>
-            </div>
+            </details>
           ))}
         </div>
       ) : null;
 
-    // ============ TABS ============
     case "tabs":
-      return (widget.items || []).length > 0 ? (
-        <div>
-          <div
-            style={{
-              display: "flex",
-              gap: 4,
-              borderBottom: "1px solid #e0e0e0",
-              marginBottom: 12,
-            }}
-          >
-            {widget.items?.map((item, i) => (
-              <div
-                key={item.id}
-                style={{
-                  padding: "10px 20px",
-                  fontWeight: i === 0 ? 700 : 500,
-                  color: i === 0 ? "#0c2f55" : "#666",
-                  borderBottom: i === 0 ? "2px solid #0c2f55" : "none",
-                }}
-              >
-                {item.title}
-              </div>
-            ))}
-          </div>
-          <div style={{ padding: 12, color: "#666" }}>
-            {widget.items?.[0]?.content}
-          </div>
-        </div>
-      ) : null;
+      return (
+        <InteractiveTabs
+          items={widget.items || []}
+          widgetId={widget.id}
+          color={color || "#0c2f55"}
+        />
+      );
 
-    // ============ TESTIMONIAL ============
     case "testimonial":
       return (
         <div
@@ -888,7 +2118,6 @@ const WidgetRenderer = ({
         </div>
       );
 
-    // ============ COUNTER ============
     case "counter":
       return (
         <div style={{ textAlign: "center", padding: 20 }}>
@@ -900,15 +2129,14 @@ const WidgetRenderer = ({
               lineHeight: 1,
             }}
           >
-            {widget.settings?.items?.[0]?.content || "1000"}
+            {widget.items?.[0]?.content || widget.settings?.items?.[0]?.content || "1000"}
           </div>
           <div style={{ color, marginTop: 12, fontSize: 15, opacity: 0.75 }}>
-            {widget.settings?.items?.[0]?.title || "Happy Clients"}
+            {widget.items?.[0]?.title || widget.settings?.items?.[0]?.title || "Happy Clients"}
           </div>
         </div>
       );
 
-    // ============ PROGRESS BAR ============
     case "progress_bar":
       return (
         <div style={{ padding: "8px 0" }}>
@@ -945,69 +2173,16 @@ const WidgetRenderer = ({
         </div>
       );
 
-    // ============ FORM ============
     case "form":
       return (
-        <div
-          style={{
-            padding: 24,
-            background: bgColor || "#f8f9fc",
-            borderRadius: 12,
-          }}
-        >
-          <input
-            type="text"
-            placeholder="Name"
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 12,
-              border: "1px solid #ddd",
-              borderRadius: 6,
-              boxSizing: "border-box",
-            }}
-          />
-          <input
-            type="email"
-            placeholder="Email"
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 12,
-              border: "1px solid #ddd",
-              borderRadius: 6,
-              boxSizing: "border-box",
-            }}
-          />
-          <textarea
-            placeholder="Message"
-            rows={4}
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 12,
-              border: "1px solid #ddd",
-              borderRadius: 6,
-              boxSizing: "border-box",
-            }}
-          />
-          <button
-            style={{
-              padding: "12px 24px",
-              background: "#0c2f55",
-              color: "#fff",
-              border: "none",
-              borderRadius: 6,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            {widget.settings?.submitText || "Submit"}
-          </button>
-        </div>
+        <PublicFormWidget
+          widget={widget}
+          pageId={pageId}
+          pageTitle={pageTitle}
+          background={bgColor}
+        />
       );
 
-    // ============ SEARCH ============
     case "search":
       return (
         <div style={{ display: "flex", maxWidth: 500, margin: "0 auto" }}>
@@ -1039,35 +2214,6 @@ const WidgetRenderer = ({
         </div>
       );
 
-    // ============ MENU ============
-    case "menu":
-      return (
-        <nav
-          style={{
-            display: "flex",
-            gap: 24,
-            justifyContent: "center",
-            padding: 12,
-          }}
-        >
-          {["Home", "About", "Services", "Contact"].map((item) => (
-            <a
-              key={item}
-              href="#"
-              style={{
-                color,
-                textDecoration: "none",
-                fontWeight: 500,
-                fontSize: 14,
-              }}
-            >
-              {item}
-            </a>
-          ))}
-        </nav>
-      );
-
-    // ============ SOCIAL ICONS ============
     case "social_icons":
       return (
         <div
@@ -1078,9 +2224,13 @@ const WidgetRenderer = ({
             padding: 16,
           }}
         >
-          {["f", "t", "in", "ig"].map((icon, i) => (
-            <span
-              key={i}
+          {(widget.items || []).map((item) => (
+            <a
+              key={item.id}
+              href={item.link?.url || "#"}
+              target={item.link?.target || "_self"}
+              rel={item.link?.target === "_blank" ? "noopener noreferrer" : undefined}
+              aria-label={item.title || "Social profile"}
               style={{
                 width: 44,
                 height: 44,
@@ -1090,18 +2240,17 @@ const WidgetRenderer = ({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: 700,
-                cursor: "pointer",
+                textDecoration: "none",
               }}
             >
-              {icon}
-            </span>
+              {(item.icon || item.title || "•").slice(0, 2)}
+            </a>
           ))}
         </div>
       );
 
-    // ============ POST GRID ============
     case "post_grid":
       return (
         <div
@@ -1127,21 +2276,11 @@ const WidgetRenderer = ({
                 style={{ width: "100%", height: 160, objectFit: "cover" }}
               />
               <div style={{ padding: 14 }}>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "#0c2f55",
-                    fontWeight: 600,
-                    marginBottom: 6,
-                  }}
-                >
-                  CATEGORY
-                </div>
                 <h4 style={{ margin: "0 0 8px", fontSize: 16 }}>
-                  Sample Post Title {i}
+                  Sample Post {i}
                 </h4>
                 <p style={{ margin: 0, fontSize: 13, color: "#666" }}>
-                  Short excerpt of the post content...
+                  Short excerpt...
                 </p>
               </div>
             </div>
@@ -1149,7 +2288,6 @@ const WidgetRenderer = ({
         </div>
       );
 
-    // ============ POST LIST ============
     case "post_list":
       return (
         <div>
@@ -1179,52 +2317,8 @@ const WidgetRenderer = ({
                   Post Title {i}
                 </h4>
                 <p style={{ margin: 0, fontSize: 13, color: "#666" }}>
-                  Excerpt text goes here...
+                  Excerpt...
                 </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      );
-
-    // ============ PRODUCTS ============
-    case "products":
-    case "product_grid":
-      return (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 16,
-          }}
-        >
-          {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              style={{
-                border: "1px solid #e0e0e0",
-                borderRadius: 8,
-                overflow: "hidden",
-                textAlign: "center",
-                background: "#fff",
-              }}
-            >
-              <img
-                src={`https://picsum.photos/300/300?product${i}`}
-                alt=""
-                style={{ width: "100%" }}
-              />
-              <div style={{ padding: 12 }}>
-                <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Product {i}</h4>
-                <div
-                  style={{
-                    color: "#0c2f55",
-                    fontWeight: 700,
-                    fontSize: 14,
-                  }}
-                >
-                  $99.00
-                </div>
               </div>
             </div>
           ))}
@@ -1240,10 +2334,23 @@ const WidgetRenderer = ({
 const BuilderRenderer = ({
   layout,
   device = "desktop",
+  pageId = "homepage",
+  pageTitle = "",
+  product,
 }: BuilderRendererProps) => {
-  const memoizedLayout = useMemo(() => layout || [], [layout]);
+  // ✅ Defensive: ensure layout is always an array
+  const safeLayout = useMemo(() => {
+    if (Array.isArray(layout)) return layout;
+    if (layout === null || layout === undefined) return [];
+    console.warn(
+      "BuilderRenderer: layout is not an array. Received:",
+      typeof layout,
+      layout
+    );
+    return [];
+  }, [layout]);
 
-  if (!memoizedLayout.length) {
+  if (!safeLayout.length) {
     return (
       <div style={{ padding: 40, textAlign: "center", color: "#999" }}>
         No content
@@ -1253,8 +2360,15 @@ const BuilderRenderer = ({
 
   return (
     <div className="builder-renderer">
-      {memoizedLayout.map((widget) => (
-        <WidgetRenderer key={widget.id} widget={widget} device={device} />
+      {safeLayout.map((widget) => (
+        <WidgetRenderer
+          key={widget.id}
+          widget={widget}
+          device={device}
+          pageId={pageId}
+          pageTitle={pageTitle}
+          product={product}
+        />
       ))}
     </div>
   );

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-
-import { getPages } from "../../api/content";
-
+import axios from "axios";
+import { API_URL } from "../../api/config";
 import {
   getReadingSettings,
   updateReadingSettings,
@@ -10,75 +9,102 @@ import {
 
 interface PageOption {
   id: string;
-
   title: string;
+  slug?: string;
+  source: "content" | "builder";
 }
 
 const Reading = () => {
   const [pages, setPages] = useState<PageOption[]>([]);
-
   const [settings, setSettings] = useState<ReadingSettings>({
     homepage_type: "latest_posts",
     homepage_id: "",
     posts_page_id: "",
     search_engine_visibility: false,
   });
-
   const [message, setMessage] = useState("");
-
   const [error, setError] = useState("");
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [pageResponse, readingResponse] = await Promise.all([
-          getPages(false, true),
+        const token = localStorage.getItem("access_token");
+        const headers = { Authorization: `Bearer ${token}` };
+
+        const [pagesRes, builderRes, readingRes] = await Promise.all([
+          axios.get(`${API_URL}/api/content/pages`, {
+            params: { published_only: true },
+            headers,
+          }),
+          axios
+            .get(`${API_URL}/api/page-builder`, {
+              params: { status: "published" },
+              headers,
+            })
+            .catch(() => ({ data: [] })),
           getReadingSettings(),
         ]);
 
-        setPages(pageResponse);
+        const contentPages: PageOption[] = (pagesRes.data.pages || []).map(
+          (p: any) => ({
+            id: p.id,
+            title: p.title,
+            slug: p.slug,
+            source: "content",
+          })
+        );
 
-        setSettings(readingResponse);
-      } catch (error) {
-        console.log("READING SETTINGS ERROR:", error);
+        const builderPages: PageOption[] = (builderRes.data || [])
+          .filter(
+            (p: any) =>
+              p.template_type === "page" ||
+              !p.template_type ||
+              p.template_type === "page"
+          )
+          .map((p: any) => ({
+            id: p.id,
+            title: `[Builder] ${p.title}`,
+            slug: p.slug,
+            source: "builder",
+          }));
 
+        setPages([...contentPages, ...builderPages]);
+        setSettings(readingRes);
+      } catch (err) {
+        console.error("READING SETTINGS ERROR:", err);
         setError("Unable to load reading settings.");
       }
     };
 
-    loadData();
+    void loadData();
   }, []);
 
   const handleSave = async () => {
     if (settings.homepage_type === "static" && !settings.homepage_id) {
       setError("Select a published page for the homepage.");
-
       setMessage("");
-
       return;
     }
 
     try {
       setError("");
-
       setMessage("");
-
       await updateReadingSettings(settings);
-
       setMessage("Reading settings saved successfully.");
-    } catch (error) {
-      console.log("SAVE READING SETTINGS ERROR:", error);
-
+    } catch (err) {
+      console.error("SAVE READING SETTINGS ERROR:", err);
       setError("Unable to save reading settings.");
     }
   };
+
+  // Find selected page for URL preview
+  const selectedPage = pages.find((p) => p.id === settings.homepage_id);
 
   return (
     <div className="content-page">
       <div className="page-heading">
         <div>
           <h1>Reading Settings</h1>
-
           <p>Manage your homepage and posts page</p>
         </div>
       </div>
@@ -87,7 +113,6 @@ const Reading = () => {
         <div className="content-card-header">
           <div>
             <h2>Homepage Settings</h2>
-
             <p>
               Choose whether your homepage shows recent posts or a published
               page.
@@ -137,7 +162,6 @@ const Reading = () => {
             <>
               <div className="content-form-group">
                 <label>Homepage</label>
-
                 <select
                   value={settings.homepage_id}
                   onChange={(event) =>
@@ -152,18 +176,30 @@ const Reading = () => {
                       ? "Select a published page"
                       : "No published pages available"}
                   </option>
-
                   {pages.map((page) => (
                     <option key={page.id} value={page.id}>
                       {page.title}
                     </option>
                   ))}
                 </select>
+
+                {selectedPage?.slug && (
+                  <small
+                    style={{
+                      display: "block",
+                      marginTop: 6,
+                      color: "#666",
+                      fontSize: 12,
+                    }}
+                  >
+                    📍 Permalink: <code>/{selectedPage.slug}</code> &nbsp;→&nbsp;
+                    Site root: <code>http://localhost:5173/</code>
+                  </small>
+                )}
               </div>
 
               <div className="content-form-group">
                 <label>Posts Page</label>
-
                 <select
                   value={settings.posts_page_id}
                   onChange={(event) =>
@@ -174,7 +210,6 @@ const Reading = () => {
                   }
                 >
                   <option value="">Select Posts Page</option>
-
                   {pages.map((page) => (
                     <option key={page.id} value={page.id}>
                       {page.title}
@@ -202,7 +237,6 @@ const Reading = () => {
           </div>
 
           {error && <div className="content-message-error">{error}</div>}
-
           {message && <div className="content-message-success">{message}</div>}
 
           <div className="content-form-actions">

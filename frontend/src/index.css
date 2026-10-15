@@ -167,6 +167,78 @@ textarea {
   margin-left: 260px;
   width: calc(100% - 260px);
   min-height: 100vh;
+  min-width: 0;
+}
+
+.public-main,
+.public-content-view,
+.public-builder-view {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.media-selector-error {
+  margin: 0 20px 12px;
+  padding: 10px 12px;
+  border: 1px solid #f0c0bc;
+  border-radius: 6px;
+  background: #fff5f4;
+  color: #b42318;
+  font-size: 13px;
+}
+
+.media-selector-dialog {
+  max-height: calc(100dvh - 24px) !important;
+}
+
+.form-submissions-list {
+  display: grid;
+  gap: 14px;
+}
+
+.form-submission-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #e0e6ed;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.form-submission-card header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.form-submission-card time {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.form-submission-card dl {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+}
+
+.form-submission-card dl > div {
+  min-width: 0;
+}
+
+.form-submission-card dt {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.form-submission-card dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 /* ============================= */
@@ -2361,6 +2433,25 @@ textarea {
 }
 
 @media (max-width: 600px) {
+  .media-selector-overlay {
+    padding: 8px !important;
+  }
+
+  .media-selector-dialog {
+    max-height: calc(100dvh - 16px) !important;
+    border-radius: 8px !important;
+  }
+
+  .media-selector-dialog > div {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .media-selector-error {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+
   .login-page {
     padding: 15px;
   }
@@ -3351,6 +3442,45 @@ textarea {
   color: #ffffff;
 }
 
+.products-sidebar-section > .sidebar-section-title {
+  text-decoration: none;
+  color: #d1d5db;
+}
+
+.products-sidebar-section > .sidebar-section-title:hover,
+.products-sidebar-section > .sidebar-section-title:focus-visible {
+  color: #ffffff;
+  background: #1f2937;
+}
+
+.products-sidebar-section > .sidebar-section-title.active {
+  color: #ffffff;
+  background: #2563eb;
+}
+
+.products-submenu {
+  display: none;
+  padding-left: 8px;
+}
+
+.products-sidebar-section:hover .products-submenu,
+.products-sidebar-section:focus-within .products-submenu {
+  display: block;
+}
+
+.products-submenu .nav-link {
+  padding: 9px 12px 9px 26px;
+  color: #d1d5db;
+  font-size: 13px;
+}
+
+.products-submenu .nav-link.active,
+.products-submenu .nav-link:hover,
+.products-submenu .nav-link:focus-visible {
+  background: #0c2f55;
+  color: #ffffff;
+}
+
 /* =========================
    FLYOUT DROPDOWN
 ========================= */
@@ -3372,6 +3502,10 @@ textarea {
 @media (max-width: 600px) {
   .sidebar-section > .nav-link {
     display: flex;
+  }
+
+  .products-submenu {
+    display: block;
   }
 }
 
@@ -4785,6 +4919,3 @@ textarea {
   color: #666;
   font-style: italic;
 }
-
-
-

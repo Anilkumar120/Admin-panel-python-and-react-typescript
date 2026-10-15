@@ -158,7 +158,7 @@ def stream_gridfs_file(file_stream):
 @router.post(
     "/upload",
     dependencies=[
-        Depends(require_permission("media.create"))
+        Depends(require_permission("media.upload"))
     ],
 )
 async def upload_media(

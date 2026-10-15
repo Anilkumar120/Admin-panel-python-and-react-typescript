@@ -15,6 +15,8 @@ client = MongoClient(MONGODB_URI)
 db = client[DATABASE_NAME]
 
 products_collection = db["products"]
+product_taxonomies_collection = db["product_taxonomies"]
+orders_collection = db["orders"]
 
 users_collection = db["users"]
 
@@ -28,8 +30,8 @@ taxonomies_collection = db["taxonomies"]
 
 menus_collection = db["menus"]
 
-header_footer_collection = db["header_footer"]
 
 media_collection = db["media"]
 pages_collection = db["pages"]
 global_styles_collection = db["global_styles"]
+form_submissions_collection = db["form_submissions"]

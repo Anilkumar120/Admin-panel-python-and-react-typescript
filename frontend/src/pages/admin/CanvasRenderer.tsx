@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   useSortable,
   SortableContext,
@@ -14,11 +14,174 @@ import type {
 } from "../../types/pageBuilder";
 import ResizeHandles from "./ResizeHandles";
 import MediaPicker, { type PickedMedia } from "./MediaPicker";
+import { getImageUrl } from "../../api/products";
+
+// ============ STYLE INJECTOR ============
+const StyleInjector = ({ css }: { css: string }) => {
+  if (!css) return null;
+  return (
+    <style
+      dangerouslySetInnerHTML={{ __html: css }}
+      data-builder-style="true"
+    />
+  );
+};
+
+const InteractiveTabs = ({
+  items,
+  widgetId,
+  color,
+}: {
+  items: NonNullable<PageWidget["items"]>;
+  widgetId: string;
+  color: string;
+}) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeItem = items[activeIndex] || items[0];
+  if (!activeItem) return null;
+
+  return (
+    <div>
+      <div
+        role="tablist"
+        aria-label="Content tabs"
+        style={{ display: "flex", flexWrap: "wrap", borderBottom: "1px solid #e0e0e0" }}
+      >
+        {items.map((item, index) => (
+          <button
+            key={item.id}
+            id={`${widgetId}-tab-${index}`}
+            type="button"
+            role="tab"
+            aria-selected={index === activeIndex}
+            aria-controls={`${widgetId}-panel`}
+            onClick={() => setActiveIndex(index)}
+            style={{
+              padding: "10px 20px",
+              border: 0,
+              borderBottom: index === activeIndex ? `2px solid ${color}` : "2px solid transparent",
+              background: "transparent",
+              color: index === activeIndex ? color : "#666",
+              fontWeight: index === activeIndex ? 700 : 500,
+              cursor: "pointer",
+            }}
+          >
+            {item.title}
+          </button>
+        ))}
+      </div>
+      <div
+        id={`${widgetId}-panel`}
+        role="tabpanel"
+        aria-labelledby={`${widgetId}-tab-${activeIndex}`}
+        style={{ padding: 12, color: "#666" }}
+      >
+        {activeItem.content}
+      </div>
+    </div>
+  );
+};
+
+// ============ HOVER + ANIMATION HELPER ============
+const getHoverAndAnimation = (style: any, widgetId: string) => {
+  const hasHover =
+    style?.hoverBackgroundColor ||
+    style?.hoverColor ||
+    style?.hoverBorderColor ||
+    style?.hoverBoxShadow ||
+    (style?.hoverScale && style.hoverScale !== 1) ||
+    (style?.hoverOpacity !== undefined && style.hoverOpacity !== 1) ||
+    style?.hoverTranslateY;
+
+  const hasAnimation = style?.animation && style.animation !== "none";
+
+  if (!hasHover && !hasAnimation) {
+    return { className: "", cssText: "" };
+  }
+
+  const uid = `w-${widgetId.replace(/[^a-z0-9]/gi, "")}`;
+  const cssParts: string[] = [];
+  const classes: string[] = [];
+
+  if (hasHover) {
+    const hoverClass = `${uid}-hover`;
+    classes.push(hoverClass);
+
+    const duration = style.transitionDuration || 300;
+    const hoverRules: string[] = [];
+
+    if (style.hoverBackgroundColor)
+      hoverRules.push(
+        `background-color: ${style.hoverBackgroundColor} !important;`
+      );
+    if (style.hoverColor)
+      hoverRules.push(`color: ${style.hoverColor} !important;`);
+    if (style.hoverBorderColor)
+      hoverRules.push(`border-color: ${style.hoverBorderColor} !important;`);
+    if (style.hoverBoxShadow)
+      hoverRules.push(`box-shadow: ${style.hoverBoxShadow} !important;`);
+
+    const transforms: string[] = [];
+    if (style.hoverScale && style.hoverScale !== 1)
+      transforms.push(`scale(${style.hoverScale})`);
+    if (style.hoverTranslateY)
+      transforms.push(`translateY(${style.hoverTranslateY}px)`);
+    if (transforms.length)
+      hoverRules.push(`transform: ${transforms.join(" ")} !important;`);
+
+    if (style.hoverOpacity !== undefined && style.hoverOpacity !== 1)
+      hoverRules.push(`opacity: ${style.hoverOpacity} !important;`);
+
+    cssParts.push(`
+      .${hoverClass} {
+        transition: all ${duration}ms ease-in-out;
+      }
+      .${hoverClass}:hover {
+        ${hoverRules.join("\n")}
+      }
+    `);
+  }
+
+  if (hasAnimation) {
+    const animClass = `${uid}-anim`;
+    classes.push(animClass);
+
+    const duration = style.animationDuration || 600;
+    const delay = style.animationDelay || 0;
+    const easing = style.animationEasing || "ease";
+
+    const keyframesMap: Record<string, string> = {
+      fadeIn: `from { opacity: 0; } to { opacity: 1; }`,
+      slideUp: `from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); }`,
+      slideDown: `from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); }`,
+      slideLeft: `from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); }`,
+      slideRight: `from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); }`,
+      zoomIn: `from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); }`,
+      bounce: `0%,20%,50%,80%,100% { transform: translateY(0); } 40% { transform: translateY(-15px); } 60% { transform: translateY(-8px); }`,
+      pulse: `0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); }`,
+    };
+
+    const kfName = `${uid}-kf`;
+    const kfBody = keyframesMap[style.animation] || keyframesMap.fadeIn;
+
+    cssParts.push(`
+      @keyframes ${kfName} { ${kfBody} }
+      .${animClass} {
+        animation: ${kfName} ${duration}ms ${easing} ${delay}ms both;
+      }
+    `);
+  }
+
+  return {
+    className: classes.join(" "),
+    cssText: cssParts.join("\n"),
+  };
+};
 
 // ============ STYLE RENDERER ============
 export const renderWidgetStyles = (
   style: WidgetStyle,
-  device: ResponsiveDevice,
+  device: ResponsiveDevice
 ): React.CSSProperties => {
   const rs = style.responsive?.[device] || {};
 
@@ -34,7 +197,6 @@ export const renderWidgetStyles = (
     return `${m.top || 0}px ${m.right || 0}px ${m.bottom || 0}px ${m.left || 0}px`;
   };
 
-  // ✅ Compute resolved display/direction once
   const resolvedDisplay = (rs.display || style.display) as string | undefined;
   const resolvedFlexDirection = (rs.flexDirection || style.flexDirection) as
     | string
@@ -43,7 +205,6 @@ export const renderWidgetStyles = (
   const isFlexOrGrid =
     resolvedDisplay === "flex" || resolvedDisplay === "grid";
 
-  // ✅ ALWAYS emit gap for flex/grid containers (fallback 20px)
   const computeGap = (): string | undefined => {
     if (rs.gap !== undefined) return `${rs.gap}px`;
     if (style.gap !== undefined) return `${style.gap}px`;
@@ -117,6 +278,275 @@ export const renderWidgetStyles = (
     cursor: style.cursor || undefined,
     ...responsiveStyle,
   };
+};
+
+// ============ MOBILE MENU WIDGET (Canvas Preview) ============
+const CanvasMenuWidget = ({
+  widget,
+  device,
+  color,
+  fontSize,
+  s,
+  rs,
+  isEditMode,
+  onOpenMedia,
+}: {
+  widget: PageWidget;
+  device: ResponsiveDevice;
+  color: string;
+  fontSize: number;
+  s: any;
+  rs: any;
+  isEditMode: boolean;
+  onOpenMedia: (multiple: boolean, target?: string) => void;
+}) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
+
+  void fontSize;
+  void isEditMode;
+  void onOpenMedia;
+
+  // Auto-close menu when device changes
+  useEffect(() => {
+    setMenuOpen(false);
+    setOpenSubmenus({});
+  }, [device]);
+
+  const items =
+    widget.items && widget.items.length > 0
+      ? widget.items
+      : [
+          { id: "1", title: "Home", link: { url: "#" } },
+          { id: "2", title: "About", link: { url: "#" } },
+          { id: "3", title: "Services", link: { url: "#" } },
+          { id: "4", title: "Contact", link: { url: "#" } },
+        ];
+
+  const menuGap = s.gap ?? 24;
+  const menuJustify = (rs.justifyContent || s.justifyContent || "center") as any;
+  const hamburgerColor = s.hamburgerColor || color || "#0c2f55";
+  const mobileMenuBg = s.mobileMenuBgColor || "#ffffff";
+  const breakpoint = s.mobileBreakpoint === "tablet" ? 1024 : 768;
+  const uid = `canvas-nav-${widget.id.replace(/[^a-z0-9]/gi, "")}`;
+
+  const isMobileView = device === "mobile";
+  const isTabletView = device === "tablet";
+  const forceShowHamburger = isMobileView || isTabletView;
+
+  const menuFontSize = fontSize || s.fontSize || 14;
+  const menuFontWeight = s.fontWeight || 500;
+  const hoverColor = s.hoverColor || "#f0b429";
+
+  const cssText = `
+    .${uid}-wrapper { width: 100%; position: relative; display: flex; align-items: center; justify-content: space-between; }
+    .${uid}-toggle { display: ${forceShowHamburger ? "flex" : "none"}; align-items: center; justify-content: center; width: 44px; height: 44px; background: transparent; border: none; cursor: pointer; padding: 0; margin-left: auto; }
+    .${uid}-list { display: flex; gap: ${menuGap}px; justify-content: ${menuJustify}; align-items: center; flex-wrap: wrap; margin: 0; padding: 12px 0; list-style: none; width: 100%; }
+    .${uid}-list > li { position: relative; }
+    .${uid}-list > li > a {
+      color: ${color || "#1a1a2e"};
+      text-decoration: none;
+      font-weight: ${menuFontWeight};
+      font-size: ${menuFontSize}px;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 0;
+    }
+    .${uid}-list > li > a:hover { color: ${hoverColor}; }
+
+    /* Submenu (hover dropdown in canvas) */
+    .${uid}-submenu {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      min-width: 180px;
+      background: ${mobileMenuBg};
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      border-radius: 6px;
+      padding: 8px 0;
+      margin: 0;
+      list-style: none;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(8px);
+      transition: all 0.2s ease;
+      z-index: 100;
+    }
+    .${uid}-list > li:hover > .${uid}-submenu {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+    .${uid}-submenu li { position: relative; }
+    .${uid}-submenu a {
+      display: block;
+      padding: 8px 16px;
+      color: ${color || "#1a1a2e"};
+      text-decoration: none;
+      font-size: ${Math.max(menuFontSize - 1, 12)}px;
+      white-space: nowrap;
+    }
+    .${uid}-submenu a:hover {
+      background: rgba(12, 47, 85, 0.08);
+      color: ${hoverColor};
+    }
+    .${uid}-submenu .${uid}-submenu { top: 0; left: 100%; }
+
+    @media (max-width: ${breakpoint}px) {
+      .${uid}-list {
+        display: ${menuOpen ? "flex" : "none"};
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        padding: 12px;
+        background: ${mobileMenuBg};
+        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        border-radius: 8px;
+        z-index: 1000;
+        width: 100%;
+      }
+      .${uid}-list > li { width: 100%; }
+      .${uid}-list > li > a {
+        width: 100%;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
+        font-size: 15px;
+        justify-content: space-between;
+      }
+      .${uid}-submenu {
+        position: static;
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        box-shadow: none;
+        padding: 0 0 0 16px;
+        display: none;
+        background: transparent;
+      }
+      .${uid}-submenu.open { display: block; }
+      .${uid}-submenu a { padding: 10px 0; font-size: 14px; }
+    }
+  `;
+
+  const renderMenuItem = (item: any, depth: number = 0): React.ReactNode => {
+    const hasChildren =
+      item.children && Array.isArray(item.children) && item.children.length > 0;
+    const itemKey = item.id || `${depth}-${item.title}`;
+
+    return (
+      <li key={itemKey}>
+        <a
+          href={item.link?.url || item.url || "#"}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (hasChildren && (isMobileView || isTabletView)) {
+              const submenuKey = `${widget.id}-${item.id || itemKey}`;
+              setOpenSubmenus((prev) => ({
+                ...prev,
+                [submenuKey]: !prev[submenuKey],
+              }));
+            }
+          }}
+        >
+          {item.title}
+          {hasChildren && (
+            <span style={{ marginLeft: 6, fontSize: "0.75em", opacity: 0.7 }}>
+              ▾
+            </span>
+          )}
+        </a>
+        {hasChildren && (
+          <ul
+            className={`${uid}-submenu ${
+              openSubmenus[`${widget.id}-${item.id || itemKey}`]
+                ? "open"
+                : ""
+            }`}
+          >
+            {item.children.map((child: any) =>
+              renderMenuItem(child, depth + 1)
+            )}
+          </ul>
+        )}
+      </li>
+    );
+  };
+
+  return (
+    <>
+      <StyleInjector css={cssText} />
+      <div className={`${uid}-wrapper`}>
+        <button
+          type="button"
+          className={`${uid}-toggle`}
+          aria-label="Toggle menu"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpen((v) => !v);
+          }}
+          style={{
+            display: forceShowHamburger ? "flex" : "none",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 44,
+            height: 44,
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
+            marginLeft: "auto",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              width: 24,
+              height: 2,
+              background: hamburgerColor,
+              position: "relative",
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: -8,
+                left: 0,
+                width: 24,
+                height: 2,
+                background: hamburgerColor,
+              }}
+            />
+            <span
+              style={{
+                position: "absolute",
+                top: 8,
+                left: 0,
+                width: 24,
+                height: 2,
+                background: hamburgerColor,
+              }}
+            />
+          </span>
+        </button>
+
+        <ul
+          className={`${uid}-list`}
+          style={{
+            display: menuOpen || !forceShowHamburger ? "flex" : "none",
+          }}
+        >
+          {items.map((item) => renderMenuItem(item, 0))}
+        </ul>
+      </div>
+    </>
+  );
 };
 
 // ============ CONTAINER DROP ZONE ============
@@ -238,6 +668,7 @@ const WidgetContent = ({
   const textAlign = rs.textAlign ?? s.textAlign ?? "left";
   const color = rs.color ?? s.color ?? "#1a1a2e";
   const bgColor = rs.backgroundColor ?? s.backgroundColor;
+  const productPreview = widget.settings?.previewProduct;
 
   const baseStyle: React.CSSProperties = {
     fontSize: `${fontSize}px`,
@@ -260,55 +691,67 @@ const WidgetContent = ({
       const validTags = ["h1", "h2", "h3", "h4", "h5", "h6", "p", "div", "span"];
       const HeadingTag = (validTags.includes(tag) ? tag : "h2") as any;
       const headingAlign = (rs.textAlign ?? s.textAlign ?? "left") as any;
+      const hover = getHoverAndAnimation(s, widget.id);
 
       return (
-        <MaybeLink widget={widget}>
-          <div
-            style={{
-              width: "100%",
-              textAlign: headingAlign,
-              alignSelf: "stretch",
-              flexBasis: "100%",
-            }}
-          >
-            <HeadingTag
+        <>
+          <StyleInjector css={hover.cssText} />
+          <MaybeLink widget={widget}>
+            <div
               style={{
-                ...baseStyle,
+                width: "100%",
                 textAlign: headingAlign,
-                margin: 0,
-                padding: 0,
-                fontWeight: s.fontWeight || 700,
-                display: "block",
+                alignSelf: "stretch",
+                flexBasis: "100%",
               }}
-              dangerouslySetInnerHTML={{ __html: widget.content || "Heading" }}
-            />
-          </div>
-        </MaybeLink>
+            >
+              <HeadingTag
+                className={hover.className}
+                style={{
+                  ...baseStyle,
+                  textAlign: headingAlign,
+                  margin: 0,
+                  padding: 0,
+                  fontWeight: s.fontWeight || 700,
+                  display: "block",
+                  width: s.width || undefined,
+                  maxWidth: s.maxWidth || undefined,
+                }}
+                dangerouslySetInnerHTML={{ __html: widget.content || "Heading" }}
+              />
+            </div>
+          </MaybeLink>
+        </>
       );
     }
 
     // ===== TEXT =====
     case "text": {
       const textAlignVal = (rs.textAlign ?? s.textAlign ?? "left") as any;
+      const hover = getHoverAndAnimation(s, widget.id);
 
       return (
-        <MaybeLink widget={widget}>
-          <div
-            style={{
-              ...baseStyle,
-              textAlign: textAlignVal,
-              margin: 0,
-              padding: 0,
-              width: "100%",
-              display: "block",
-              alignSelf: "stretch",
-              flexBasis: "100%",
-            }}
-            dangerouslySetInnerHTML={{
-              __html: widget.content || "<p>Text content goes here...</p>",
-            }}
-          />
-        </MaybeLink>
+        <>
+          <StyleInjector css={hover.cssText} />
+          <MaybeLink widget={widget}>
+            <div
+              className={hover.className}
+              style={{
+                ...baseStyle,
+                textAlign: textAlignVal,
+                margin: 0,
+                padding: 0,
+                width: "100%",
+                display: "block",
+                alignSelf: "stretch",
+                flexBasis: "100%",
+              }}
+              dangerouslySetInnerHTML={{
+                __html: widget.content || "<p>Text content goes here...</p>",
+              }}
+            />
+          </MaybeLink>
+        </>
       );
     }
 
@@ -328,6 +771,7 @@ const WidgetContent = ({
       }[btnTextAlign];
 
       const isJustified = btnTextAlign === "justify";
+      const hover = getHoverAndAnimation(s, widget.id);
 
       const buttonStyle: React.CSSProperties = {
         display: "inline-flex",
@@ -365,64 +809,81 @@ const WidgetContent = ({
         whiteSpace: "normal",
         overflowWrap: "anywhere",
         verticalAlign: "middle",
+        transition: `all ${s.transitionDuration || 300}ms ease-in-out`,
       };
 
       return (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent,
-            width: "100%",
-            minWidth: 0,
-            boxSizing: "border-box",
-          }}
-        >
-          <MaybeLink widget={widget}>
-            <span style={buttonStyle}>{widget.content || "Click Here"}</span>
-          </MaybeLink>
-        </div>
+        <>
+          <StyleInjector css={hover.cssText} />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent,
+              width: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
+            }}
+          >
+            <MaybeLink widget={widget}>
+              <span className={hover.className} style={buttonStyle}>
+                {widget.content || "Click Here"}
+              </span>
+            </MaybeLink>
+          </div>
+        </>
       );
     }
 
     // ===== IMAGE =====
-    case "image":
+    case "image": {
+      const hover = getHoverAndAnimation(s, widget.id);
+
       return widget.url ? (
-        <div
-          className="widget-image-wrapper"
-          style={{
-            textAlign: (s.textAlign as any) || "left",
-            width: "100%",
-            alignSelf: "stretch",
-          }}
-        >
-          <MaybeLink widget={widget}>
-            <img
-              src={widget.url}
-              alt={widget.accessibility?.altText || widget.label}
-              style={{
-                width: s.width || "100%",
-                height: s.height || "auto",
-                maxWidth: s.maxWidth || "100%",
-                display: "inline-block",
-                borderRadius: s.borderRadius ? `${s.borderRadius}px` : "8px",
-                objectFit: (widget.settings?.imageFit as any) || "cover",
-              }}
-            />
-          </MaybeLink>
-          {isEditMode && (
-            <button
-              type="button"
-              className="widget-image-change-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenMedia(false, "image");
-              }}
-            >
-              🔄 Change Image
-            </button>
-          )}
-        </div>
+        <>
+          <StyleInjector css={hover.cssText} />
+          <div
+            className="widget-image-wrapper"
+            style={{
+              textAlign: (s.textAlign as any) || "left",
+              width: "100%",
+              alignSelf: "stretch",
+            }}
+          >
+            <MaybeLink widget={widget}>
+              <img
+                src={widget.url}
+                alt={widget.accessibility?.altText || widget.label}
+                className={hover.className}
+                style={{
+                  width: s.width || "100%",
+                  height: s.height || "auto",
+                  maxWidth: s.maxWidth || "100%",
+                  maxHeight: s.maxHeight || undefined,
+                  display: "inline-block",
+                  borderRadius: s.borderRadius ? `${s.borderRadius}px` : "8px",
+                  objectFit:
+                    (s.objectFit as any) ||
+                    (widget.settings?.imageFit as any) ||
+                    "cover",
+                  objectPosition: s.objectPosition || "center",
+                }}
+              />
+            </MaybeLink>
+            {isEditMode && (
+              <button
+                type="button"
+                className="widget-image-change-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenMedia(false, "image");
+                }}
+              >
+                🔄 Change Image
+              </button>
+            )}
+          </div>
+        </>
       ) : (
         <WidgetEmptyState
           icon="🖼"
@@ -430,6 +891,145 @@ const WidgetContent = ({
           subtitle="Choose from your Media Library"
           actionLabel="📁 Choose Image"
           onAction={() => onOpenMedia(false, "image")}
+        />
+      );
+    }
+
+    // ===== SITE LOGO =====
+    case "site_logo": {
+      const hover = getHoverAndAnimation(s, widget.id);
+
+      return (
+        <>
+          <StyleInjector css={hover.cssText} />
+          <div
+            className="widget-image-wrapper"
+            style={{
+              width: "100%",
+              alignSelf: "stretch",
+            }}
+          >
+            {widget.url ? (
+              <MaybeLink widget={widget}>
+                <img
+                  src={widget.url}
+                  alt={widget.accessibility?.altText || "Logo"}
+                  className={hover.className}
+                  style={{
+                    width: s.width || "auto",
+                    height: s.height || "auto",
+                    maxHeight: s.maxHeight || "50px",
+                    maxWidth: s.maxWidth || "none",
+                    display: "inline-block",
+                    objectFit: (s.objectFit as any) || "contain",
+                    objectPosition: s.objectPosition || "center",
+                  }}
+                />
+              </MaybeLink>
+            ) : (
+              <span
+                style={{
+                  fontSize: `${fontSize || 22}px`,
+                  fontWeight: s.fontWeight || 700,
+                  color: color || "#0c2f55",
+                }}
+              >
+                {widget.content || "Site Logo"}
+              </span>
+            )}
+            {isEditMode && (
+              <button
+                type="button"
+                className="widget-image-change-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenMedia(false, "logo");
+                }}
+              >
+                🔄 Change Logo
+              </button>
+            )}
+          </div>
+        </>
+      );
+    }
+
+    // ===== SITE TITLE =====
+    case "site_title": {
+      const titleAlign = (rs.textAlign ?? s.textAlign ?? "left") as any;
+      return (
+        <h1
+          style={{
+            ...baseStyle,
+            margin: 0,
+            padding: 0,
+            fontSize: `${fontSize || 24}px`,
+            fontWeight: s.fontWeight || 700,
+            textAlign: titleAlign,
+            width: "100%",
+            alignSelf: "stretch",
+          }}
+        >
+          {widget.content || "Site Title"}
+        </h1>
+      );
+    }
+
+    // ===== SITE TAGLINE =====
+    case "site_tagline": {
+      const taglineAlign = (rs.textAlign ?? s.textAlign ?? "left") as any;
+      return (
+        <p
+          style={{
+            ...baseStyle,
+            margin: 0,
+            fontSize: `${fontSize || 14}px`,
+            opacity: 0.75,
+            textAlign: taglineAlign,
+            width: "100%",
+            alignSelf: "stretch",
+          }}
+        >
+          {widget.content || "Your site tagline here"}
+        </p>
+      );
+    }
+
+    // ===== COPYRIGHT =====
+    case "copyright": {
+      const copyrightAlign = (rs.textAlign ?? s.textAlign ?? "center") as any;
+      return (
+        <div
+          style={{
+            ...baseStyle,
+            fontSize: `${fontSize || 14}px`,
+            textAlign: copyrightAlign,
+            padding: "8px 0",
+            width: "100%",
+            alignSelf: "stretch",
+            opacity: s.opacity ?? 0.9,
+          }}
+        >
+          {widget.content ||
+            `© ${new Date().getFullYear()} All rights reserved.`}
+        </div>
+      );
+    }
+
+    // ===== NAV MENU / FOOTER MENU / MENU =====
+    case "menu":
+    case "nav_menu":
+    case "footer_menu":
+      return (
+        <CanvasMenuWidget
+          widget={widget}
+          device={device}
+          color={color}
+          fontSize={fontSize}
+          s={s}
+          rs={rs}
+          isEditMode={isEditMode}
+          onOpenMedia={onOpenMedia}
         />
       );
 
@@ -484,6 +1084,60 @@ const WidgetContent = ({
       );
 
     // ===== ICON =====
+    case "icon_list":
+      return (
+        <ul
+          className="builder-icon-list"
+          style={{
+            listStyle: "none",
+            display: "flex",
+            flexDirection: (s.flexDirection as "row" | "column") || "column",
+            gap: `${s.gap ?? 12}px`,
+            padding: 0,
+            margin: 0,
+          }}
+        >
+          {(widget.items || []).map((item) => (
+            <li key={item.id}>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 10,
+                  color: s.color || color || "inherit",
+                }}
+              >
+                {item.image ? (
+                  <img
+                    src={item.image}
+                    alt=""
+                    aria-hidden="true"
+                    style={{
+                      width: `${s.iconSize || 20}px`,
+                      height: `${s.iconSize || 20}px`,
+                      objectFit: "contain",
+                      flex: "0 0 auto",
+                    }}
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      color: s.iconColor || color || "#0c2f55",
+                      fontSize: `${s.iconSize || 20}px`,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {item.icon || "✓"}
+                  </span>
+                )}
+                <span>{item.title || item.content}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
+
     case "icon":
       return (
         <MaybeLink widget={widget}>
@@ -496,7 +1150,20 @@ const WidgetContent = ({
               padding: 16,
             }}
           >
-            {widget.content || "★"}
+            {widget.url ? (
+              <img
+                src={widget.url}
+                alt={widget.accessibility?.altText || ""}
+                style={{
+                  width: `${fontSize || 48}px`,
+                  height: `${fontSize || 48}px`,
+                  objectFit: "contain",
+                  verticalAlign: "middle",
+                }}
+              />
+            ) : (
+              widget.content || "★"
+            )}
           </div>
         </MaybeLink>
       );
@@ -526,10 +1193,10 @@ const WidgetContent = ({
               {widget.content || "★"}
             </div>
             <h3 style={{ margin: "0 0 8px", fontSize: 20, color }}>
-              {widget.settings?.items?.[0]?.title || "Feature Title"}
+              {widget.items?.[0]?.title || widget.settings?.items?.[0]?.title || "Feature Title"}
             </h3>
             <p style={{ margin: 0, color, fontSize: 14, opacity: 0.75 }}>
-              {widget.settings?.items?.[0]?.content ||
+              {widget.items?.[0]?.content || widget.settings?.items?.[0]?.content ||
                 "Add feature description here."}
             </p>
           </div>
@@ -537,6 +1204,126 @@ const WidgetContent = ({
       );
 
     // ===== GALLERY =====
+    case "image_box":
+      return (
+        <div
+          style={{
+            overflow: "hidden",
+            background: bgColor || "transparent",
+            borderRadius: s.borderRadius ? `${s.borderRadius}px` : 8,
+            textAlign: textAlign as React.CSSProperties["textAlign"],
+          }}
+        >
+          {widget.url ? (
+            <img
+              src={widget.url}
+              alt={widget.accessibility?.altText || ""}
+              style={{
+                display: "block",
+                width: "100%",
+                maxHeight: s.maxHeight || "320px",
+                objectFit: s.objectFit || "cover",
+              }}
+            />
+          ) : (
+            <WidgetEmptyState
+              icon="▧"
+              title="Choose an Image"
+              subtitle="Select or upload an image in the Content tab"
+            />
+          )}
+          <div style={{ padding: 20 }}>
+            <h3 style={{ margin: "0 0 8px", color }}>
+              {widget.settings?.title || "Image Box Title"}
+            </h3>
+            <p style={{ margin: 0, color }}>{widget.content}</p>
+          </div>
+        </div>
+      );
+
+    case "link_bio_minimalist":
+    case "link_bio_classic":
+    case "link_bio_showcase":
+    case "link_bio_links":
+    case "link_bio_services":
+    case "link_bio_portfolio":
+    case "link_bio_business_card": {
+      const bioLayout = widget.type.replace("link_bio_", "");
+      return (
+        <section
+          className={`builder-link-bio builder-link-bio-${bioLayout}`}
+          style={{
+            maxWidth: 480,
+            width: "100%",
+            margin: "0 auto",
+            padding: 24,
+            borderRadius: s.borderRadius ?? 16,
+            background:
+              bgColor ||
+              (bioLayout === "minimalist"
+                ? "transparent"
+                : bioLayout === "portfolio"
+                  ? "#f8f4ef"
+                  : bioLayout === "services"
+                    ? "#eff8f5"
+                    : bioLayout === "showcase"
+                      ? "#eef4ff"
+                      : "#f7f8fa"),
+            border:
+              bioLayout === "business_card" ? "1px solid #dce2e8" : undefined,
+            boxShadow:
+              bioLayout === "showcase" ? "0 12px 30px rgba(12, 47, 85, 0.12)" : undefined,
+            color: color || "#17202a",
+            textAlign: "center",
+            boxSizing: "border-box",
+          }}
+        >
+          {widget.url && (
+            <img
+              src={widget.url}
+              alt=""
+              style={{
+                width: 96,
+                height: 96,
+                borderRadius: bioLayout === "business_card" ? 12 : "50%",
+                objectFit: "cover",
+                margin: "0 auto 14px",
+              }}
+            />
+          )}
+          <h2 style={{ margin: "0 0 8px", fontSize: 24 }}>
+            {widget.settings?.profileName || "Your Name"}
+          </h2>
+          {widget.content && <p style={{ margin: "0 0 20px" }}>{widget.content}</p>}
+          <div style={{ display: "grid", gap: 10 }}>
+            {(widget.items || []).map((item) => (
+              <a
+                key={item.id}
+                href={item.link?.url || "#"}
+                target={item.link?.target || "_self"}
+                rel={item.link?.target === "_blank" ? "noopener noreferrer" : undefined}
+                style={{
+                  display: "block",
+                  padding: "12px 16px",
+                  borderRadius:
+                    bioLayout === "links"
+                      ? 999
+                      : s.borderRadius ?? 8,
+                  background: bioLayout === "minimalist" ? "transparent" : "#ffffff",
+                  border: bioLayout === "minimalist" ? "none" : "1px solid #dce2e8",
+                  color: color || "#17202a",
+                  textDecoration: "none",
+                  fontWeight: 600,
+                }}
+              >
+                {item.title}
+              </a>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
     case "gallery":
       return widget.settings?.images && widget.settings.images.length > 0 ? (
         <div
@@ -584,7 +1371,7 @@ const WidgetContent = ({
         />
       );
 
-    // ===== CAROUSEL / SLIDER (with per-slide data) =====
+    // ===== CAROUSEL / SLIDER =====
     case "carousel":
     case "slider": {
       const images = widget.settings?.images || [];
@@ -607,11 +1394,9 @@ const WidgetContent = ({
         );
       }
 
-      // ✅ Use first slide as the preview
       const firstImage = images[0];
       const firstItem = items[0];
 
-      // ✅ Resolve content position + alignment from slide data
       const contentPosition = firstItem?.contentPosition || "center";
       const contentTextAlign =
         firstItem?.contentTextAlign ||
@@ -630,7 +1415,6 @@ const WidgetContent = ({
 
       const contentColor = firstItem?.contentColor || "#ffffff";
 
-      // ✅ Slider height
       const sliderHeight =
         widget.type === "slider"
           ? widget.settings?.sliderHeight
@@ -652,7 +1436,6 @@ const WidgetContent = ({
             alignSelf: "stretch",
           }}
         >
-          {/* ✅ Background image (first slide) */}
           {firstImage?.url && (
             <img
               src={firstImage.url}
@@ -667,7 +1450,6 @@ const WidgetContent = ({
             />
           )}
 
-          {/* ✅ Overlay with title + content + buttons (slider only) */}
           {widget.type === "slider" && (
             <div
               className="slider-preview-content"
@@ -685,7 +1467,6 @@ const WidgetContent = ({
                   "linear-gradient(135deg, rgba(12, 47, 85, 0.6), rgba(0, 0, 0, 0.4))",
               }}
             >
-              {/* Title */}
               {firstItem?.title && (
                 <h2
                   style={{
@@ -700,7 +1481,6 @@ const WidgetContent = ({
                 </h2>
               )}
 
-              {/* Description */}
               {firstItem?.content && (
                 <p
                   style={{
@@ -714,56 +1494,9 @@ const WidgetContent = ({
                   {firstItem.content}
                 </p>
               )}
-
-              {/* Buttons */}
-              {(firstItem?.button1Text || firstItem?.button2Text) && (
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 12,
-                    flexWrap: "wrap",
-                    justifyContent: alignContent,
-                  }}
-                >
-                  {firstItem.button1Text && (
-                    <span
-                      style={{
-                        backgroundColor: "#f0b429",
-                        color: "#0c2f55",
-                        padding: "12px 28px",
-                        borderRadius: 6,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        fontSize: 15,
-                        display: "inline-block",
-                      }}
-                    >
-                      {firstItem.button1Text}
-                    </span>
-                  )}
-                  {firstItem.button2Text && (
-                    <span
-                      style={{
-                        backgroundColor: "transparent",
-                        color: contentColor,
-                        padding: "12px 28px",
-                        borderRadius: 6,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        fontSize: 15,
-                        display: "inline-block",
-                        border: `2px solid ${contentColor}`,
-                      }}
-                    >
-                      {firstItem.button2Text}
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
           )}
 
-          {/* Dots indicator */}
           <div
             style={{
               position: "absolute",
@@ -788,7 +1521,6 @@ const WidgetContent = ({
             ))}
           </div>
 
-          {/* Nav arrows */}
           <button
             type="button"
             style={{
@@ -836,7 +1568,6 @@ const WidgetContent = ({
             ›
           </button>
 
-          {/* Add Slide button */}
           {isEditMode && (
             <button
               type="button"
@@ -938,7 +1669,7 @@ const WidgetContent = ({
           }}
         >
           {widget.items?.map((item, i) => (
-            <div
+            <details
               key={item.id}
               style={{
                 borderBottom:
@@ -946,27 +1677,15 @@ const WidgetContent = ({
                     ? "1px solid #e0e0e0"
                     : "none",
               }}
+              open={i === (widget.settings?.defaultActiveItem ?? 0)}
             >
-              <div
-                style={{
-                  padding: "14px 16px",
-                  fontWeight: 600,
-                  background: "#f8f9fc",
-                  display: "flex",
-                  justifyContent: "space-between",
-                }}
-              >
+              <summary style={{ padding: "14px 16px", fontWeight: 600, background: "#f8f9fc", cursor: "pointer" }}>
                 {item.title}
-                <span>▾</span>
+              </summary>
+              <div style={{ padding: "12px 16px", color: "#666", fontSize: 14 }}>
+                {item.content}
               </div>
-              {i === 0 && (
-                <div
-                  style={{ padding: "12px 16px", color: "#666", fontSize: 14 }}
-                >
-                  {item.content}
-                </div>
-              )}
-            </div>
+            </details>
           ))}
         </div>
       ) : (
@@ -980,34 +1699,11 @@ const WidgetContent = ({
     // ===== TABS =====
     case "tabs":
       return (widget.items || []).length > 0 ? (
-        <div style={{ width: "100%", alignSelf: "stretch" }}>
-          <div
-            style={{
-              display: "flex",
-              gap: 4,
-              borderBottom: "1px solid #e0e0e0",
-              marginBottom: 12,
-            }}
-          >
-            {widget.items?.map((item, i) => (
-              <div
-                key={item.id}
-                style={{
-                  padding: "10px 20px",
-                  fontWeight: i === 0 ? 700 : 500,
-                  color: i === 0 ? "#0c2f55" : "#666",
-                  borderBottom: i === 0 ? "2px solid #0c2f55" : "none",
-                  cursor: "pointer",
-                }}
-              >
-                {item.title}
-              </div>
-            ))}
-          </div>
-          <div style={{ padding: 12, color: "#666" }}>
-            {widget.items?.[0]?.content}
-          </div>
-        </div>
+        <InteractiveTabs
+          items={widget.items || []}
+          widgetId={widget.id}
+          color={color || "#0c2f55"}
+        />
       ) : (
         <WidgetEmptyState
           icon="▭"
@@ -1065,10 +1761,10 @@ const WidgetContent = ({
               lineHeight: 1,
             }}
           >
-            {widget.settings?.items?.[0]?.content || "1000"}
+            {widget.items?.[0]?.content || widget.settings?.items?.[0]?.content || "1000"}
           </div>
           <div style={{ color, marginTop: 12, fontSize: 15, opacity: 0.75 }}>
-            {widget.settings?.items?.[0]?.title || "Happy Clients"}
+            {widget.items?.[0]?.title || widget.settings?.items?.[0]?.title || "Happy Clients"}
           </div>
         </div>
       );
@@ -1219,38 +1915,6 @@ const WidgetContent = ({
         </div>
       );
 
-    // ===== MENU =====
-    case "menu":
-      return (
-        <nav
-          style={{
-            display: "flex",
-            gap: 24,
-            justifyContent: "center",
-            padding: 12,
-            flexWrap: "wrap",
-            width: "100%",
-            alignSelf: "stretch",
-          }}
-        >
-          {["Home", "About", "Services", "Contact"].map((item) => (
-            <a
-              key={item}
-              href="#"
-              style={{
-                color,
-                textDecoration: "none",
-                fontWeight: 500,
-                fontSize: 14,
-              }}
-              onClick={(e) => e.preventDefault()}
-            >
-              {item}
-            </a>
-          ))}
-        </nav>
-      );
-
     // ===== SOCIAL ICONS =====
     case "social_icons":
       return (
@@ -1264,9 +1928,12 @@ const WidgetContent = ({
             alignSelf: "stretch",
           }}
         >
-          {["f", "t", "in", "ig"].map((icon, i) => (
-            <span
-              key={i}
+          {(widget.items || []).map((item) => (
+            <a
+              key={item.id}
+              href={item.link?.url || "#"}
+              onClick={(event) => event.preventDefault()}
+              aria-label={item.title || "Social profile"}
               style={{
                 width: 44,
                 height: 44,
@@ -1276,13 +1943,13 @@ const WidgetContent = ({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: 700,
-                cursor: "pointer",
+                textDecoration: "none",
               }}
             >
-              {icon}
-            </span>
+              {(item.icon || item.title || "•").slice(0, 2)}
+            </a>
           ))}
         </div>
       );
@@ -1375,6 +2042,73 @@ const WidgetContent = ({
         </div>
       );
 
+    case "product_title":
+      return <div style={{ ...baseStyle, fontWeight: 600 }}>{productPreview?.title || "Choose a product preview"}</div>;
+
+    case "product_price":
+      return <div style={{ ...baseStyle, fontWeight: 700 }}>{productPreview ? `₹${Number(productPreview.price || 0).toFixed(2)}` : "Product Price"}</div>;
+
+    case "product_image":
+      return productPreview?.image ? (
+        <img
+          src={getImageUrl(productPreview.image)}
+          alt={productPreview.title}
+          style={{
+            display: "block",
+            width: s.width || "100%",
+            height: s.height || "auto",
+            maxWidth: "100%",
+            objectFit: s.objectFit || "contain",
+          }}
+        />
+      ) : (
+        <div style={{ ...baseStyle, minHeight: 160, display: "grid", placeItems: "center", background: "#f3f4f6" }}>
+          Choose a product preview in Content settings to show its image
+        </div>
+      );
+
+    case "product_gallery":
+      return productPreview?.gallery?.length ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(88px, 1fr))", gap: 8 }}>
+          {productPreview.gallery.map((image, index) => (
+            <img
+              key={`${image.url}-${index}`}
+              src={getImageUrl(image.url)}
+              alt={image.alt || productPreview.title}
+              style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6 }}
+            />
+          ))}
+        </div>
+      ) : productPreview?.image ? (
+        <img src={getImageUrl(productPreview.image)} alt={productPreview.title} style={{ display: "block", width: "100%", maxHeight: 360, objectFit: "contain" }} />
+      ) : (
+        <div style={{ ...baseStyle, minHeight: 160, display: "grid", placeItems: "center", background: "#f3f4f6" }}>
+          Choose a product preview to show its gallery
+        </div>
+      );
+
+    case "product_short_description":
+      return <div style={baseStyle}>{productPreview?.short_description || "Product Short Description"}</div>;
+
+    case "product_categories":
+      return <div style={baseStyle}>{productPreview?.category || "Product Categories"}</div>;
+
+    case "product_tags":
+      return <div style={baseStyle}>{productPreview?.tags?.join(", ") || "Product Tags"}</div>;
+
+    case "product_description":
+      return <div style={baseStyle}>{productPreview?.description || "Product Description"}</div>;
+
+    case "product_stock":
+      return <div style={baseStyle}>{productPreview ? (productPreview.quantity ? `In stock (${productPreview.quantity})` : "Out of stock") : "Product Stock"}</div>;
+
+    case "add_to_cart":
+      return (
+        <button type="button" disabled={!productPreview || productPreview.quantity === 0 && productPreview.manage_stock !== false} style={{ padding: "10px 18px", opacity: 0.8 }}>
+          Add to Cart
+        </button>
+      );
+
     // ===== PRODUCTS =====
     case "products":
     case "product_grid":
@@ -1431,6 +2165,131 @@ const WidgetContent = ({
           }}
         />
       );
+
+    case "map": {
+      const address = widget.settings?.mapAddress || widget.content || "";
+      return address ? (
+        <iframe
+          title={`Map: ${address}`}
+          src={`https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`}
+          loading="lazy"
+          style={{ width: "100%", minHeight: 320, border: 0, borderRadius: 8 }}
+        />
+      ) : (
+        <WidgetEmptyState icon="⌖" title="Set Map Location" subtitle="Enter an address in the Content tab" />
+      );
+    }
+
+    case "soundcloud":
+      return widget.url ? (
+        <iframe
+          title="SoundCloud player"
+          src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(widget.url)}`}
+          allow="autoplay"
+          loading="lazy"
+          style={{ width: "100%", height: 166, border: 0 }}
+        />
+      ) : (
+        <WidgetEmptyState icon="♫" title="Add a SoundCloud Track" subtitle="Paste its URL in the Content tab" />
+      );
+
+    case "shortcode":
+      return <code className="builder-shortcode">{widget.content || "[shortcode]"}</code>;
+
+    case "menu_anchor": {
+      const anchorId = (widget.content || "").trim().replace(/[^a-zA-Z0-9_-]/g, "-");
+      return anchorId ? <span id={anchorId} aria-hidden="true" /> : null;
+    }
+
+    case "sidebar":
+      return (
+        <aside>
+          {widget.content && <h3>{widget.content}</h3>}
+          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            {(widget.items || []).map((item) => (
+              <li key={item.id} style={{ padding: "8px 0" }}>
+                <a href={item.link?.url || "#"}>{item.title}</a>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      );
+
+    case "read_more":
+      return (
+        <a
+          href={widget.link?.url || widget.url || "#"}
+          target={widget.link?.target || "_self"}
+          onClick={(event) => event.preventDefault()}
+          style={{
+            display: "inline-block",
+            padding: "10px 18px",
+            borderRadius: s.borderRadius ?? 6,
+            background: bgColor || "#0c2f55",
+            color: color || "#ffffff",
+            textDecoration: "none",
+          }}
+        >
+          {widget.content || "Read More"}
+        </a>
+      );
+
+    case "rating": {
+      const rating = Math.max(0, Math.min(5, widget.settings?.rating ?? 4));
+      return (
+        <div role="img" aria-label={`${rating} out of 5 stars`} style={{ color: "#f0b429" }}>
+          {"★".repeat(Math.floor(rating))}
+          {rating % 1 ? "½" : ""}
+          {"☆".repeat(5 - Math.ceil(rating))}
+        </div>
+      );
+    }
+
+    case "text_path":
+      return (
+        <svg
+          viewBox="0 0 320 180"
+          role="img"
+          aria-label={widget.content || "Text on a path"}
+          style={{ width: "100%", overflow: "visible" }}
+        >
+          <defs>
+            <path id={`text-path-${widget.id}`} d="M 20,145 Q 160,-20 300,145" />
+          </defs>
+          <text fill={color || "#0c2f55"} fontSize={fontSize || 22}>
+            <textPath href={`#text-path-${widget.id}`} startOffset="50%" textAnchor="middle">
+              {widget.content || "Text on a path"}
+            </textPath>
+          </text>
+        </svg>
+      );
+
+    case "tablepress": {
+      const headers = widget.settings?.tableHeaders || ["Name", "Role"];
+      return (
+        <div style={{ width: "100%", overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                {headers.map((header, index) => (
+                  <th key={`${header}-${index}`} scope="col" style={{ textAlign: "left", padding: 10, borderBottom: "2px solid #d9dee7" }}>
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(widget.items || []).map((item) => (
+                <tr key={item.id}>
+                  <td style={{ padding: 10, borderBottom: "1px solid #e5e7eb" }}>{item.title}</td>
+                  {headers.length > 1 && <td style={{ padding: 10, borderBottom: "1px solid #e5e7eb" }}>{item.content}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
 
     // ===== DEFAULT =====
     default:
@@ -1558,7 +2417,11 @@ const CanvasRenderer = ({
     if (!onUpdateWidget) return;
     const pickedArray = Array.isArray(media) ? media : [media];
 
-    if (widget.type === "image" || widget.type === "video") {
+    if (
+      widget.type === "image" ||
+      widget.type === "video" ||
+      widget.type === "site_logo"
+    ) {
       const picked = pickedArray[0];
       onUpdateWidget(widget.id, {
         url: picked.url,
