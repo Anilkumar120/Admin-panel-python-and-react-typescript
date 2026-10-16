@@ -388,6 +388,16 @@ const CreateContent = () => {
                     onChange={(event) => setSlug(createSlug(event.target.value))}
                     placeholder="Enter slug"
                   />
+                  {slug && (
+                    <small>
+                      Permalink: {window.location.origin}/
+                      {postTypeSlug === "pages"
+                        ? slug
+                        : postTypeSlug === "posts"
+                          ? slug
+                          : `${postTypeSlug}/${slug}`}
+                    </small>
+                  )}
                 </div>
               )}
 

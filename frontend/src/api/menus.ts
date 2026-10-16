@@ -36,6 +36,11 @@ export const getMenuSources = async () => {
   return response.data;
 };
 
+export const getPublicMenu = async (menuId: string) => {
+  const response = await axios.get(`${API_URL}/api/public/menus/${menuId}`);
+  return response.data;
+};
+
 export const createMenu = async (data: {
   name: string;
   items: any[];

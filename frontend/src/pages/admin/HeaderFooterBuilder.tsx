@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import PageBuilder from "./PageBuilder";
 import ConditionsPanel from "../../components/PageBuilder/ConditionsPanel";
@@ -41,6 +41,45 @@ const HeaderFooterBuilder = () => {
     void load();
   }, [templateId]);
 
+  const loadTemplate = useCallback(async () => {
+    if (!templateId) return null;
+    const template = await getTemplate(templateId);
+    return {
+      title: template.title,
+      slug: template.slug,
+      layout: template.layout,
+      status: template.status,
+      globals: template.globals,
+    };
+  }, [templateId]);
+
+  const saveTemplate = useCallback(
+    async (data: any) => {
+      const payload = {
+        title: data.title,
+        slug: data.slug,
+        layout: data.layout,
+        status: data.status,
+        globals: data.globals,
+        template_type: templateType,
+        conditions,
+        is_default: isDefault,
+      };
+
+      if (templateId) {
+        return await updateTemplate(templateId, payload);
+      }
+
+      const result = await createTemplate(payload);
+      navigate(
+        `/admin/appearance/header-footer/edit?id=${result.id}&type=${templateType}`,
+        { replace: true },
+      );
+      return result;
+    },
+    [conditions, isDefault, navigate, templateId, templateType],
+  );
+
   if (loading) return <div className="hf-loading">Loading...</div>;
 
   return (
@@ -60,40 +99,8 @@ const HeaderFooterBuilder = () => {
           onDefaultChange={setIsDefault}
         />
       )}
-      loadHandler={async () => {
-        if (!templateId) return null;
-        const t = await getTemplate(templateId);
-        return {
-          title: t.title,
-          slug: t.slug,
-          layout: t.layout,
-          status: t.status,
-          globals: t.globals,
-        };
-      }}
-      saveHandler={async (data) => {
-        const payload = {
-          title: data.title,
-          slug: data.slug,
-          layout: data.layout,
-          status: data.status,
-          globals: data.globals,
-          template_type: templateType,
-          conditions,
-          is_default: isDefault,
-        };
-
-        if (templateId) {
-          return await updateTemplate(templateId, payload);
-        } else {
-          const result = await createTemplate(payload);
-          navigate(
-            `/admin/appearance/header-footer/edit?id=${result.id}&type=${templateType}`,
-            { replace: true }
-          );
-          return result;
-        }
-      }}
+      loadHandler={loadTemplate}
+      saveHandler={saveTemplate}
     />
   );
 };

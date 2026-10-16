@@ -94,7 +94,7 @@ const WidgetContent = ({
           style={{
             ...baseStyle,
             backgroundColor: bgColor || "#0c2f55",
-            color: color || "#ffffff",
+            color: rs.color || s.color || "#ffffff",
             padding: "12px 24px",
             borderRadius: s.borderRadius ? `${s.borderRadius}px` : "6px",
             display: "inline-block",
@@ -190,6 +190,18 @@ const WidgetContent = ({
         >
           {widget.content || "★"}
         </div>
+      );
+
+    case "cart":
+    case "checkout":
+    case "my_account":
+    case "order_summary":
+      return (
+        <EmptyState
+          icon={widget.type === "cart" ? "🛒" : widget.type === "checkout" ? "💳" : "▤"}
+          title={`${widget.label} section`}
+          subtitle="This interactive store section is rendered on the published page."
+        />
       );
 
     // ===== ICON BOX =====

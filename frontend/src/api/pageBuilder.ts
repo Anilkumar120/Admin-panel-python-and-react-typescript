@@ -77,6 +77,7 @@ export type WidgetType =
   | "cart"
   | "checkout"
   | "my_account"
+  | "order_summary"
   // 🆕 NEW product widgets
   | "product_sku"
   | "product_attributes"

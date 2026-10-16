@@ -1,4 +1,11 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { lazy, Suspense, useEffect, useState } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -28,6 +35,8 @@ import EditPostType from "./pages/Content/EditPostType";
 import PostTypeFields from "./pages/Content/PostTypeFields";
 import CustomPostTypeContent from "./pages/Content/CustomPostTypeContent";
 import Reading from "./pages/Settings/Reading";
+import Permalinks from "./pages/Settings/Permalinks";
+import Payments from "./pages/Settings/Payments";
 import SiteIdentity from "./pages/Settings/SiteIdentity";
 import Categories from "./pages/Content/Categories";
 import Tags from "./pages/Content/Tags";
@@ -48,13 +57,73 @@ import HeaderFooterBuilder from "./pages/admin/HeaderFooterBuilder";
 import PublicLayout from "./components/Layout/PublicLayout";
 import PublicPageView from "./pages/admin/PublicPageView";
 import HomePage from "./pages/admin/HomePage";
-import Storefront from "./pages/Storefront/Storefront";
+const Storefront = lazy(() => import("./pages/Storefront/Storefront"));
+
+const RouteLoadingIndicator = () => {
+  const location = useLocation();
+  const [hiddenLocationKey, setHiddenLocationKey] = useState<string | null>(
+    null,
+  );
+
+  useEffect(() => {
+    const timeout = window.setTimeout(
+      () => setHiddenLocationKey(location.key),
+      400,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [location.key]);
+
+  if (hiddenLocationKey === location.key) return null;
+
+  return (
+    <div
+      role="status"
+      aria-label="Loading page"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 10000,
+        display: "grid",
+        placeItems: "center",
+        pointerEvents: "none",
+      }}
+    >
+      <span
+        style={{
+          width: 42,
+          height: 42,
+          border: "4px solid rgba(147, 0, 60, 0.18)",
+          borderTopColor: "#93003c",
+          borderRadius: "50%",
+          animation: "route-loading-spin 0.8s linear infinite",
+        }}
+      />
+      <style>{`
+        @keyframes route-loading-spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+};
 
 const App = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
         <SiteIdentityMeta />
+        <RouteLoadingIndicator />
+        <Suspense
+          fallback={
+            <div
+              role="status"
+              aria-label="Loading page"
+              style={{ minHeight: "50vh", display: "grid", placeItems: "center" }}
+            >
+              Loading…
+            </div>
+          }
+        >
         <Routes>
           {/* ================================================== */}
           {/* ============ 1. ADMIN AUTH ROUTES ================ */}
@@ -116,6 +185,8 @@ const App = () => {
             />
 
             <Route path="settings/reading" element={<Reading />} />
+            <Route path="settings/permalinks" element={<Permalinks />} />
+            <Route path="settings/payments" element={<Payments />} />
             <Route path="settings/site-identity" element={<SiteIdentity />} />
             <Route
               path="content/:postTypeSlug/categories"
@@ -182,12 +253,14 @@ const App = () => {
             <Route path="/cart" element={<Storefront page="cart" />} />
             <Route path="/checkout" element={<Storefront page="checkout" />} />
             <Route path="/order-received" element={<Storefront page="received" />} />
+            <Route path="/my-account" element={<Storefront page="account" />} />
 
             {/* Root-level slugs: /about, /my-post, /iphone-15 */}
             <Route path="/:slug" element={<PublicPageView />} />
 
             {/* Deeper paths: /category/tech, /tag/news */}
             <Route path="/:postType/:slug" element={<PublicPageView />} />
+            <Route path="/*" element={<PublicPageView />} />
           </Route>
 
           {/* ================================================== */}
@@ -230,6 +303,7 @@ const App = () => {
             }
           />
         </Routes>
+        </Suspense>
       </AuthProvider>
     </BrowserRouter>
   );

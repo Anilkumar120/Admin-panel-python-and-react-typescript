@@ -4919,3 +4919,392 @@ textarea {
   color: #666;
   font-style: italic;
 }
+
+
+
+/* Reading Settings - Fix Form Layout */
+.content-form {
+  width: 100%;
+  max-width: 900px;
+  padding: 24px;
+  box-sizing: border-box;
+  background: #fff;
+  color: #1d2327;
+  font-family: Arial, sans-serif;
+}
+
+/* Form Groups */
+.content-form > .content-form-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 24px;
+}
+
+/* Main Labels */
+.content-form > .content-form-group > label:first-child {
+  display: block;
+  width: 100%;
+  margin-bottom: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d2327;
+}
+
+/* Radio and Checkbox Labels */
+.content-form > .content-form-group > label:has(input[type="radio"]),
+.content-form > .content-form-group > label:has(input[type="checkbox"]) {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+/* Radio and Checkbox Inputs */
+.content-form input[type="radio"],
+.content-form input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #2271b1;
+  cursor: pointer;
+}
+
+/* Select Dropdowns */
+.content-form select {
+  display: block;
+  width: 100%;
+  max-width: 450px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid #8c8f94;
+  border-radius: 4px;
+  background-color: #fff;
+  color: #1d2327;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+/* Number Inputs */
+.content-form input[type="number"] {
+  width: 100%;
+  max-width: 120px;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid #8c8f94;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+/* Focus State */
+.content-form select:focus,
+.content-form input[type="number"]:focus {
+  outline: 1px solid #2271b1;
+  border-color: #2271b1;
+}
+
+/* Posts and Items Text */
+.content-form > .content-form-group > span {
+  font-size: 14px;
+  color: #50575e;
+}
+
+/* Permalink Help Text */
+.content-form .content-form-group small {
+  display: block;
+  width: 100%;
+  max-width: 450px;
+  margin-top: 2px;
+  color: #646970;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.content-form .content-form-group small code {
+  overflow-wrap: anywhere;
+}
+
+/* Save Changes */
+.content-form .content-form-actions {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid #dcdcde;
+}
+
+.content-form .content-primary-button {
+  min-height: 38px;
+  padding: 0 18px;
+  border: 1px solid #2271b1;
+  border-radius: 4px;
+  background: #2271b1;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.content-form .content-primary-button:hover {
+  background: #135e96;
+  border-color: #135e96;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .content-form {
+    padding: 14px;
+  }
+
+  .content-form > .content-form-group {
+    margin-bottom: 20px;
+  }
+
+  .content-form select {
+    max-width: 100%;
+  }
+
+  .content-form .content-form-group small {
+    max-width: 100%;
+  }
+}
+
+
+/* ========================================
+   Permalink Settings
+======================================== */
+
+.permalink-settings-form {
+  width: 100%;
+  max-width: 900px;
+  padding: 24px;
+  box-sizing: border-box;
+  color: #1d2327;
+}
+
+/* Permalink radio option */
+.permalink-settings-form .permalink-option {
+  display: grid;
+  grid-template-columns: 18px 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 58px;
+  margin: 0 0 10px;
+  padding: 12px 16px;
+  box-sizing: border-box;
+  border: 1px solid #dcdcde;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.permalink-settings-form .permalink-option:hover {
+  border-color: #8c8f94;
+  background: #f6f7f7;
+}
+
+.permalink-settings-form
+  .permalink-option:has(input[type="radio"]:checked) {
+  border-color: #2271b1;
+  background: #f0f6fc;
+}
+
+/* Radio */
+.permalink-settings-form
+  .permalink-option
+  input[type="radio"] {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: #2271b1;
+  cursor: pointer;
+}
+
+/* Option label */
+.permalink-settings-form .permalink-option span {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* URL example */
+.permalink-settings-form .permalink-option code {
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 3px;
+  background: #f6f7f7;
+  color: #50575e;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* Custom structure input */
+.permalink-settings-form
+  .permalink-option
+  input[type="text"] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #8c8f94;
+  border-radius: 4px;
+  background: #fff;
+  color: #1d2327;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+/* Available permalink tokens */
+.permalink-settings-form .permalink-tokens {
+  margin: 8px 0 22px;
+  padding: 12px;
+  border-left: 3px solid #2271b1;
+  background: #f6f7f7;
+  color: #50575e;
+  font-size: 13px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+/* Category, tag and product base groups */
+.permalink-settings-form > .content-form-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  max-width: 450px;
+  margin: 22px 0;
+}
+
+.permalink-settings-form .content-form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* Base inputs */
+.permalink-settings-form .content-form-group input {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid #8c8f94;
+  border-radius: 4px;
+  background: #fff;
+  color: #1d2327;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+/* Focus */
+.permalink-settings-form input[type="text"]:focus,
+.permalink-settings-form .content-form-group input:focus {
+  outline: none;
+  border-color: #2271b1;
+  box-shadow: 0 0 0 1px #2271b1;
+}
+
+/* Success and error messages */
+.permalink-settings-form .content-message-error,
+.permalink-settings-form .content-message-success {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.permalink-settings-form .content-message-error {
+  border-left: 4px solid #d63638;
+  background: #fcf0f1;
+  color: #8a2424;
+}
+
+.permalink-settings-form .content-message-success {
+  border-left: 4px solid #00a32a;
+  background: #edfaef;
+  color: #146c2e;
+}
+
+/* Save button area */
+.permalink-settings-form .content-form-actions {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid #dcdcde;
+}
+
+.permalink-settings-form .content-primary-button {
+  min-height: 38px;
+  padding: 0 18px;
+  border: 1px solid #2271b1;
+  border-radius: 4px;
+  background: #2271b1;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.permalink-settings-form .content-primary-button:hover {
+  border-color: #135e96;
+  background: #135e96;
+}
+
+.permalink-settings-form .content-primary-button:focus-visible {
+  outline: 2px solid #2271b1;
+  outline-offset: 3px;
+}
+
+/* Tablet and mobile */
+@media (max-width: 650px) {
+  .permalink-settings-form {
+    padding: 14px;
+  }
+
+  .permalink-settings-form .permalink-option {
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .permalink-settings-form .permalink-option span {
+    min-width: 0;
+  }
+
+  .permalink-settings-form .permalink-option code,
+  .permalink-settings-form
+    .permalink-option
+    input[type="text"] {
+    grid-column: 2;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .permalink-settings-form > .content-form-group {
+    max-width: 100%;
+  }
+}

@@ -19,6 +19,8 @@ interface Order {
   created_at?: string;
 }
 
+type CustomerDetails = Pick<Order, "customer_name" | "email" | "phone" | "address">;
+
 const statusLabels: Record<OrderStatus, string> = {
   pending: "Pending",
   processing: "Processing",
@@ -36,6 +38,13 @@ const Orders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editingOrderId, setEditingOrderId] = useState("");
+  const [customerDraft, setCustomerDraft] = useState<CustomerDetails>({
+    customer_name: "",
+    email: "",
+    phone: "",
+    address: "",
+  });
 
   const headers = () => ({
     Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
@@ -90,6 +99,22 @@ const Orders = () => {
     }
   };
 
+  const saveCustomer = async () => {
+    if (!editingOrderId) return;
+    try {
+      await axios.put(
+        `${API_URL}/api/orders/${editingOrderId}/customer`,
+        customerDraft,
+        { headers: headers() },
+      );
+      setEditingOrderId("");
+      await loadOrders();
+    } catch (saveError) {
+      console.error("Unable to update order customer details:", saveError);
+      setError("Unable to update customer information.");
+    }
+  };
+
   return (
     <div className="products-page">
       <div className="page-heading">
@@ -111,7 +136,7 @@ const Orders = () => {
                 {orders.map((order) => (
                   <tr key={order.id}>
                     <td><strong>{order.order_number}</strong></td>
-                    <td>{order.customer_name}<small style={{ display: "block" }}>{order.email}</small><small>{order.phone}</small></td>
+                    <td>{order.customer_name}<small style={{ display: "block" }}>{order.email}</small><small>{order.phone}</small><small style={{ display: "block" }}>{order.address}</small></td>
                     <td>{order.created_at ? new Date(order.created_at).toLocaleString() : "—"}</td>
                     <td>{order.items.map((item, index) => <div key={`${item.name}-${index}`}>{item.name} × {item.quantity}</div>)}</td>
                     <td>₹{Number(order.total).toFixed(2)}</td>
@@ -121,7 +146,18 @@ const Orders = () => {
                         {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                       </select>
                     )}</td>
-                    <td><button type="button" className="secondary-button" onClick={() => void moveOrder(order, isTrash)}>{isTrash ? "Restore" : "Move to trash"}</button></td>
+                    <td>
+                      {!isTrash && <button type="button" className="secondary-button" onClick={() => {
+                        setCustomerDraft({
+                          customer_name: order.customer_name,
+                          email: order.email,
+                          phone: order.phone,
+                          address: order.address,
+                        });
+                        setEditingOrderId(order.id);
+                      }}>Edit customer</button>}
+                      <button type="button" className="secondary-button" onClick={() => void moveOrder(order, isTrash)}>{isTrash ? "Restore" : "Move to trash"}</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -129,7 +165,17 @@ const Orders = () => {
           </div>
         ) : <p style={{ padding: 20 }}>{isTrash ? "Trash is empty." : "No orders yet. Orders submitted through checkout will appear here."}</p>}
       </div>
-      <p style={{ marginTop: 16, color: "#6b7280" }}>Checkout currently supports cash on delivery and offline bank transfer. No online payment gateway is configured.</p>
+      {editingOrderId && (
+        <div role="dialog" aria-modal="true" aria-label="Edit order customer" className="order-customer-dialog">
+          <h2>Edit customer information</h2>
+          <label>Name<input value={customerDraft.customer_name} onChange={(event) => setCustomerDraft({ ...customerDraft, customer_name: event.target.value })} /></label>
+          <label>Email<input type="email" value={customerDraft.email} onChange={(event) => setCustomerDraft({ ...customerDraft, email: event.target.value })} /></label>
+          <label>Phone<input value={customerDraft.phone} onChange={(event) => setCustomerDraft({ ...customerDraft, phone: event.target.value })} /></label>
+          <label>Address<textarea rows={4} value={customerDraft.address} onChange={(event) => setCustomerDraft({ ...customerDraft, address: event.target.value })} /></label>
+          <button type="button" className="secondary-button" onClick={() => setEditingOrderId("")}>Cancel</button>
+          <button type="button" className="primary-button" onClick={() => void saveCustomer()}>Save customer</button>
+        </div>
+      )}
     </div>
   );
 };

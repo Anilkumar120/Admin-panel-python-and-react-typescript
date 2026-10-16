@@ -17,6 +17,42 @@
   margin: 6px 0;
 }
 
+.icon-library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+  gap: 6px;
+  max-width: 420px;
+  margin-top: 8px;
+}
+
+.icon-library-option {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 34px;
+  min-height: 34px;
+  border: 1px solid #d9e2ec;
+  border-radius: 5px;
+  background: #fff;
+  color: #344054;
+  cursor: pointer;
+}
+
+.icon-library-option:hover,
+.icon-library-option.selected {
+  border-color: #0c2f55;
+  background: #eef5fb;
+  color: #0c2f55;
+}
+
+.icon-list-selection-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: #475467;
+}
+
 .background-image-preview {
   display: flex;
   align-items: flex-start;

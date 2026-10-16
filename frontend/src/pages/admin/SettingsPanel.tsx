@@ -10,6 +10,8 @@ import MediaPicker, { type PickedMedia } from "./MediaPicker";
 import UnitInput from "./UnitInput";
 import SliderSettings from "./SliderSettings";
 import RichTextEditor from "./RichTextEditor";
+import BuilderIcon from "../../components/BuilderIcon";
+import { ICON_LIBRARY } from "../../components/iconLibrary";
 import { getMenusForDropdown } from "../../api/menus";
 import { API_URL } from "../../api/config";
 import { getProducts, type Product } from "../../api/products";
@@ -2071,7 +2073,7 @@ const SettingsPanel = ({
                         {
                           id: `icon-list-${widget.id}-${iconListItemSequence.current++}`,
                           title: `List Item ${(widget.items || []).length + 1}`,
-                          icon: "✓",
+                          icon: "FaCheck",
                           link: { url: "" },
                         },
                       ])
@@ -2101,23 +2103,32 @@ const SettingsPanel = ({
                         placeholder="List item text"
                       />
                     </label>
-                    <label className="setting-field">
-                      <span>Icon (text fallback)</span>
-                      <input
-                        type="text"
-                        value={item.icon || ""}
-                        onChange={(event) => {
-                          const items = [...(widget.items || [])];
-                          items[index] = {
-                            ...item,
-                            icon: event.target.value,
-                            image: "",
-                          };
-                          onChangeItems(items);
-                        }}
-                        placeholder="✓, ★, or •"
-                      />
-                    </label>
+                    <div className="setting-field">
+                      <span>Choose Icon</span>
+                      <div className="icon-library-grid" role="group" aria-label={`Choose icon for ${item.title || "list item"}`}>
+                        {ICON_LIBRARY.map(({ name, label, Icon }) => (
+                          <button
+                            type="button"
+                            key={name}
+                            title={label}
+                            aria-label={label}
+                            aria-pressed={item.icon === name}
+                            className={item.icon === name ? "icon-library-option selected" : "icon-library-option"}
+                            onClick={() => {
+                              const items = [...(widget.items || [])];
+                              items[index] = { ...item, icon: name, image: "" };
+                              onChangeItems(items);
+                            }}
+                          >
+                            <Icon aria-hidden="true" />
+                          </button>
+                        ))}
+                      </div>
+                      <div className="icon-list-selection-preview">
+                        <BuilderIcon name={item.icon} />
+                        <span>{item.icon || "Choose an icon"}</span>
+                      </div>
+                    </div>
                     <div className="setting-field">
                       <span>Icon Image (SVG or PNG)</span>
                       {item.image && (

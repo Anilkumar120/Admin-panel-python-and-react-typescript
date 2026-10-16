@@ -3,6 +3,7 @@ import axios from "axios";
 import { API_URL } from "../../api/config";
 import BuilderRenderer from "../../components/ContentRenderer/BuilderRenderer";
 import type { ResponsiveDevice } from "../../types/pageBuilder";
+import PublicPageView from "./PublicPageView";
 
 const useDevice = (): ResponsiveDevice => {
   const [device, setDevice] = useState<ResponsiveDevice>("desktop");
@@ -40,6 +41,10 @@ const HomePage = () => {
     };
     void load();
   }, []);
+
+  if (new URLSearchParams(window.location.search).has("p")) {
+    return <PublicPageView />;
+  }
 
   if (loading) {
     return (
@@ -123,7 +128,7 @@ const LatestPostsHome = ({ device }: { device: ResponsiveDevice }) => {
     const load = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/public/posts`, {
-          params: { page: 1, limit: 12 },
+          params: { page: 1 },
         });
         setPosts(res.data.posts || []);
       } catch (err) {
@@ -169,13 +174,15 @@ const LatestPostsHome = ({ device }: { device: ResponsiveDevice }) => {
             gap: 24,
           }}
         >
-          {posts.map((post) => (
+          {posts.map((post) => {
+            const postPath = post.permalink || `/${post.slug}`;
+            return (
             <a
               key={post.id}
-              href={`/${post.slug}`}
+              href={postPath}
               onClick={(e) => {
                 e.preventDefault();
-                window.history.pushState({}, "", `/${post.slug}`);
+                window.history.pushState({}, "", postPath);
                 window.dispatchEvent(new PopStateEvent("popstate"));
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
@@ -224,7 +231,8 @@ const LatestPostsHome = ({ device }: { device: ResponsiveDevice }) => {
                 </p>
               </div>
             </a>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

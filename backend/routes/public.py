@@ -11,6 +11,7 @@ from backend.database.connection import (
     products_collection,
     post_types_collection,
     settings_collection,
+    menus_collection,
 )
 
 router = APIRouter(
@@ -29,12 +30,56 @@ def get_media_url(media_id):
     return media.get("url", "") if media else ""
 
 
-def format_content_item(item):
+def format_content_item(item, permalink_settings=None):
+    if permalink_settings is None:
+        permalink_settings = settings_collection.find_one({"type": "permalinks"}) or {}
+    structure = permalink_settings.get("structure", "post_name")
+    slug = item.get("slug", "")
+    post_type = item.get("post_type", "")
+    if post_type == "posts":
+        created = item.get("created_at")
+        if not isinstance(created, datetime):
+            try:
+                created = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                created = None
+        if structure == "plain":
+            permalink = f"/?p={item.get('_id', '')}"
+        elif structure == "day_name" and created:
+            permalink = f"/{created:%Y/%m/%d}/{slug}/"
+        elif structure == "month_name" and created:
+            permalink = f"/{created:%Y/%m}/{slug}/"
+        elif structure == "numeric":
+            permalink = f"/archives/{item.get('_id', '')}"
+        elif structure == "custom":
+            permalink = str(permalink_settings.get("custom_structure", "/%postname%/"))
+            tokens = {
+                "%year%": f"{created:%Y}" if created else "",
+                "%monthnum%": f"{created:%m}" if created else "",
+                "%day%": f"{created:%d}" if created else "",
+                "%hour%": f"{created:%H}" if created else "",
+                "%minute%": f"{created:%M}" if created else "",
+                "%second%": f"{created:%S}" if created else "",
+                "%post_id%": str(item.get("_id", "")),
+                "%postname%": slug,
+                "%category%": (item.get("categories") or [""])[0],
+                "%author%": str(item.get("author_slug", "author")),
+            }
+            for token, value in tokens.items():
+                permalink = permalink.replace(token, str(value))
+        else:
+            permalink = f"/{slug}/"
+    elif post_type == "pages":
+        permalink = f"/{slug}/"
+    else:
+        permalink = f"/{post_type}/{slug}/"
+
     return {
         "id": str(item["_id"]),
         "post_type": item.get("post_type", ""),
         "title": item.get("title", ""),
-        "slug": item.get("slug", ""),
+        "slug": slug,
+        "permalink": permalink,
         "content": item.get("content", ""),
         "excerpt": (
             item.get("content", "")[:200] + "..."
@@ -55,7 +100,7 @@ def format_content_item(item):
     }
 
 
-def format_public_product(product):
+def format_public_product(product, permalink_settings=None):
     image_url = product.get("image", "") or product.get("featured_image", "")
     media_id = product.get("media_id", "")
     if media_id and ObjectId.is_valid(media_id):
@@ -107,12 +152,16 @@ def format_public_product(product):
                 "alt": entry.get("alt", ""),
             })
 
+    if permalink_settings is None:
+        permalink_settings = settings_collection.find_one({"type": "permalinks"}) or {}
+    product_base = permalink_settings.get("product_base", "products").strip("/")
     return {
         "id": str(product["_id"]),
         "post_type": "products",
         "title": product.get("name", "") or product.get("title", ""),
         "name": product.get("name", "") or product.get("title", ""),
         "slug": product.get("slug", "") or str(product["_id"]),
+        "permalink": f"/{product_base}/{product.get('slug', '') or str(product['_id'])}/",
         "content": description,
         "description": description,
         "short_description": product.get("short_description", ""),
@@ -267,7 +316,13 @@ def get_public_products(
         sort_field = [("price", -1)]
 
     products = list(products_collection.find(query).sort(sort_field).limit(limit))
-    return {"products": [format_public_product(product) for product in products]}
+    permalink_settings = settings_collection.find_one({"type": "permalinks"}) or {}
+    return {
+        "products": [
+            format_public_product(product, permalink_settings)
+            for product in products
+        ]
+    }
 
 
 @router.get("/products/{product_id}/related")
@@ -301,7 +356,29 @@ def get_related_products(product_id: str, limit: int = Query(4, ge=1, le=20)):
         }).limit(limit - len(related)))
         related.extend(more)
 
-    return {"products": [format_public_product(p) for p in related]}
+    permalink_settings = settings_collection.find_one({"type": "permalinks"}) or {}
+    return {
+        "products": [
+            format_public_product(product, permalink_settings)
+            for product in related
+        ]
+    }
+
+
+@router.get("/menus/{menu_id}")
+def get_public_menu(menu_id: str):
+    if not ObjectId.is_valid(menu_id):
+        raise HTTPException(status_code=400, detail="Invalid menu ID")
+
+    menu = menus_collection.find_one({"_id": ObjectId(menu_id)})
+    if not menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+
+    return {
+        "id": str(menu["_id"]),
+        "name": menu.get("name", ""),
+        "items": menu.get("items", []),
+    }
 
 
 # ============ PERMALINK RESOLVER ============
@@ -356,11 +433,37 @@ def _find_matching_template(template_type: str, url_path: str, post_type: str, s
 
 @router.get("/resolve")
 def resolve_permalink(
-    slug: str = Query(...),
+    slug: str = Query(""),
     post_type: Optional[str] = Query(None),
+    url_path: Optional[str] = Query(None),
+    post_id: Optional[str] = Query(None),
 ):
+    path_parts = [part for part in (url_path or "").split("/") if part]
+    if not slug and path_parts:
+        slug = path_parts[-1]
+    if not post_id and path_parts and path_parts[0] == "archives" and ObjectId.is_valid(path_parts[-1]):
+        post_id = path_parts[-1]
+    if post_id and ObjectId.is_valid(post_id):
+        item = content_collection.find_one({
+            "_id": ObjectId(post_id),
+            "status": "published",
+            "is_deleted": False,
+        })
+        if item:
+            return format_content_item(item)
     if not slug:
         raise HTTPException(status_code=400, detail="Slug required")
+
+    permalink_settings = settings_collection.find_one({"type": "permalinks"}) or {}
+    product_base = permalink_settings.get("product_base", "products").strip("/")
+    if path_parts and (
+        path_parts[0] == product_base or path_parts[0] in {"product", "products"}
+    ):
+        post_type = "products"
+    elif path_parts and path_parts[0] in {"blog", "posts"}:
+        post_type = "posts"
+    elif path_parts and path_parts[0].isdigit():
+        post_type = "posts"
 
     # 1. Builder page
     builder = pages_collection.find_one({
@@ -387,10 +490,16 @@ def resolve_permalink(
 
     # 2. Content items
     query = {"slug": slug, "status": "published", "is_deleted": False}
-    if post_type:
+    if post_type and post_type not in {"product", "products"}:
         query["post_type"] = post_type
 
     item = content_collection.find_one(query)
+    if not item and (not post_type or url_path):
+        item = content_collection.find_one({
+            "slug": slug,
+            "status": "published",
+            "is_deleted": False,
+        })
     if item:
         formatted = format_content_item(item)
         t_type = "single_post" if item.get("post_type") == "posts" else "single_page"
@@ -499,11 +608,13 @@ def get_public_page_by_slug(slug: str):
 @router.get("/posts")
 def get_public_posts(
     page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
+    limit: Optional[int] = Query(None, ge=1, le=100),
     category: Optional[str] = Query(None),
     tag: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
 ):
+    if limit is None:
+        limit = int((settings_collection.find_one({"type": "reading"}) or {}).get("posts_per_page", 10))
     query = {"post_type": "posts", "status": "published", "is_deleted": False}
     if category:
         query["categories"] = category
@@ -522,8 +633,9 @@ def get_public_posts(
         content_collection.find(query).sort("created_at", -1).skip(skip).limit(limit)
     )
 
+    permalink_settings = settings_collection.find_one({"type": "permalinks"}) or {}
     return {
-        "posts": [format_content_item(p) for p in posts],
+        "posts": [format_content_item(p, permalink_settings) for p in posts],
         "total": total,
         "page": page,
         "limit": limit,

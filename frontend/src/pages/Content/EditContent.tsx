@@ -31,6 +31,7 @@ const EditContent = () => {
 
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [content, setContent] = useState("");
   const [featuredImage, setFeaturedImage] = useState("");
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
@@ -98,6 +99,7 @@ const EditContent = () => {
 
         setTitle(itemResponse.title || "");
         setSlug(itemResponse.slug || "");
+        setSlugManuallyEdited(false);
         setContent(itemResponse.content || "");
         setFeaturedImage(itemResponse.featured_image || "");
 
@@ -384,7 +386,11 @@ const EditContent = () => {
                 <input
                   type="text"
                   value={title}
-                  onChange={(event) => setTitle(event.target.value)}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setTitle(value);
+                    if (!slugManuallyEdited) setSlug(createSlug(value));
+                  }}
                   required
                 />
               </div>
@@ -394,9 +400,22 @@ const EditContent = () => {
                 <input
                   type="text"
                   value={slug}
-                  onChange={(event) => setSlug(event.target.value)}
+                  onChange={(event) => {
+                    setSlug(event.target.value);
+                    setSlugManuallyEdited(Boolean(event.target.value));
+                  }}
                   required
                 />
+                {slug && (
+                  <small>
+                    Permalink: {window.location.origin}/
+                    {postTypeSlug === "pages"
+                      ? slug
+                      : postTypeSlug === "posts"
+                        ? slug
+                        : `${postTypeSlug}/${slug}`}
+                  </small>
+                )}
               </div>
 
               <div className="form-group">

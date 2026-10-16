@@ -15,6 +15,7 @@ import type {
 import ResizeHandles from "./ResizeHandles";
 import MediaPicker, { type PickedMedia } from "./MediaPicker";
 import { getImageUrl } from "../../api/products";
+import BuilderIcon from "../../components/BuilderIcon";
 
 // ============ STYLE INJECTOR ============
 const StyleInjector = ({ css }: { css: string }) => {
@@ -1145,6 +1146,7 @@ const WidgetContent = ({
         <ul
           className="builder-icon-list"
           style={{
+            ...renderWidgetStyles(widget.style, device),
             listStyle: "none",
             display: "flex",
             flexDirection: (s.flexDirection as "row" | "column") || "column",
@@ -1176,16 +1178,14 @@ const WidgetContent = ({
                     }}
                   />
                 ) : (
-                  <span
-                    aria-hidden="true"
+                  <BuilderIcon
+                    name={item.icon}
                     style={{
                       color: s.iconColor || color || "#0c2f55",
                       fontSize: `${s.iconSize || 20}px`,
                       lineHeight: 1,
                     }}
-                  >
-                    {item.icon || "✓"}
-                  </span>
+                  />
                 )}
                 <span>{item.title || item.content}</span>
               </span>

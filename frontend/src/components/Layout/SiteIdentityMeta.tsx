@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { getMediaUrl } from "../../api/media";
 import { getPublicSiteIdentity } from "../../api/siteIdentity";
+import { getPublicReadingSettings } from "../../api/settings";
 
 const SiteIdentityMeta = () => {
   useEffect(() => {
@@ -29,8 +30,27 @@ const SiteIdentityMeta = () => {
       }
     };
 
+    const updateRobots = async () => {
+      try {
+        const readingSettings = await getPublicReadingSettings();
+        if (!active) return;
+        let robots = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+        if (!robots) {
+          robots = document.createElement("meta");
+          robots.name = "robots";
+          document.head.appendChild(robots);
+        }
+        robots.content = readingSettings.search_engine_visibility
+          ? "noindex,nofollow"
+          : "index,follow";
+      } catch (error) {
+        console.error("SEARCH VISIBILITY SETTINGS LOAD ERROR:", error);
+      }
+    };
+
     const handleUpdate = () => {
       void updateFavicon();
+      void updateRobots();
     };
 
     void updateFavicon();

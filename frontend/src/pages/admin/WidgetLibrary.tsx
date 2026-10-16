@@ -118,6 +118,10 @@ const CATEGORIES: WidgetCategory[] = [
       { type: "add_to_cart", label: "Add to Cart", icon: "🛒" },
       { type: "related_products", label: "Related Products", icon: "↻" },
       { type: "recent_products", label: "Recent Products", icon: "⏱" },
+      { type: "cart", label: "Cart", icon: "🛒" },
+      { type: "checkout", label: "Checkout", icon: "💳" },
+      { type: "my_account", label: "My Account", icon: "👤" },
+      { type: "order_summary", label: "Order Summary", icon: "✓" },
     ],
   },
   {

@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useState, useRef, useCallback, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, useRef, useCallback, type FormEvent } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { API_URL, getImageUrl } from "../../api/config";
 import type { PageWidget, ResponsiveDevice } from "../../types/pageBuilder";
 import { submitForm } from "../../api/forms";
 import { addToCart } from "../../api/cart";
+import { getPublicMenu } from "../../api/menus";
+import BuilderIcon from "../BuilderIcon";
+
+const StorefrontWidget = lazy(() => import("../../pages/Storefront/Storefront"));
 
 interface BuilderRendererProps {
   layout: PageWidget[];
@@ -19,6 +23,7 @@ export interface ProductData {
   title: string;
   name: string;
   slug: string;
+  permalink?: string;
   description: string;
   short_description?: string;
   excerpt: string;
@@ -110,7 +115,7 @@ const ProductGridWidget = ({
       {products.map((product) => (
         <a
           key={product.id}
-          href={`/${encodeURIComponent(product.slug || product.id)}`}
+          href={product.permalink || `/${encodeURIComponent(product.slug || product.id)}`}
           style={{
             border: "1px solid #e0e0e0",
             borderRadius: 8,
@@ -139,6 +144,92 @@ const ProductGridWidget = ({
             <strong style={{ color: "#0c2f55" }}>
               ₹{Number(product.price || 0).toFixed(2)}
             </strong>
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+};
+
+const PublicPostsWidget = ({
+  limit,
+  columns,
+  layout,
+}: {
+  limit: number;
+  columns: number;
+  layout: "grid" | "list";
+}) => {
+  const [posts, setPosts] = useState<{
+    id: string;
+    title: string;
+    slug: string;
+    permalink?: string;
+    excerpt?: string;
+    featured_image?: string;
+  }[]>([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    axios.get<{ posts: typeof posts }>(`${API_URL}/api/public/posts`, {
+      params: { page: 1, limit },
+    })
+      .then(({ data }) => {
+        if (active) setPosts(Array.isArray(data.posts) ? data.posts : []);
+      })
+      .catch((loadError) => {
+        console.error("PUBLIC POST WIDGET LOAD ERROR:", loadError);
+        if (active) setError("Posts could not be loaded.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [limit]);
+
+  if (error) return <p role="alert">{error}</p>;
+  if (!posts.length) return <p>No published posts yet.</p>;
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: layout === "grid"
+          ? `repeat(auto-fit, minmax(min(100%, ${Math.max(180, Math.floor(1200 / Math.max(1, columns)))}px), 1fr))`
+          : "1fr",
+        gap: 20,
+      }}
+    >
+      {posts.map((post) => (
+        <a
+          key={post.id}
+          href={post.permalink || `/${post.slug}`}
+          style={{
+            display: layout === "list" ? "flex" : "block",
+            gap: 16,
+            border: "1px solid #e0e6ed",
+            borderRadius: 8,
+            overflow: "hidden",
+            color: "inherit",
+            textDecoration: "none",
+            background: "#fff",
+          }}
+        >
+          {post.featured_image && (
+            <img
+              src={getImageUrl(post.featured_image)}
+              alt={post.title}
+              loading="lazy"
+              style={{
+                width: layout === "list" ? 180 : "100%",
+                height: layout === "list" ? 130 : 190,
+                objectFit: "cover",
+              }}
+            />
+          )}
+          <div style={{ padding: 16 }}>
+            <h3 style={{ margin: "0 0 8px" }}>{post.title}</h3>
+            {post.excerpt && <p style={{ margin: 0 }}>{post.excerpt}</p>}
           </div>
         </a>
       ))}
@@ -548,7 +639,13 @@ const ProductGalleryWidget = ({ product }: { product?: ProductData }) => {
 };
 
 // ============ ADD TO CART ============
-const ProductAddToCart = ({ product }: { product?: ProductData }) => {
+const ProductAddToCart = ({
+  product,
+  style,
+}: {
+  product?: ProductData;
+  style?: React.CSSProperties;
+}) => {
   const [quantity, setQuantity] = useState(1);
   const [message, setMessage] = useState("");
   const available = Boolean(
@@ -609,8 +706,13 @@ const ProductAddToCart = ({ product }: { product?: ProductData }) => {
           }
         }}
         style={{
+          backgroundColor: "#0c2f55",
+          color: "#ffffff",
+          border: 0,
+          borderRadius: 6,
           padding: "10px 18px",
           cursor: available ? "pointer" : "not-allowed",
+          ...style,
         }}
       >
         {available ? "Add to Cart" : "Out of stock"}
@@ -1206,6 +1308,45 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
 };
 
 // ============ MENU RENDERER ============
+const DEFAULT_MENU_ITEMS = [
+  { id: "1", title: "Home", link: { url: "/" } },
+  { id: "2", title: "About", link: { url: "/about" } },
+  { id: "3", title: "Contact", link: { url: "/contact" } },
+];
+
+const buildMenuTree = (items: any[]) => {
+  const nodes = new Map<string, any>();
+  const roots: any[] = [];
+
+  items.forEach((item, index) => {
+    const id = String(item.id || item._id || `menu-item-${index}`);
+    const itemLink =
+      item.url || item.link?.url || (typeof item.link === "string" ? item.link : "#");
+
+    nodes.set(id, {
+      id,
+      title: item.title || item.label || "Menu Item",
+      link: { url: itemLink },
+      children: [],
+    });
+  });
+
+  items.forEach((item, index) => {
+    const id = String(item.id || item._id || `menu-item-${index}`);
+    const node = nodes.get(id);
+    const rawParentId = item.parent_id ?? item.parentId;
+    const parent = rawParentId ? nodes.get(String(rawParentId)) : null;
+
+    if (parent && parent.id !== id) {
+      parent.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+
+  return roots;
+};
+
 const MenuRenderer = ({
   widget,
   color,
@@ -1221,15 +1362,52 @@ const MenuRenderer = ({
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const selectedMenuId = widget.settings?.selectedMenuId;
+  const fallbackItems =
+    widget.settings?.items || widget.items || DEFAULT_MENU_ITEMS;
+  const [loadedMenu, setLoadedMenu] = useState<{
+    id: string;
+    items: any[];
+  } | null>(null);
 
-  const items =
-    widget.items && widget.items.length > 0
-      ? widget.items
-      : [
-          { id: "1", title: "Home", link: { url: "/" } },
-          { id: "2", title: "About", link: { url: "/about" } },
-          { id: "3", title: "Contact", link: { url: "/contact" } },
-        ];
+  useEffect(() => {
+    if (!selectedMenuId) return;
+
+    let active = true;
+
+    getPublicMenu(String(selectedMenuId))
+      .then((menu) => {
+        if (active) {
+          setLoadedMenu({
+            id: String(selectedMenuId),
+            items: buildMenuTree(Array.isArray(menu.items) ? menu.items : []),
+          });
+        }
+      })
+      .catch((error) => {
+        console.error("PUBLIC MENU LOAD ERROR:", error);
+        if (!active) return;
+
+        if (axios.isAxiosError(error) && error.response?.status === 404) {
+          setLoadedMenu({ id: String(selectedMenuId), items: [] });
+        } else {
+          setLoadedMenu({
+            id: String(selectedMenuId),
+            items: fallbackItems,
+          });
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedMenuId, fallbackItems]);
+
+  const items = selectedMenuId
+    ? loadedMenu?.id === String(selectedMenuId)
+      ? loadedMenu.items
+      : []
+    : fallbackItems;
 
   const menuGap = s.gap ?? 24;
   const menuJustify = (rs.justifyContent || s.justifyContent || "center") as any;
@@ -1513,6 +1691,7 @@ const WidgetRenderer = ({
   const bgColor = rs.backgroundColor ?? s.backgroundColor;
 
   const baseStyle: React.CSSProperties = {
+    ...renderStyles(widget.style, device),
     fontSize: `${fontSize}px`,
     textAlign: textAlign as any,
     color,
@@ -1577,6 +1756,7 @@ const WidgetRenderer = ({
           src={getImageUrl(product.image)}
           alt={product.title}
           style={{
+            ...renderStyles(widget.style, device),
             display: "block",
             width: s.width || "100%",
             height: s.height || "auto",
@@ -1589,7 +1769,11 @@ const WidgetRenderer = ({
       );
 
     case "product_gallery":
-      return <ProductGalleryWidget product={product} />;
+      return (
+        <div style={renderStyles(widget.style, device)}>
+          <ProductGalleryWidget product={product} />
+        </div>
+      );
 
     case "product_description":
       return (
@@ -1623,10 +1807,18 @@ const WidgetRenderer = ({
       );
 
     case "product_attributes":
-      return <ProductAttributesWidget product={product} />;
+      return (
+        <div style={renderStyles(widget.style, device)}>
+          <ProductAttributesWidget product={product} />
+        </div>
+      );
 
     case "product_variations":
-      return <ProductVariationsWidget product={product} />;
+      return (
+        <div style={renderStyles(widget.style, device)}>
+          <ProductVariationsWidget product={product} />
+        </div>
+      );
 
     case "product_stock":
       return (
@@ -1644,38 +1836,67 @@ const WidgetRenderer = ({
       );
 
     case "quantity":
-      return <ProductQuantityWidget product={product} />;
+      return (
+        <div style={renderStyles(widget.style, device)}>
+          <ProductQuantityWidget product={product} />
+        </div>
+      );
 
     case "add_to_cart":
-      return <ProductAddToCart product={product} />;
+      return <ProductAddToCart product={product} style={renderStyles(widget.style, device)} />;
+
+    case "cart":
+    case "checkout":
+    case "my_account":
+    case "order_summary":
+      return (
+        <Suspense fallback={<div style={baseStyle}>Loading store section…</div>}>
+          <StorefrontWidget
+            page={
+              widget.type === "my_account"
+                ? "account"
+                : widget.type === "order_summary"
+                  ? "received"
+                  : widget.type
+            }
+            embedded
+          />
+        </Suspense>
+      );
 
     case "products":
     case "product_grid":
       return (
-        <ProductGridWidget
-          limit={widget.settings?.postsPerPage || 8}
-          columns={widget.settings?.columns || 4}
-          query="all"
-        />
+        <div style={renderStyles(widget.style, device)}>
+          <ProductGridWidget
+            limit={widget.settings?.postsPerPage || 8}
+            columns={widget.settings?.columns || 4}
+            query="all"
+          />
+        </div>
       );
 
     case "related_products":
       return (
-        <ProductGridWidget
-          limit={widget.settings?.postsPerPage || 4}
-          columns={widget.settings?.columns || 4}
-          query="related"
-          productId={product?.id}
-        />
+        <div style={renderStyles(widget.style, device)}>
+          <ProductGridWidget
+            limit={widget.settings?.postsPerPage || 4}
+            columns={widget.settings?.columns || 4}
+            query="related"
+            productId={product?.id}
+          />
+        </div>
       );
 
     case "recent_products":
       return (
-        <ProductGridWidget
-          limit={widget.settings?.postsPerPage || 4}
-          columns={widget.settings?.columns || 4}
-          query="recent"
-        />
+        <div style={renderStyles(widget.style, device)}>
+          <ProductGridWidget
+            limit={widget.settings?.postsPerPage || 4}
+            columns={widget.settings?.columns || 4}
+            query="recent"
+          />
+        </div>
       );
 
     case "heading": {
@@ -1750,7 +1971,7 @@ const WidgetRenderer = ({
                 ...baseStyle,
                 textAlign: btnTextAlign,
                 backgroundColor: bgColor || "#0c2f55",
-                color: color || "#ffffff",
+                color: rs.color || s.color || "#ffffff",
                 padding: "12px 24px",
                 borderRadius: s.borderRadius ? `${s.borderRadius}px` : "6px",
                 display: "inline-block",
@@ -1919,6 +2140,7 @@ const WidgetRenderer = ({
         <ul
           className="builder-icon-list"
           style={{
+            ...renderStyles(widget.style, device),
             listStyle: "none",
             display: "flex",
             flexDirection: (s.flexDirection as "row" | "column") || "column",
@@ -1943,16 +2165,14 @@ const WidgetRenderer = ({
                     }}
                   />
                 ) : (
-                  <span
-                    aria-hidden="true"
+                  <BuilderIcon
+                    name={item.icon}
                     style={{
                       color: s.iconColor || color || "#0c2f55",
                       fontSize: `${s.iconSize || 20}px`,
                       lineHeight: 1,
                     }}
-                  >
-                    {item.icon || "✓"}
-                  </span>
+                  />
                 )}
                 <span>{item.title || item.content}</span>
               </>
@@ -2214,7 +2434,6 @@ const WidgetRenderer = ({
 
     case "carousel":
     case "slider":
-    case "post_carousel":
       return <SliderRenderer widget={widget} />;
 
     case "spacer":
@@ -2626,78 +2845,23 @@ const WidgetRenderer = ({
         </div>
       );
 
+    case "posts":
     case "post_grid":
       return (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: 20,
-          }}
-        >
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              style={{
-                border: "1px solid #e0e0e0",
-                borderRadius: 8,
-                overflow: "hidden",
-                background: "#fff",
-              }}
-            >
-              <img
-                src={`https://picsum.photos/400/250?post${i}`}
-                alt=""
-                style={{ width: "100%", height: 160, objectFit: "cover" }}
-              />
-              <div style={{ padding: 14 }}>
-                <h4 style={{ margin: "0 0 8px", fontSize: 16 }}>
-                  Sample Post {i}
-                </h4>
-                <p style={{ margin: 0, fontSize: 13, color: "#666" }}>
-                  Short excerpt...
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
+        <PublicPostsWidget
+          limit={widget.settings?.postsPerPage || 6}
+          columns={widget.settings?.columns || 3}
+          layout="grid"
+        />
       );
-
     case "post_list":
+    case "post_carousel":
       return (
-        <div>
-          {[1, 2].map((i) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                gap: 16,
-                marginBottom: 16,
-                paddingBottom: 16,
-                borderBottom: "1px solid #eee",
-              }}
-            >
-              <img
-                src={`https://picsum.photos/200/150?list${i}`}
-                alt=""
-                style={{
-                  width: 140,
-                  height: 100,
-                  objectFit: "cover",
-                  borderRadius: 6,
-                }}
-              />
-              <div>
-                <h4 style={{ margin: "0 0 8px", fontSize: 16 }}>
-                  Post Title {i}
-                </h4>
-                <p style={{ margin: 0, fontSize: 13, color: "#666" }}>
-                  Excerpt...
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
+        <PublicPostsWidget
+          limit={widget.settings?.postsPerPage || 6}
+          columns={1}
+          layout="list"
+        />
       );
 
     default:

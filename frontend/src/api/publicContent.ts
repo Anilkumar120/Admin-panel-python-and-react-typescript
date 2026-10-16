@@ -83,13 +83,19 @@ export const getPublicPageBySlug = async (
 // Posts
 export const getPublicPosts = async (
   page = 1,
-  limit = 10,
+  limit?: number,
   category?: string,
   tag?: string,
   search?: string,
 ): Promise<PublicPostsResponse> => {
   const response = await axios.get(`${PUBLIC_URL}/posts`, {
-    params: { page, limit, category, tag, search },
+    params: {
+      page,
+      ...(limit !== undefined ? { limit } : {}),
+      category,
+      tag,
+      search,
+    },
   });
   return response.data;
 };

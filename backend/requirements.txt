@@ -7,3 +7,4 @@ passlib
 bcrypt
 PyJWT
 python-jose[cryptography]
+cryptography

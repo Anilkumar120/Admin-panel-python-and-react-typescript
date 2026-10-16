@@ -329,6 +329,28 @@ const AdminLayout = () => {
               <span>🖼️</span>
               Site Identity
             </Link>
+            <Link
+              to="/admin/settings/permalinks"
+              className={
+                location.pathname === "/admin/settings/permalinks"
+                  ? "nav-link active"
+                  : "nav-link"
+              }
+            >
+              <span>🔗</span>
+              Permalinks
+            </Link>
+            <Link
+              to="/admin/settings/payments"
+              className={
+                location.pathname === "/admin/settings/payments"
+                  ? "nav-link active"
+                  : "nav-link"
+              }
+            >
+              <span>💳</span>
+              Payments
+            </Link>
           </div>
         </nav>
       </aside>

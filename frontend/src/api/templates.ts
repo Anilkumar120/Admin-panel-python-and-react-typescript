@@ -19,7 +19,12 @@ export type TemplateType =
   | "archive"
   | "search_results"
   | "loop_item"
-  | "error_404";
+  | "error_404"
+  | "shop"
+  | "cart"
+  | "checkout"
+  | "my_account"
+  | "order_received";
 
 export interface TemplateConditions {
   include?: string[];

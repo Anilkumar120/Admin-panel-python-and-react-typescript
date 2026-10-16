@@ -24,6 +24,11 @@ const SITE_PARTS: {
   { type: "search_results", title: "Search Results", description: "Search results page layout", icon: "⌕" },
   { type: "loop_item", title: "Loop Item", description: "Reusable post or product item", icon: "▣" },
   { type: "error_404", title: "Error 404", description: "Not-found page layout", icon: "!" },
+  { type: "shop", title: "Shop", description: "Product catalog page", icon: "🛍" },
+  { type: "cart", title: "Cart", description: "Shopping cart page", icon: "🛒" },
+  { type: "checkout", title: "Checkout", description: "Checkout and payment page", icon: "💳" },
+  { type: "my_account", title: "My Account", description: "Customer account page", icon: "👤" },
+  { type: "order_received", title: "Order Received", description: "Order confirmation page", icon: "✓" },
 ];
 
 const HeaderFooterList = () => {

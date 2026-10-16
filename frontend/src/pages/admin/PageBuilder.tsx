@@ -75,6 +75,7 @@ const getLayerIcon = (type: WidgetType): string => {
     product_image: "▧", product_gallery: "▦",
     product_description: "¶", product_short_description: "≡",
     product_stock: "✓", add_to_cart: "+",
+    cart: "🛒", checkout: "💳", my_account: "👤", order_summary: "✓",
     product_sku: "⌗",
     product_categories: "▤",
     product_tags: "#",
@@ -116,6 +117,8 @@ const getWidgetLabel = (type: WidgetType): string => {
     product_image: "Product Image", product_gallery: "Product Gallery",
     product_description: "Product Description", product_stock: "Product Stock",
     add_to_cart: "Add to Cart",
+    cart: "Cart", checkout: "Checkout", my_account: "My Account",
+    order_summary: "Order Summary",
     product_short_description: "Product Short Description",
     product_sku: "Product SKU",
     product_categories: "Product Categories",
@@ -398,6 +401,13 @@ const createWidget = (type: WidgetType): PageWidget => {
       content: "★",
       items: [{ id: createId(), title: "Feature Title", content: "Description text here." }],
     },
+    icon_list: {
+      items: [
+        { id: createId(), title: "Quality checked", icon: "FaCheckCircle" },
+        { id: createId(), title: "Fast delivery", icon: "FaArrowRight" },
+        { id: createId(), title: "Customer support", icon: "FaHeart" },
+      ],
+    },
     image_box: {
       content: "Add your image box description.",
       url: "",
@@ -496,6 +506,10 @@ const createWidget = (type: WidgetType): PageWidget => {
     recent_products: { settings: { postsPerPage: 4, columns: 4 } },
     product_stock: { content: "Product Stock" },
     add_to_cart: { content: "Add to Cart" },
+    cart: { content: "Cart" },
+    checkout: { content: "Checkout" },
+    my_account: { content: "My Account" },
+    order_summary: { content: "Order Summary" },
     html: { content: "<p>Custom HTML content</p>" },
     search: { content: "Search" },
     menu: { content: "Menu" },
@@ -720,6 +734,7 @@ const PageBuilder = ({
 
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [layout, setLayout] = useState<PageWidget[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [status, setStatus] = useState<PageStatus>("draft");
@@ -795,6 +810,7 @@ const PageBuilder = ({
         if (!active || !data) return;
         setTitle(data.title || "");
         setSlug(data.slug || "");
+        setSlugManuallyEdited(false);
         setLayout(data.layout || []);
         setStatus(data.status || "draft");
         if (data.globals) setGlobals((prev) => ({ ...prev, ...data.globals }));
@@ -824,6 +840,7 @@ const PageBuilder = ({
           if (!active) return;
           setTitle(page.title || "");
           setSlug(page.slug || "");
+          setSlugManuallyEdited(false);
           setLayout(page.layout || []);
           setStatus(page.status || "draft");
           setShowTitle(page.show_title !== false);
@@ -860,6 +877,7 @@ const PageBuilder = ({
 
           setTitle(page.title || "");
           setSlug(page.slug || "");
+          setSlugManuallyEdited(false);
           setLayout(page.layout || []);
           setStatus(page.status || "draft");
           setShowTitle(page.show_title !== false);
@@ -1434,6 +1452,19 @@ const PageBuilder = ({
     [selectedId, layout, updateWidget, pushHistory],
   );
 
+  const handleTitleChange = (value: string) => {
+    setTitle(value);
+    if (!slugManuallyEdited) {
+      setSlug(
+        value
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, ""),
+      );
+    }
+  };
+
   const handleSave = useCallback(
     async (publish: boolean) => {
       if (!title.trim() || !slug.trim()) {
@@ -1501,6 +1532,7 @@ const PageBuilder = ({
               }${urlPostType ? `&postType=${urlPostType}` : ""}`,
               { replace: true },
             );
+
           }
         }
         setStatus(pageData.status);
@@ -1579,6 +1611,11 @@ const PageBuilder = ({
               search_results: "🔎 Search Results",
               loop_item: "▤ Loop Item",
               error_404: "⚠ Error 404",
+              shop: "🛍 Shop",
+              cart: "🛒 Cart",
+              checkout: "💳 Checkout",
+              my_account: "👤 My Account",
+              order_received: "✓ Order Received",
             }[templateType] || "Site Template"}
           </div>
         )}
@@ -1588,16 +1625,23 @@ const PageBuilder = ({
             type="text"
             value={title}
             placeholder={mode === "template" ? "Template Title" : "Page Title"}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => handleTitleChange(e.target.value)}
           />
           <input
             type="text"
             value={slug}
             placeholder="template-slug"
-            onChange={(e) =>
-              setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))
-            }
+            onChange={(e) => {
+              const value = e.target.value.toLowerCase().replace(/\s+/g, "-");
+              setSlug(value);
+              setSlugManuallyEdited(Boolean(value));
+            }}
           />
+          {mode === "page" && slug && (
+            <small className="builder-permalink-preview">
+              {window.location.origin}/{slug}
+            </small>
+          )}
         </div>
 
         <div className="builder-actions">

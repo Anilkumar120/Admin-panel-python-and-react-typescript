@@ -20,7 +20,8 @@ router = APIRouter(
 
 TEMPLATE_TYPES = {
     "header", "footer", "single_product", "single_post", "single_page",
-    "archive", "search_results", "loop_item", "error_404",
+    "archive", "search_results", "loop_item", "error_404", "shop", "cart",
+    "checkout", "my_account", "order_received",
 }
 
 

@@ -7,6 +7,7 @@ import {
   updateProduct,
   type Product,
 } from "../../api/products";
+import { getPublicPermalinkSettings } from "../../api/settings";
 import { getMediaUrl } from "../../api/media";
 import { API_URL } from "../../api/config";
 import MediaPicker, { type PickedMedia } from "../admin/MediaPicker";
@@ -106,6 +107,8 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
   const navigate = useNavigate();
   const { productId } = useParams();
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [productBase, setProductBase] = useState("products");
   const [featured, setFeatured] = useState<PickedMedia | null>(null);
   const [mediaPicker, setMediaPicker] = useState<"featured" | "gallery" | null>(
     null,
@@ -120,6 +123,14 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
     key: K,
     value: ProductDraft[K],
   ) => setDraft((current) => ({ ...current, [key]: value }));
+
+  useEffect(() => {
+    getPublicPermalinkSettings()
+      .then((settings) => setProductBase(settings.product_base || "products"))
+      .catch((loadError) => {
+        console.error("PRODUCT PERMALINK SETTINGS ERROR:", loadError);
+      });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -181,6 +192,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
           cross_sells: safeList(product.cross_sells),
           regular_price: product.regular_price ?? product.price,
         });
+        setSlugManuallyEdited(false);
 
         const imageUrl = product.image || "";
         if (imageUrl) {
@@ -304,16 +316,26 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
         placeholder={options.placeholder}
         min={options.min}
         step={options.step}
-        onChange={(event) =>
-          update(
-            key,
-            (options.type === "number"
+        onChange={(event) => {
+          const value =
+            options.type === "number"
               ? event.target.value === ""
                 ? undefined
                 : Number(event.target.value)
-              : event.target.value) as ProductDraft[typeof key],
-          )
-        }
+              : event.target.value;
+          update(key, value as ProductDraft[typeof key]);
+          if (key === "name" && !slugManuallyEdited) {
+            update(
+              "slug",
+              String(value)
+                .toLowerCase()
+                .trim()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, ""),
+            );
+          }
+          if (key === "slug") setSlugManuallyEdited(Boolean(value));
+        }}
       />
     </label>
   );
@@ -353,6 +375,11 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
             {field("Slug", "slug", {
               placeholder: "Generated from product name if left empty",
             })}
+            {draft.slug && (
+              <small className="product-editor-permalink">
+                {window.location.origin}/{productBase}/{draft.slug}
+              </small>
+            )}
             <label className="product-editor-field">
               <span>Full description</span>
               <textarea

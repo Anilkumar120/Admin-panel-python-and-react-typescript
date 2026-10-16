@@ -83,6 +83,10 @@ interface SortableMenuItemProps {
   onLabelChange: (id: string, label: string) => void;
 
   onUrlChange: (id: string, url: string) => void;
+
+  parentOptions: MenuItem[];
+
+  onParentChange: (id: string, parentId: string | null) => void;
 }
 
 const SortableMenuItem = ({
@@ -93,6 +97,8 @@ const SortableMenuItem = ({
   onDelete,
   onLabelChange,
   onUrlChange,
+  parentOptions,
+  onParentChange,
 }: SortableMenuItemProps) => {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({
@@ -143,6 +149,24 @@ const SortableMenuItem = ({
 
       {expanded && (
         <div className="menu-builder-item-settings">
+          <div className="menu-item-field">
+            <label htmlFor={`menu-parent-${item.id}`}>Parent menu item</label>
+            <select
+              id={`menu-parent-${item.id}`}
+              value={item.parent_id || ""}
+              onChange={(event) =>
+                onParentChange(item.id, event.target.value || null)
+              }
+            >
+              <option value="">No parent</option>
+              {parentOptions.map((parent) => (
+                <option key={parent.id} value={parent.id}>
+                  {parent.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="menu-item-field">
             <label>Navigation Label</label>
 
@@ -507,18 +531,22 @@ const EditMenu = () => {
     const subtreeIds = new Set(subtree.map((item) => item.id));
 
     if (subtreeIds.has(String(over.id))) {
-      return;
+      if (String(over.id) !== activeItem.id) return;
     }
 
-    const remaining = visibleItems.filter((item) => !subtreeIds.has(item.id));
+    const remaining = items.filter((item) => !subtreeIds.has(item.id));
 
     let targetIndex = remaining.findIndex((item) => item.id === over.id);
-
-    if (targetIndex === -1) {
+    if (String(over.id) === activeItem.id) {
+      const sourceIndex = items.findIndex((item) => item.id === activeItem.id);
+      targetIndex = items
+        .slice(0, sourceIndex)
+        .filter((item) => !subtreeIds.has(item.id)).length;
+    } else if (targetIndex === -1) {
       return;
     }
 
-    if (oldIndex < overIndex) {
+    if (String(over.id) !== activeItem.id && oldIndex < overIndex) {
       targetIndex++;
     }
 
@@ -528,7 +556,11 @@ const EditMenu = () => {
 
     const indentSize = 35;
 
-    const horizontalMove = Math.round(delta.x / indentSize);
+    const horizontalMove =
+      Math.abs(delta.x) < 24
+        ? 0
+        : Math.sign(delta.x) *
+          Math.max(1, Math.round(Math.abs(delta.x) / indentSize));
 
     let newLevel = oldLevel + horizontalMove;
 
@@ -617,6 +649,14 @@ const EditMenu = () => {
               url,
             }
           : item,
+      ),
+    );
+  };
+
+  const handleParentChange = (id: string, parentId: string | null) => {
+    setItems((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, parent_id: parentId } : item,
       ),
     );
   };
@@ -881,11 +921,19 @@ const EditMenu = () => {
                         key={item.id}
                         item={item}
                         level={getLevel(item, items)}
+                        parentOptions={items.filter(
+                          (candidate) =>
+                            candidate.id !== item.id &&
+                            !getSubtree(item.id, items).some(
+                              (descendant) => descendant.id === candidate.id,
+                            ),
+                        )}
                         expanded={expandedItems.includes(item.id)}
                         onToggle={toggleItem}
                         onDelete={handleDeleteItem}
                         onLabelChange={handleLabelChange}
                         onUrlChange={handleUrlChange}
+                        onParentChange={handleParentChange}
                       />
                     ))}
                   </SortableContext>

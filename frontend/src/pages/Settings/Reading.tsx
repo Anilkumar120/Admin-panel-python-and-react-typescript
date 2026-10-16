@@ -20,6 +20,9 @@ const Reading = () => {
     homepage_type: "latest_posts",
     homepage_id: "",
     posts_page_id: "",
+    posts_per_page: 10,
+    feed_items: 10,
+    feed_content: "excerpt",
     search_engine_visibility: false,
   });
   const [message, setMessage] = useState("");
@@ -192,8 +195,10 @@ const Reading = () => {
                       fontSize: 12,
                     }}
                   >
-                    📍 Permalink: <code>/{selectedPage.slug}</code> &nbsp;→&nbsp;
-                    Site root: <code>http://localhost:5173/</code>
+                    Permalink:{" "}
+                    <code>
+                      {window.location.origin}/{selectedPage.slug}
+                    </code>
                   </small>
                 )}
               </div>
@@ -219,6 +224,59 @@ const Reading = () => {
               </div>
             </>
           )}
+
+          <div className="content-form-group">
+            <label htmlFor="posts-per-page">Blog pages show at most</label>
+            <input
+              id="posts-per-page"
+              type="number"
+              min={1}
+              max={100}
+              value={settings.posts_per_page}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  posts_per_page: Number(event.target.value),
+                })
+              }
+            />
+            <span>posts</span>
+          </div>
+
+          <div className="content-form-group">
+            <label htmlFor="feed-items">Syndication feeds show the most recent</label>
+            <input
+              id="feed-items"
+              type="number"
+              min={1}
+              max={100}
+              value={settings.feed_items}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  feed_items: Number(event.target.value),
+                })
+              }
+            />
+            <span>items</span>
+          </div>
+
+          <div className="content-form-group">
+            <label htmlFor="feed-content">For each post in a feed, include</label>
+            <select
+              id="feed-content"
+              value={settings.feed_content}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  feed_content: event.target.value as "full" | "excerpt",
+                })
+              }
+            >
+              <option value="excerpt">Excerpt</option>
+              <option value="full">Full text</option>
+            </select>
+          </div>
 
           <div className="content-form-group">
             <label>

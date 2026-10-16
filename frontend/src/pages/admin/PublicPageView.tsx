@@ -48,6 +48,7 @@ const PublicPageView = () => {
   const pathParts = currentPath.split("/").filter(Boolean);
   let slug = params.slug;
   let postType = params.postType;
+  const postId = new URLSearchParams(location.search).get("p") || undefined;
 
   if (!slug && pathParts.length > 0) {
     slug = pathParts[pathParts.length - 1];
@@ -57,7 +58,7 @@ const PublicPageView = () => {
   }
 
   useEffect(() => {
-    if (!slug) {
+    if (!slug && !postId) {
       setError("Invalid URL");
       setLoading(false);
       return;
@@ -71,7 +72,7 @@ const PublicPageView = () => {
 
       try {
         const res = await axios.get(`${API_URL}/api/public/resolve`, {
-          params: { slug, post_type: postType },
+          params: { slug, post_type: postType, url_path: currentPath, post_id: postId },
         });
 
         if (!active) return;
@@ -122,7 +123,7 @@ const PublicPageView = () => {
     return () => {
       active = false;
     };
-  }, [slug, postType, currentPath]);
+  }, [slug, postType, currentPath, postId]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
