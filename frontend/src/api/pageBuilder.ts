@@ -15,7 +15,7 @@ const getHeaders = () => {
   };
 };
 
-// ============ TYPES ============
+// ============ Widget Type ============
 export type WidgetType =
   | "container"
   | "grid"
@@ -78,13 +78,11 @@ export type WidgetType =
   | "checkout"
   | "my_account"
   | "order_summary"
-  // 🆕 NEW product widgets
   | "product_sku"
   | "product_attributes"
   | "product_variations"
   | "quantity"
   | "recent_products"
-  // existing
   | "html"
   | "shortcode"
   | "table"
@@ -317,7 +315,6 @@ export interface WidgetStyle {
   mobileMenuBgColor?: string;
   hamburgerColor?: string;
   menuAnimation?: "slide" | "fade" | "scale";
-  // 🆕 Additional fields used by menu/header-footer widgets
   activeColor?: string;
   hoverUnderline?: boolean;
 }
@@ -341,7 +338,6 @@ export interface MediaItem {
   height?: number;
 }
 
-// ============ 🆕 WIDGET ITEM (with submenu support) ============
 export interface WidgetItem {
   id: string;
   title: string;
@@ -363,7 +359,6 @@ export interface WidgetItem {
   label?: string;
   target?: string;
   parent_id?: string;
-  // 🆕 For product preview
   options?: string[];
 }
 
@@ -468,7 +463,6 @@ export interface WidgetSettings {
   dynamicField?: string;
   altText?: string;
 
-  // ========== PRODUCT PREVIEW (updated) ==========
   previewProductId?: string;
   previewProduct?: {
     id: string;
@@ -519,6 +513,87 @@ export interface WidgetSettings {
 
   selectedMenuId?: string;
   menuName?: string;
+
+  // ================================================================
+  // 🛒 CART WIDGET SETTINGS
+  // ================================================================
+  cartLayout?: "default" | "modern" | "minimal" | "sidebar";
+  cartColumns?: string;
+  showCartHeading?: boolean;
+  cartHeading?: string;
+  showCartItems?: boolean;
+  showCoupon?: boolean;
+  showCartTotal?: boolean;
+  showContinueShopping?: boolean;
+  continueShoppingText?: string;
+  showUpdateCartButton?: boolean;
+  showCheckoutButton?: boolean;
+  checkoutButtonText?: string;
+  emptyCartMessage?: string;
+  showCrossSells?: boolean;
+  crossSellsHeading?: string;
+
+  // ================================================================
+  // 💳 CHECKOUT WIDGET SETTINGS
+  // ================================================================
+  checkoutLayout?: "two-column" | "one-column" | "multi-step";
+  orderSummaryPosition?: "right" | "left" | "top" | "bottom";
+  showBillingForm?: boolean;
+  showShippingForm?: boolean;
+  showOrderNotes?: boolean;
+  orderNotesPlaceholder?: string;
+  showTerms?: boolean;
+  termsText?: string;
+  termsLink?: string;
+  showReturnToCart?: boolean;
+  returnToCartText?: string;
+  placeOrderText?: string;
+  showCod?: boolean;
+  showBankTransfer?: boolean;
+  showRazorpay?: boolean;
+
+  // ================================================================
+  // 👤 MY ACCOUNT WIDGET SETTINGS
+  // ================================================================
+  accountLayout?: "sidebar" | "tabs-top" | "tabs-left" | "minimal";
+  accountNavPosition?: "left" | "right" | "top";
+  showAccountNav?: boolean;
+  showDashboardLink?: boolean;
+  showOrdersLink?: boolean;
+  showDownloadsLink?: boolean;
+  showAddressesLink?: boolean;
+  showAccountDetailsLink?: boolean;
+  showLogoutLink?: boolean;
+  logoutText?: string;
+  showWelcomeMessage?: boolean;
+  welcomeText?: string;
+  defaultAccountTab?:
+    | "dashboard"
+    | "orders"
+    | "downloads"
+    | "addresses"
+    | "account_details";
+  showOrderLookupForm?: boolean;
+
+  // ================================================================
+  // 🧾 ORDER SUMMARY WIDGET SETTINGS
+  // ================================================================
+  orderSummaryLayout?: "card" | "plain" | "table";
+  orderSummaryWidth?: "full" | "boxed";
+  showOrderNumber?: boolean;
+  showOrderDate?: boolean;
+  showPaymentStatus?: boolean;
+  showOrderItems?: boolean;
+  showOrderTotals?: boolean;
+  showShippingDetails?: boolean;
+  showBillingDetails?: boolean;
+  showThankYouMessage?: boolean;
+  thankYouHeading?: string;
+  thankYouDescription?: string;
+  showContinueShoppingButton?: boolean;
+  continueShoppingButtonText?: string;
+  continueShoppingLink?: string;
+  emptyOrderText?: string;
 }
 
 export interface PageWidget {
@@ -590,7 +665,6 @@ export interface CreatePageData {
 }
 
 export type UpdatePageData = Partial<CreatePageData>;
-
 // ============ API FUNCTIONS ============
 
 export const getPages = async (params?: {

@@ -1,4 +1,13 @@
-import { lazy, Suspense, useEffect, useMemo, useState, useRef, useCallback, type FormEvent } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+  useCallback,
+  type FormEvent,
+} from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { API_URL, getImageUrl } from "../../api/config";
@@ -8,7 +17,9 @@ import { addToCart } from "../../api/cart";
 import { getPublicMenu } from "../../api/menus";
 import BuilderIcon from "../BuilderIcon";
 
-const StorefrontWidget = lazy(() => import("../../pages/Storefront/Storefront"));
+const StorefrontWidget = lazy(
+  () => import("../../pages/Storefront/Storefront"),
+);
 
 interface BuilderRendererProps {
   layout: PageWidget[];
@@ -84,7 +95,8 @@ const ProductGridWidget = ({
     axios
       .get<{ products: ProductData[] }>(url, { params })
       .then(({ data }) => {
-        if (active) setProducts(Array.isArray(data.products) ? data.products : []);
+        if (active)
+          setProducts(Array.isArray(data.products) ? data.products : []);
       })
       .catch((loadError) => {
         console.error("PUBLIC PRODUCT GRID LOAD ERROR:", loadError);
@@ -115,7 +127,10 @@ const ProductGridWidget = ({
       {products.map((product) => (
         <a
           key={product.id}
-          href={product.permalink || `/${encodeURIComponent(product.slug || product.id)}`}
+          href={
+            product.permalink ||
+            `/${encodeURIComponent(product.slug || product.id)}`
+          }
           style={{
             border: "1px solid #e0e0e0",
             borderRadius: 8,
@@ -160,21 +175,24 @@ const PublicPostsWidget = ({
   columns: number;
   layout: "grid" | "list";
 }) => {
-  const [posts, setPosts] = useState<{
-    id: string;
-    title: string;
-    slug: string;
-    permalink?: string;
-    excerpt?: string;
-    featured_image?: string;
-  }[]>([]);
+  const [posts, setPosts] = useState<
+    {
+      id: string;
+      title: string;
+      slug: string;
+      permalink?: string;
+      excerpt?: string;
+      featured_image?: string;
+    }[]
+  >([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
-    axios.get<{ posts: typeof posts }>(`${API_URL}/api/public/posts`, {
-      params: { page: 1, limit },
-    })
+    axios
+      .get<{ posts: typeof posts }>(`${API_URL}/api/public/posts`, {
+        params: { page: 1, limit },
+      })
       .then(({ data }) => {
         if (active) setPosts(Array.isArray(data.posts) ? data.posts : []);
       })
@@ -194,9 +212,10 @@ const PublicPostsWidget = ({
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: layout === "grid"
-          ? `repeat(auto-fit, minmax(min(100%, ${Math.max(180, Math.floor(1200 / Math.max(1, columns)))}px), 1fr))`
-          : "1fr",
+        gridTemplateColumns:
+          layout === "grid"
+            ? `repeat(auto-fit, minmax(min(100%, ${Math.max(180, Math.floor(1200 / Math.max(1, columns)))}px), 1fr))`
+            : "1fr",
         gap: 20,
       }}
     >
@@ -241,7 +260,10 @@ const PublicPostsWidget = ({
 const StyleInjector = ({ css }: { css: string }) => {
   if (!css) return null;
   return (
-    <style dangerouslySetInnerHTML={{ __html: css }} data-builder-style="true" />
+    <style
+      dangerouslySetInnerHTML={{ __html: css }}
+      data-builder-style="true"
+    />
   );
 };
 
@@ -492,7 +514,9 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
     const hoverRules: string[] = [];
 
     if (style.hoverBackgroundColor)
-      hoverRules.push(`background-color: ${style.hoverBackgroundColor} !important;`);
+      hoverRules.push(
+        `background-color: ${style.hoverBackgroundColor} !important;`,
+      );
     if (style.hoverColor)
       hoverRules.push(`color: ${style.hoverColor} !important;`);
     if (style.hoverBorderColor)
@@ -575,7 +599,9 @@ const ProductGalleryWidget = ({ product }: { product?: ProductData }) => {
   }, [product?.id, product?.image, product?.gallery]);
 
   if (!product)
-    return <div>Product Gallery preview — select a product in the builder.</div>;
+    return (
+      <div>Product Gallery preview — select a product in the builder.</div>
+    );
   if (!images.length) return <div>Product has no gallery images.</div>;
 
   return (
@@ -650,8 +676,8 @@ const ProductAddToCart = ({
   const [message, setMessage] = useState("");
   const available = Boolean(
     product &&
-      product.stock_status !== "out_of_stock" &&
-      (!product.manage_stock || product.quantity > 0),
+    product.stock_status !== "out_of_stock" &&
+    (!product.manage_stock || product.quantity > 0),
   );
 
   return (
@@ -706,13 +732,15 @@ const ProductAddToCart = ({
           }
         }}
         style={{
-          backgroundColor: "#0c2f55",
-          color: "#ffffff",
-          border: 0,
-          borderRadius: 6,
-          padding: "10px 18px",
+          backgroundColor: style?.backgroundColor ?? "#0c2f55",
+          color: style?.color ?? "#ffffff",
+          border: style?.border ?? 0,
+          borderRadius: style?.borderRadius ?? 6,
+          borderWidth: style?.borderWidth,
+          borderStyle: style?.borderStyle,
+          borderColor: style?.borderColor,
+          padding: style?.padding ?? "10px 18px",
           cursor: available ? "pointer" : "not-allowed",
-          ...style,
         }}
       >
         {available ? "Add to Cart" : "Out of stock"}
@@ -747,7 +775,9 @@ const ProductQuantityWidget = ({ product }: { product?: ProductData }) => {
         max={max}
         value={qty}
         onChange={(e) =>
-          setQty(Math.max(1, Math.min(max ?? 9999, Number(e.target.value) || 1)))
+          setQty(
+            Math.max(1, Math.min(max ?? 9999, Number(e.target.value) || 1)),
+          )
         }
         style={{ width: 64, padding: 8, textAlign: "center" }}
       />
@@ -804,16 +834,40 @@ const ProductVariationsWidget = ({ product }: { product?: ProductData }) => {
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
       <thead>
         <tr style={{ background: "#f8f9fc" }}>
-          <th style={{ padding: "8px 12px", border: "1px solid #e5e7eb", textAlign: "left" }}>
+          <th
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #e5e7eb",
+              textAlign: "left",
+            }}
+          >
             SKU
           </th>
-          <th style={{ padding: "8px 12px", border: "1px solid #e5e7eb", textAlign: "left" }}>
+          <th
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #e5e7eb",
+              textAlign: "left",
+            }}
+          >
             Attributes
           </th>
-          <th style={{ padding: "8px 12px", border: "1px solid #e5e7eb", textAlign: "left" }}>
+          <th
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #e5e7eb",
+              textAlign: "left",
+            }}
+          >
             Price
           </th>
-          <th style={{ padding: "8px 12px", border: "1px solid #e5e7eb", textAlign: "left" }}>
+          <th
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #e5e7eb",
+              textAlign: "left",
+            }}
+          >
             Stock
           </th>
         </tr>
@@ -855,92 +909,96 @@ const ProductVariationsWidget = ({ product }: { product?: ProductData }) => {
 };
 
 // ============ STYLE RENDERER (FIXED gap) ============
+
 const renderStyles = (
   style: any,
   device: ResponsiveDevice,
 ): React.CSSProperties => {
-  const rs = style.responsive?.[device] || {};
+  const rs = style?.responsive?.[device] || {};
 
-  const getPadding = () => {
-    const p = rs.padding || style.padding;
-    if (!p) return undefined;
-    return `${p.top || 0}px ${p.right || 0}px ${p.bottom || 0}px ${p.left || 0}px`;
+  const getSpacing = (responsiveValue: any, baseValue: any) => {
+    const value = responsiveValue ?? baseValue;
+
+    if (!value || typeof value !== "object") {
+      return undefined;
+    }
+
+    return `${value.top ?? 0}px ${value.right ?? 0}px ${
+      value.bottom ?? 0
+    }px ${value.left ?? 0}px`;
   };
 
-  const getMargin = () => {
-    const m = rs.margin || style.margin;
-    if (!m) return undefined;
-    return `${m.top || 0}px ${m.right || 0}px ${m.bottom || 0}px ${m.left || 0}px`;
+  const normalizeSize = (value: unknown): string | undefined => {
+    if (value === undefined || value === null || value === "") {
+      return undefined;
+    }
+
+    if (typeof value === "number") {
+      return `${value}px`;
+    }
+
+    const text = String(value).trim();
+
+    if (!text) return undefined;
+
+    return /^-?\d*\.?\d+$/.test(text) ? `${text}px` : text;
   };
 
-  const resolvedDisplay = (rs.display || style.display) as string | undefined;
-  const resolvedFlexDirection = (rs.flexDirection || style.flexDirection) as
-    | string
-    | undefined;
+  const display = rs.display ?? style.display;
+  const flexDirection = rs.flexDirection ?? style.flexDirection;
 
-  const effectiveDirection =
-    resolvedDisplay === "flex"
-      ? resolvedFlexDirection || "row"
-      : resolvedFlexDirection;
+  const isFlexOrGrid = display === "flex" || display === "grid";
 
-  const isFlexOrGrid =
-    resolvedDisplay === "flex" || resolvedDisplay === "grid";
-
-  // ✅ NEW: normalize gap so "20", "20px", 20 all work
-  const normalizeGap = (val: unknown): string | undefined => {
-    if (val === undefined || val === null || val === "") return undefined;
-    if (typeof val === "number") return `${val}px`;
-    const str = String(val).trim();
-    if (!str) return undefined;
-    if (/^-?\d*\.?\d+(px|em|rem|%|vh|vw)$/i.test(str)) return str;
-    if (/^-?\d*\.?\d+$/.test(str)) return `${str}px`;
-    return str;
-  };
-
-  const computeGap = (): string | undefined => {
-    const rg = normalizeGap(rs.gap);
-    if (rg) return rg;
-    const g = normalizeGap(style.gap);
-    if (g) return g;
-    if (isFlexOrGrid) return "20px";
-    return undefined;
-  };
+  const gap = normalizeSize(rs.gap ?? style.gap);
+  const rowGap = normalizeSize(rs.rowGap ?? style.rowGap);
+  const columnGap = normalizeSize(rs.columnGap ?? style.columnGap);
 
   return {
-    backgroundColor: rs.backgroundColor || style.backgroundColor,
+    boxSizing: "border-box",
+
+    backgroundColor: rs.backgroundColor ?? style.backgroundColor,
+
     backgroundImage: style.backgroundImage
-      ? `url(${getImageUrl(style.backgroundImage)})`
-      : style.backgroundGradient,
+      ? `url("${getImageUrl(style.backgroundImage)}")`
+      : style.backgroundGradient || undefined,
+
     backgroundSize: style.backgroundSize || "cover",
     backgroundPosition: style.backgroundPosition || "center",
     backgroundRepeat: style.backgroundRepeat || "no-repeat",
-    color: rs.color || style.color,
-    fontSize: rs.fontSize
-      ? `${rs.fontSize}px`
-      : style.fontSize
-        ? `${style.fontSize}px`
-        : undefined,
+
+    color: rs.color ?? style.color,
+
+    fontSize: normalizeSize(rs.fontSize ?? style.fontSize),
     fontFamily: style.fontFamily,
     fontWeight: style.fontWeight,
     lineHeight: style.lineHeight,
-    letterSpacing: style.letterSpacing ? `${style.letterSpacing}px` : undefined,
-    textAlign: rs.textAlign || style.textAlign,
+
+    letterSpacing:
+      style.letterSpacing !== undefined
+        ? normalizeSize(style.letterSpacing)
+        : undefined,
+
+    textAlign: rs.textAlign ?? style.textAlign,
     textTransform: style.textTransform,
     textDecoration: style.textDecoration,
     textShadow: style.textShadow,
+
     width: style.width,
     height: style.height,
     minWidth: style.minWidth,
     maxWidth: style.maxWidth,
     minHeight: style.minHeight,
     maxHeight: style.maxHeight,
-    padding: getPadding(),
-    margin: getMargin(),
+
+    padding: getSpacing(rs.padding, style.padding),
+    margin: getSpacing(rs.margin, style.margin),
+
     borderColor: style.borderColor,
-    borderWidth: style.borderWidth ? `${style.borderWidth}px` : undefined,
+    borderWidth: normalizeSize(style.borderWidth),
     borderStyle: style.borderStyle,
-    borderRadius: style.borderRadius ? `${style.borderRadius}px` : undefined,
+    borderRadius: normalizeSize(style.borderRadius),
     boxShadow: style.boxShadow,
+
     opacity: style.opacity,
     position: style.position,
     top: style.top,
@@ -949,23 +1007,31 @@ const renderStyles = (
     left: style.left,
     zIndex: style.zIndex,
     overflow: style.overflow,
-    display: resolvedDisplay as any,
-    flexDirection: effectiveDirection as any,
-    flexWrap: (rs.flexWrap || style.flexWrap) as any,
-    justifyContent: rs.justifyContent || style.justifyContent,
-    alignItems: rs.alignItems || style.alignItems,
-    alignContent: rs.alignContent || style.alignContent,
-    gap: computeGap(),
+
+    display,
+    flexDirection: flexDirection as React.CSSProperties["flexDirection"],
+    flexWrap: rs.flexWrap ?? style.flexWrap,
+
+    justifyContent: rs.justifyContent ?? style.justifyContent,
+    alignItems: rs.alignItems ?? style.alignItems,
+    alignContent: rs.alignContent ?? style.alignContent,
+
+    // Apply saved layout gap to the public renderer.
+    gap: gap ?? (isFlexOrGrid ? "20px" : undefined),
+
+    rowGap: rowGap ?? gap ?? (isFlexOrGrid ? "20px" : undefined),
+
+    columnGap: columnGap ?? gap ?? (isFlexOrGrid ? "20px" : undefined),
+
     gridTemplateColumns:
-      rs.gridTemplateColumns ||
-      style.gridTemplateColumns ||
+      rs.gridTemplateColumns ??
+      style.gridTemplateColumns ??
       (style.gridColumns ? `repeat(${style.gridColumns}, 1fr)` : undefined),
+
     gridTemplateRows:
-      rs.gridTemplateRows ||
-      style.gridTemplateRows ||
+      rs.gridTemplateRows ??
+      style.gridTemplateRows ??
       (style.gridRows ? `repeat(${style.gridRows}, 1fr)` : undefined),
-    gridColumnGap: style.gridColumnGap ? `${style.gridColumnGap}px` : undefined,
-    gridRowGap: style.gridRowGap ? `${style.gridRowGap}px` : undefined,
   };
 };
 
@@ -1045,7 +1111,10 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
 
   useEffect(() => {
     if (settings.autoplay === false || isPaused || totalSlides <= 1) return;
-    autoplayRef.current = setInterval(nextSlide, settings.autoplaySpeed || 5000);
+    autoplayRef.current = setInterval(
+      nextSlide,
+      settings.autoplaySpeed || 5000,
+    );
     return () => {
       if (autoplayRef.current) clearInterval(autoplayRef.current);
     };
@@ -1183,9 +1252,7 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
                       buttonStyle === "outline" ? "transparent" : "#0c2f55",
                     color: buttonStyle === "outline" ? "#0c2f55" : "#fff",
                     border:
-                      buttonStyle === "outline"
-                        ? "2px solid #0c2f55"
-                        : "none",
+                      buttonStyle === "outline" ? "2px solid #0c2f55" : "none",
                     fontWeight: 600,
                     textDecoration: "none",
                     fontSize: 15,
@@ -1321,7 +1388,9 @@ const buildMenuTree = (items: any[]) => {
   items.forEach((item, index) => {
     const id = String(item.id || item._id || `menu-item-${index}`);
     const itemLink =
-      item.url || item.link?.url || (typeof item.link === "string" ? item.link : "#");
+      item.url ||
+      item.link?.url ||
+      (typeof item.link === "string" ? item.link : "#");
 
     nodes.set(id, {
       id,
@@ -1410,7 +1479,9 @@ const MenuRenderer = ({
     : fallbackItems;
 
   const menuGap = s.gap ?? 24;
-  const menuJustify = (rs.justifyContent || s.justifyContent || "center") as any;
+  const menuJustify = (rs.justifyContent ||
+    s.justifyContent ||
+    "center") as any;
   const hamburgerColor = s.hamburgerColor || color || "#0c2f55";
   const mobileMenuBg = s.mobileMenuBgColor || "#ffffff";
   const breakpoint = s.mobileBreakpoint === "tablet" ? 1024 : 768;
@@ -1559,7 +1630,9 @@ const MenuRenderer = ({
           onClick={(e) => {
             e.stopPropagation();
             document.querySelector(`.${uid}-list`)?.classList.toggle("open");
-            document.querySelector(`.${uid}-backdrop`)?.classList.toggle("open");
+            document
+              .querySelector(`.${uid}-backdrop`)
+              ?.classList.toggle("open");
           }}
         >
           <span />
@@ -1572,7 +1645,9 @@ const MenuRenderer = ({
           onClick={(e) => {
             e.stopPropagation();
             document.querySelector(`.${uid}-list`)?.classList.remove("open");
-            document.querySelector(`.${uid}-backdrop`)?.classList.remove("open");
+            document
+              .querySelector(`.${uid}-backdrop`)
+              ?.classList.remove("open");
           }}
         />
       </div>
@@ -1677,7 +1752,8 @@ const WidgetRenderer = ({
   const isHiddenOnDevice = (() => {
     const currentRs = s.responsive?.[device];
     if (currentRs?.hide === true) return true;
-    if (device === "desktop" && s.responsive?.desktop?.hide === true) return true;
+    if (device === "desktop" && s.responsive?.desktop?.hide === true)
+      return true;
     if (device === "tablet" && s.responsive?.tablet?.hide === true) return true;
     if (device === "mobile" && s.responsive?.mobile?.hide === true) return true;
     return false;
@@ -1706,12 +1782,16 @@ const WidgetRenderer = ({
 
   if (isContainer) {
     const styles = renderStyles(widget.style, device);
-    const displayValue = (rs.display || s.display) as string | undefined;
-    const flexDirectionValue = (rs.flexDirection || s.flexDirection) as
-      | string
-      | undefined;
+
+    const displayValue =
+      widget.style.responsive?.[device]?.display ?? widget.style.display;
+
+    const flexDirectionValue =
+      widget.style.responsive?.[device]?.flexDirection ??
+      widget.style.flexDirection;
 
     let layoutClass = "layout-block";
+
     if (displayValue === "grid") {
       layoutClass = "layout-grid";
     } else if (displayValue === "flex") {
@@ -1746,7 +1826,9 @@ const WidgetRenderer = ({
     case "product_price":
       return (
         <div style={{ ...baseStyle, fontWeight: 700 }}>
-          {product ? `₹${Number(product.price || 0).toFixed(2)}` : "Product Price"}
+          {product
+            ? `₹${Number(product.price || 0).toFixed(2)}`
+            : "Product Price"}
         </div>
       );
 
@@ -1843,14 +1925,21 @@ const WidgetRenderer = ({
       );
 
     case "add_to_cart":
-      return <ProductAddToCart product={product} style={renderStyles(widget.style, device)} />;
+      return (
+        <ProductAddToCart
+          product={product}
+          style={renderStyles(widget.style, device)}
+        />
+      );
 
     case "cart":
     case "checkout":
     case "my_account":
     case "order_summary":
       return (
-        <Suspense fallback={<div style={baseStyle}>Loading store section…</div>}>
+        <Suspense
+          fallback={<div style={baseStyle}>Loading store section…</div>}
+        >
           <StorefrontWidget
             page={
               widget.type === "my_account"
@@ -1860,6 +1949,7 @@ const WidgetRenderer = ({
                   : widget.type
             }
             embedded
+            settings={widget.settings}
           />
         </Suspense>
       );
@@ -1901,7 +1991,17 @@ const WidgetRenderer = ({
 
     case "heading": {
       const tag = (s.htmlTag || "h2").toLowerCase();
-      const validTags = ["h1", "h2", "h3", "h4", "h5", "h6", "p", "div", "span"];
+      const validTags = [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "p",
+        "div",
+        "span",
+      ];
       const HeadingTag = (validTags.includes(tag) ? tag : "h2") as any;
       const headingTextAlign = (rs.textAlign || s.textAlign || "left") as any;
       const hover = getHoverAndAnimation(s, widget.id);
@@ -2371,7 +2471,9 @@ const WidgetRenderer = ({
           <h2 style={{ margin: "0 0 8px", fontSize: 24 }}>
             {widget.settings?.profileName || "Your Name"}
           </h2>
-          {widget.content && <p style={{ margin: "0 0 20px" }}>{widget.content}</p>}
+          {widget.content && (
+            <p style={{ margin: "0 0 20px" }}>{widget.content}</p>
+          )}
           <div style={{ display: "grid", gap: 10 }}>
             {(widget.items || []).map((item) => (
               <a
@@ -2391,9 +2493,7 @@ const WidgetRenderer = ({
                   background:
                     bioLayout === "minimalist" ? "transparent" : "#ffffff",
                   border:
-                    bioLayout === "minimalist"
-                      ? "none"
-                      : "1px solid #dce2e8",
+                    bioLayout === "minimalist" ? "none" : "1px solid #dce2e8",
                   color: color || "#17202a",
                   textDecoration: "none",
                   fontWeight: 600,
@@ -2512,9 +2612,7 @@ const WidgetRenderer = ({
           href={widget.link?.url || widget.url || "#"}
           target={widget.link?.target || "_self"}
           rel={
-            widget.link?.target === "_blank"
-              ? "noopener noreferrer"
-              : undefined
+            widget.link?.target === "_blank" ? "noopener noreferrer" : undefined
           }
           style={{
             display: "inline-block",
@@ -2553,7 +2651,10 @@ const WidgetRenderer = ({
           style={{ width: "100%", overflow: "visible" }}
         >
           <defs>
-            <path id={`text-path-${widget.id}`} d="M 20,145 Q 160,-20 300,145" />
+            <path
+              id={`text-path-${widget.id}`}
+              d="M 20,145 Q 160,-20 300,145"
+            />
           </defs>
           <text fill={color || "#0c2f55"} fontSize={fontSize || 22}>
             <textPath
@@ -2592,7 +2693,9 @@ const WidgetRenderer = ({
             <tbody>
               {(widget.items || []).map((item) => (
                 <tr key={item.id}>
-                  <td style={{ padding: 10, borderBottom: "1px solid #e5e7eb" }}>
+                  <td
+                    style={{ padding: 10, borderBottom: "1px solid #e5e7eb" }}
+                  >
                     {item.title}
                   </td>
                   {headers.length > 1 && (

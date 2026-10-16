@@ -46,7 +46,7 @@ type ContainerJustify =
 type ContainerAlign = "flex-start" | "center" | "flex-end" | "stretch";
 type ContainerWrap = "nowrap" | "wrap" | "wrap-reverse";
 
-// ============ DYNAMIC LINK PICKER ============
+// ============ DYNAMIC LINK PICKER (unchanged) ============
 interface LinkOption {
   id: string;
   label: string;
@@ -429,6 +429,13 @@ const SettingsPanel = ({
     widget.type,
   );
 
+  // ✅ NEW: Elementor-style store widgets
+    // ✅ NEW: Elementor-style store widgets
+  const isCartWidget = widget.type === "cart";
+  const isCheckoutWidget = widget.type === "checkout";
+  const isMyAccountWidget = widget.type === "my_account";
+  const isOrderSummaryWidget = widget.type === "order_summary";
+
   const toggleSection = (key: string) => {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -537,6 +544,11 @@ const SettingsPanel = ({
     widget.type === "related_products" ||
     widget.type === "recent_products";
 
+  // Helper to read current settings with fallback
+  const st = widget.settings || {};
+  const setSetting = (key: string, value: any) =>
+    onChangeSettings({ [key]: value });
+
   return (
     <div className="settings-panel">
       <div className="settings-header">
@@ -589,6 +601,845 @@ const SettingsPanel = ({
         {/* ============================================ */}
         {activeTab === "content" && (
           <div className="settings-section">
+            {/* ============================================================ */}
+            {/* 🛒 CART WIDGET — Elementor-style content options            */}
+            {/* ============================================================ */}
+            {isCartWidget && (
+              <>
+                <div className="items-editor">
+                  <h4>🛒 Cart Layout</h4>
+                  <label className="setting-field">
+                    <span>Cart Style</span>
+                    <select
+                      value={st.cartLayout || "default"}
+                      onChange={(e) =>
+                        setSetting("cartLayout", e.target.value)
+                      }
+                    >
+                      <option value="default">Default (Theme)</option>
+                      <option value="modern">Modern Card</option>
+                      <option value="minimal">Minimal List</option>
+                      <option value="sidebar">Sidebar / Drawer</option>
+                    </select>
+                  </label>
+                  <label className="setting-field">
+                    <span>Columns</span>
+                    <select
+                      value={st.cartColumns || "2"}
+                      onChange={(e) =>
+                        setSetting("cartColumns", e.target.value)
+                      }
+                    >
+                      <option value="1">1 Column</option>
+                      <option value="2">2 Columns (items + totals)</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="items-editor">
+                  <h4>Cart Heading</h4>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showCartHeading !== false}
+                      onChange={(e) =>
+                        setSetting("showCartHeading", e.target.checked)
+                      }
+                    />
+                    <span>Show Cart Heading</span>
+                  </label>
+                  {st.showCartHeading !== false && (
+                    <label className="setting-field">
+                      <span>Heading Text</span>
+                      <input
+                        type="text"
+                        value={st.cartHeading || "Your Cart"}
+                        onChange={(e) =>
+                          setSetting("cartHeading", e.target.value)
+                        }
+                      />
+                    </label>
+                  )}
+                </div>
+
+                <div className="items-editor">
+                  <h4>Cart Elements</h4>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showCartItems !== false}
+                      onChange={(e) =>
+                        setSetting("showCartItems", e.target.checked)
+                      }
+                    />
+                    <span>Show Cart Items</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showCoupon !== false}
+                      onChange={(e) =>
+                        setSetting("showCoupon", e.target.checked)
+                      }
+                    />
+                    <span>Show Coupon Field</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showCartTotal !== false}
+                      onChange={(e) =>
+                        setSetting("showCartTotal", e.target.checked)
+                      }
+                    />
+                    <span>Show Cart Total</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showContinueShopping !== false}
+                      onChange={(e) =>
+                        setSetting("showContinueShopping", e.target.checked)
+                      }
+                    />
+                    <span>Show Continue Shopping Button</span>
+                  </label>
+                  {st.showContinueShopping !== false && (
+                    <label className="setting-field">
+                      <span>Continue Shopping Text</span>
+                      <input
+                        type="text"
+                        value={st.continueShoppingText || "Continue Shopping"}
+                        onChange={(e) =>
+                          setSetting("continueShoppingText", e.target.value)
+                        }
+                      />
+                    </label>
+                  )}
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showUpdateCartButton !== false}
+                      onChange={(e) =>
+                        setSetting(
+                          "showUpdateCartButton",
+                          e.target.checked,
+                        )
+                      }
+                    />
+                    <span>Show Update Cart Button</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showCheckoutButton !== false}
+                      onChange={(e) =>
+                        setSetting("showCheckoutButton", e.target.checked)
+                      }
+                    />
+                    <span>Show Checkout Button</span>
+                  </label>
+                  {st.showCheckoutButton !== false && (
+                    <label className="setting-field">
+                      <span>Checkout Button Text</span>
+                      <input
+                        type="text"
+                        value={
+                          st.checkoutButtonText || "Proceed to Checkout"
+                        }
+                        onChange={(e) =>
+                          setSetting("checkoutButtonText", e.target.value)
+                        }
+                      />
+                    </label>
+                  )}
+                </div>
+
+                <div className="items-editor">
+                  <h4>Empty / Cross-sell</h4>
+                  <label className="setting-field">
+                    <span>Empty Cart Message</span>
+                    <textarea
+                      rows={3}
+                      value={
+                        st.emptyCartMessage ||
+                        "Your cart is currently empty."
+                      }
+                      onChange={(e) =>
+                        setSetting("emptyCartMessage", e.target.value)
+                      }
+                    />
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showCrossSells === true}
+                      onChange={(e) =>
+                        setSetting("showCrossSells", e.target.checked)
+                      }
+                    />
+                    <span>Show Cross-sells</span>
+                  </label>
+                  {st.showCrossSells === true && (
+                    <label className="setting-field">
+                      <span>Cross-sells Heading</span>
+                      <input
+                        type="text"
+                        value={
+                          st.crossSellsHeading || "You may also like"
+                        }
+                        onChange={(e) =>
+                          setSetting("crossSellsHeading", e.target.value)
+                        }
+                      />
+                    </label>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* ============================================================ */}
+            {/* 💳 CHECKOUT WIDGET — Elementor-style content options         */}
+            {/* ============================================================ */}
+            {isCheckoutWidget && (
+              <>
+                <div className="items-editor">
+                  <h4>💳 Checkout Layout</h4>
+                  <label className="setting-field">
+                    <span>Layout</span>
+                    <select
+                      value={st.checkoutLayout || "two-column"}
+                      onChange={(e) =>
+                        setSetting("checkoutLayout", e.target.value)
+                      }
+                    >
+                      <option value="two-column">
+                        Two Column (form + order summary)
+                      </option>
+                      <option value="one-column">One Column</option>
+                      <option value="multi-step">Multi-step</option>
+                    </select>
+                  </label>
+                  <label className="setting-field">
+                    <span>Order Summary Position</span>
+                    <select
+                      value={st.orderSummaryPosition || "right"}
+                      onChange={(e) =>
+                        setSetting("orderSummaryPosition", e.target.value)
+                      }
+                    >
+                      <option value="right">Right</option>
+                      <option value="left">Left</option>
+                      <option value="top">Top</option>
+                      <option value="bottom">Bottom</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="items-editor">
+                  <h4>Checkout Sections</h4>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showCoupon !== false}
+                      onChange={(e) =>
+                        setSetting("showCoupon", e.target.checked)
+                      }
+                    />
+                    <span>Show Coupon Field</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showBillingForm !== false}
+                      onChange={(e) =>
+                        setSetting("showBillingForm", e.target.checked)
+                      }
+                    />
+                    <span>Show Billing Details</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showShippingForm === true}
+                      onChange={(e) =>
+                        setSetting("showShippingForm", e.target.checked)
+                      }
+                    />
+                    <span>Show Shipping Details</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showOrderNotes !== false}
+                      onChange={(e) =>
+                        setSetting("showOrderNotes", e.target.checked)
+                      }
+                    />
+                    <span>Show Order Notes</span>
+                  </label>
+                  {st.showOrderNotes !== false && (
+                    <label className="setting-field">
+                      <span>Order Notes Placeholder</span>
+                      <input
+                        type="text"
+                        value={
+                          st.orderNotesPlaceholder ||
+                          "Notes about your order, e.g. special notes for delivery."
+                        }
+                        onChange={(e) =>
+                          setSetting(
+                            "orderNotesPlaceholder",
+                            e.target.value,
+                          )
+                        }
+                      />
+                    </label>
+                  )}
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showTerms !== false}
+                      onChange={(e) =>
+                        setSetting("showTerms", e.target.checked)
+                      }
+                    />
+                    <span>Show Terms & Conditions Checkbox</span>
+                  </label>
+                  {st.showTerms !== false && (
+                    <>
+                      <label className="setting-field">
+                        <span>Terms Text</span>
+                        <input
+                          type="text"
+                          value={
+                            st.termsText ||
+                            "I have read and agree to the website terms and conditions"
+                          }
+                          onChange={(e) =>
+                            setSetting("termsText", e.target.value)
+                          }
+                        />
+                      </label>
+                      <label className="setting-field">
+                        <span>Terms Page Link</span>
+                        <LinkPicker
+                          value={st.termsLink || ""}
+                          onChange={(url) =>
+                            setSetting("termsLink", url)
+                          }
+                          onRemove={() => setSetting("termsLink", "")}
+                        />
+                      </label>
+                    </>
+                  )}
+                </div>
+
+                <div className="items-editor">
+                  <h4>Buttons & Navigation</h4>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showReturnToCart !== false}
+                      onChange={(e) =>
+                        setSetting("showReturnToCart", e.target.checked)
+                      }
+                    />
+                    <span>Show "Return to Cart" Link</span>
+                  </label>
+                  {st.showReturnToCart !== false && (
+                    <label className="setting-field">
+                      <span>Return to Cart Text</span>
+                      <input
+                        type="text"
+                        value={st.returnToCartText || "← Return to cart"}
+                        onChange={(e) =>
+                          setSetting("returnToCartText", e.target.value)
+                        }
+                      />
+                    </label>
+                  )}
+                  <label className="setting-field">
+                    <span>Place Order Button Text</span>
+                    <input
+                      type="text"
+                      value={st.placeOrderText || "Place Order"}
+                      onChange={(e) =>
+                        setSetting("placeOrderText", e.target.value)
+                      }
+                    />
+                  </label>
+                </div>
+
+                <div className="items-editor">
+                  <h4>Payment Methods</h4>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showCod !== false}
+                      onChange={(e) =>
+                        setSetting("showCod", e.target.checked)
+                      }
+                    />
+                    <span>Cash on Delivery</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showBankTransfer !== false}
+                      onChange={(e) =>
+                        setSetting("showBankTransfer", e.target.checked)
+                      }
+                    />
+                    <span>Bank Transfer</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showRazorpay === true}
+                      onChange={(e) =>
+                        setSetting("showRazorpay", e.target.checked)
+                      }
+                    />
+                    <span>Razorpay (Online Payment)</span>
+                  </label>
+                </div>
+              </>
+            )}
+
+            {/* ============================================================ */}
+            {/* 👤 MY ACCOUNT WIDGET — Elementor-style content options       */}
+            {/* ============================================================ */}
+            {isMyAccountWidget && (
+              <>
+                <div className="items-editor">
+                  <h4>👤 My Account Layout</h4>
+                  <label className="setting-field">
+                    <span>Layout</span>
+                    <select
+                      value={st.accountLayout || "sidebar"}
+                      onChange={(e) =>
+                        setSetting("accountLayout", e.target.value)
+                      }
+                    >
+                      <option value="sidebar">Sidebar Navigation</option>
+                      <option value="tabs-top">Tabs on Top</option>
+                      <option value="tabs-left">Vertical Tabs Left</option>
+                      <option value="minimal">Minimal (no nav)</option>
+                    </select>
+                  </label>
+                  <label className="setting-field">
+                    <span>Navigation Position</span>
+                    <select
+                      value={st.accountNavPosition || "left"}
+                      onChange={(e) =>
+                        setSetting("accountNavPosition", e.target.value)
+                      }
+                    >
+                      <option value="left">Left</option>
+                      <option value="right">Right</option>
+                      <option value="top">Top</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="items-editor">
+                  <h4>Account Navigation</h4>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showAccountNav !== false}
+                      onChange={(e) =>
+                        setSetting("showAccountNav", e.target.checked)
+                      }
+                    />
+                    <span>Show Account Navigation</span>
+                  </label>
+
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showDashboardLink !== false}
+                      onChange={(e) =>
+                        setSetting("showDashboardLink", e.target.checked)
+                      }
+                    />
+                    <span>Dashboard Link</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showOrdersLink !== false}
+                      onChange={(e) =>
+                        setSetting("showOrdersLink", e.target.checked)
+                      }
+                    />
+                    <span>Orders Link</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showDownloadsLink !== false}
+                      onChange={(e) =>
+                        setSetting("showDownloadsLink", e.target.checked)
+                      }
+                    />
+                    <span>Downloads Link</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showAddressesLink !== false}
+                      onChange={(e) =>
+                        setSetting("showAddressesLink", e.target.checked)
+                      }
+                    />
+                    <span>Addresses Link</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showAccountDetailsLink !== false}
+                      onChange={(e) =>
+                        setSetting(
+                          "showAccountDetailsLink",
+                          e.target.checked,
+                        )
+                      }
+                    />
+                    <span>Account Details Link</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showLogoutLink !== false}
+                      onChange={(e) =>
+                        setSetting("showLogoutLink", e.target.checked)
+                      }
+                    />
+                    <span>Logout Link</span>
+                  </label>
+                  {st.showLogoutLink !== false && (
+                    <label className="setting-field">
+                      <span>Logout Text</span>
+                      <input
+                        type="text"
+                        value={st.logoutText || "Log out"}
+                        onChange={(e) =>
+                          setSetting("logoutText", e.target.value)
+                        }
+                      />
+                    </label>
+                  )}
+                </div>
+
+                <div className="items-editor">
+                  <h4>Welcome Message</h4>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showWelcomeMessage !== false}
+                      onChange={(e) =>
+                        setSetting(
+                          "showWelcomeMessage",
+                          e.target.checked,
+                        )
+                      }
+                    />
+                    <span>Show Welcome Message</span>
+                  </label>
+                  {st.showWelcomeMessage !== false && (
+                    <label className="setting-field">
+                      <span>Welcome Text (use {"{name}"} for username)</span>
+                      <input
+                        type="text"
+                        value={
+                          st.welcomeText ||
+                          "Hello {name}, welcome back!"
+                        }
+                        onChange={(e) =>
+                          setSetting("welcomeText", e.target.value)
+                        }
+                      />
+                    </label>
+                  )}
+                </div>
+
+                <div className="items-editor">
+                  <h4>Default Tab</h4>
+                  <label className="setting-field">
+                    <span>Default Active Tab</span>
+                    <select
+                      value={st.defaultAccountTab || "dashboard"}
+                      onChange={(e) =>
+                        setSetting("defaultAccountTab", e.target.value)
+                      }
+                    >
+                      <option value="dashboard">Dashboard</option>
+                      <option value="orders">Orders</option>
+                      <option value="downloads">Downloads</option>
+                      <option value="addresses">Addresses</option>
+                      <option value="account_details">
+                        Account Details
+                      </option>
+                    </select>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showOrderLookupForm !== false}
+                      onChange={(e) =>
+                        setSetting(
+                          "showOrderLookupForm",
+                          e.target.checked,
+                        )
+                      }
+                    />
+                    <span>Show Order Lookup Form</span>
+                  </label>
+                </div>
+              </>
+            )}
+
+            {/* ============================================================ */}
+            {/* 🧾 ORDER SUMMARY WIDGET — Elementor-style content options    */}
+            {/* ============================================================ */}
+            {isOrderSummaryWidget && (
+              <>
+                <div className="items-editor">
+                  <h4>🧾 Order Summary Layout</h4>
+                  <label className="setting-field">
+                    <span>Layout Style</span>
+                    <select
+                      value={st.orderSummaryLayout || "card"}
+                      onChange={(e) =>
+                        setSetting(
+                          "orderSummaryLayout",
+                          e.target.value,
+                        )
+                      }
+                    >
+                      <option value="card">Card</option>
+                      <option value="plain">Plain List</option>
+                      <option value="table">Table</option>
+                    </select>
+                  </label>
+                  <label className="setting-field">
+                    <span>Content Width</span>
+                    <select
+                      value={st.orderSummaryWidth || "full"}
+                      onChange={(e) =>
+                        setSetting("orderSummaryWidth", e.target.value)
+                      }
+                    >
+                      <option value="full">Full Width</option>
+                      <option value="boxed">Boxed (600px)</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="items-editor">
+                  <h4>Order Details</h4>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showOrderNumber !== false}
+                      onChange={(e) =>
+                        setSetting("showOrderNumber", e.target.checked)
+                      }
+                    />
+                    <span>Show Order Number</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showOrderDate !== false}
+                      onChange={(e) =>
+                        setSetting("showOrderDate", e.target.checked)
+                      }
+                    />
+                    <span>Show Order Date</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showPaymentStatus !== false}
+                      onChange={(e) =>
+                        setSetting("showPaymentStatus", e.target.checked)
+                      }
+                    />
+                    <span>Show Payment Status</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showOrderItems !== false}
+                      onChange={(e) =>
+                        setSetting("showOrderItems", e.target.checked)
+                      }
+                    />
+                    <span>Show Order Items</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showOrderTotals !== false}
+                      onChange={(e) =>
+                        setSetting("showOrderTotals", e.target.checked)
+                      }
+                    />
+                    <span>Show Order Totals (subtotal, shipping, tax)</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showShippingDetails === true}
+                      onChange={(e) =>
+                        setSetting(
+                          "showShippingDetails",
+                          e.target.checked,
+                        )
+                      }
+                    />
+                    <span>Show Shipping Details</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showBillingDetails === true}
+                      onChange={(e) =>
+                        setSetting(
+                          "showBillingDetails",
+                          e.target.checked,
+                        )
+                      }
+                    />
+                    <span>Show Billing Details</span>
+                  </label>
+                </div>
+
+                <div className="items-editor">
+                  <h4>Thank-you Message</h4>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showThankYouMessage !== false}
+                      onChange={(e) =>
+                        setSetting(
+                          "showThankYouMessage",
+                          e.target.checked,
+                        )
+                      }
+                    />
+                    <span>Show Thank-you Message</span>
+                  </label>
+                  {st.showThankYouMessage !== false && (
+                    <>
+                      <label className="setting-field">
+                        <span>Thank-you Heading</span>
+                        <input
+                          type="text"
+                          value={
+                            st.thankYouHeading ||
+                            "Thank you. Your order has been received."
+                          }
+                          onChange={(e) =>
+                            setSetting(
+                              "thankYouHeading",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </label>
+                      <label className="setting-field">
+                        <span>Thank-you Description</span>
+                        <textarea
+                          rows={3}
+                          value={
+                            st.thankYouDescription ||
+                            "We'll notify you once your order is on its way."
+                          }
+                          onChange={(e) =>
+                            setSetting(
+                              "thankYouDescription",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </label>
+                    </>
+                  )}
+                </div>
+
+                <div className="items-editor">
+                  <h4>Continue Shopping Button</h4>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={st.showContinueShoppingButton !== false}
+                      onChange={(e) =>
+                        setSetting(
+                          "showContinueShoppingButton",
+                          e.target.checked,
+                        )
+                      }
+                    />
+                    <span>Show Continue Shopping Button</span>
+                  </label>
+                  {st.showContinueShoppingButton !== false && (
+                    <>
+                      <label className="setting-field">
+                        <span>Button Text</span>
+                        <input
+                          type="text"
+                          value={
+                            st.continueShoppingButtonText ||
+                            "Continue Shopping"
+                          }
+                          onChange={(e) =>
+                            setSetting(
+                              "continueShoppingButtonText",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </label>
+                      <label className="setting-field">
+                        <span>Button Link</span>
+                        <LinkPicker
+                          value={st.continueShoppingLink || "/shop"}
+                          onChange={(url) =>
+                            setSetting("continueShoppingLink", url)
+                          }
+                          onRemove={() =>
+                            setSetting("continueShoppingLink", "")
+                          }
+                        />
+                      </label>
+                    </>
+                  )}
+                </div>
+
+                <div className="items-editor">
+                  <h4>Empty Order Fallback</h4>
+                  <label className="setting-field">
+                    <span>When no order is found</span>
+                    <input
+                      type="text"
+                      value={
+                        st.emptyOrderText ||
+                        "We couldn't find an order matching those details."
+                      }
+                      onChange={(e) =>
+                        setSetting("emptyOrderText", e.target.value)
+                      }
+                    />
+                  </label>
+                </div>
+              </>
+            )}
+
+            {/* ====== PRODUCT PREVIEW (existing, unchanged) ====== */}
             {isProductWidget &&
               !["products", "product_grid"].includes(widget.type) && (
                 <div className="items-editor">
@@ -613,7 +1464,8 @@ const SettingsPanel = ({
                                 short_description:
                                   selected.short_description || "",
                                 quantity: Number(selected.quantity || 0),
-                                manage_stock: selected.manage_stock !== false,
+                                manage_stock:
+                                  selected.manage_stock !== false,
                                 category: selected.category || "",
                                 tags: selected.tags || [],
                                 gallery: selected.gallery || [],
@@ -660,7 +1512,7 @@ const SettingsPanel = ({
                 </div>
               )}
 
-            {/* ====== CONTAINER ====== */}
+            {/* ====== CONTAINER (unchanged) ====== */}
             {isContainer && (
               <>
                 {device !== "desktop" && (
@@ -812,7 +1664,6 @@ const SettingsPanel = ({
                       </div>
                     </label>
 
-                    {/* ✅ NEW: Wrap control */}
                     <label className="setting-field">
                       <span>Wrap</span>
                       <div className="button-group">
@@ -975,6 +1826,7 @@ const SettingsPanel = ({
               </>
             )}
 
+            {/* ====== ICON (unchanged) ====== */}
             {widget.type === "icon" && (
               <div className="items-editor">
                 <h4>Choose Icon</h4>
@@ -1059,6 +1911,7 @@ const SettingsPanel = ({
               </div>
             )}
 
+            {/* ====== PRODUCTS GRID (unchanged) ====== */}
             {["products", "product_grid"].includes(widget.type) && (
               <div className="items-editor">
                 <h4>Product Query</h4>
@@ -1099,6 +1952,7 @@ const SettingsPanel = ({
               </div>
             )}
 
+            {/* ====== LINK BIO (unchanged) ====== */}
             {isLinkBio && (
               <div className="items-editor">
                 <h4>Link in Bio Profile</h4>
@@ -1218,6 +2072,7 @@ const SettingsPanel = ({
               </div>
             )}
 
+            {/* ====== IMAGE BOX (unchanged) ====== */}
             {widget.type === "image_box" && (
               <>
                 <label className="setting-field">
@@ -1240,6 +2095,7 @@ const SettingsPanel = ({
               </>
             )}
 
+            {/* ====== MAP (unchanged) ====== */}
             {widget.type === "map" && (
               <label className="setting-field">
                 <span>Map Location</span>
@@ -1253,6 +2109,7 @@ const SettingsPanel = ({
               </label>
             )}
 
+            {/* ====== SOUNDCLOUD (unchanged) ====== */}
             {widget.type === "soundcloud" && (
               <label className="setting-field">
                 <span>SoundCloud Track URL</span>
@@ -1265,6 +2122,7 @@ const SettingsPanel = ({
               </label>
             )}
 
+            {/* ====== FORM (unchanged) ====== */}
             {widget.type === "form" && (
               <>
                 <label className="setting-field">
@@ -1293,6 +2151,7 @@ const SettingsPanel = ({
               </>
             )}
 
+            {/* ====== SHORTCODE (unchanged) ====== */}
             {widget.type === "shortcode" && (
               <label className="setting-field">
                 <span>Shortcode</span>
@@ -1309,6 +2168,7 @@ const SettingsPanel = ({
               </label>
             )}
 
+            {/* ====== MENU ANCHOR (unchanged) ====== */}
             {widget.type === "menu_anchor" && (
               <label className="setting-field">
                 <span>Anchor ID</span>
@@ -1320,6 +2180,7 @@ const SettingsPanel = ({
               </label>
             )}
 
+            {/* ====== READ MORE / SIDEBAR (unchanged) ====== */}
             {(widget.type === "read_more" || widget.type === "sidebar") && (
               <>
                 <label className="setting-field">
@@ -1344,6 +2205,7 @@ const SettingsPanel = ({
               </>
             )}
 
+            {/* ====== SIDEBAR LINKS (unchanged) ====== */}
             {widget.type === "sidebar" && (
               <div className="items-editor">
                 <div className="items-header">
@@ -1409,6 +2271,7 @@ const SettingsPanel = ({
               </div>
             )}
 
+            {/* ====== RATING (unchanged) ====== */}
             {widget.type === "rating" && (
               <label className="setting-field">
                 <span>Rating (0–5)</span>
@@ -1430,6 +2293,7 @@ const SettingsPanel = ({
               </label>
             )}
 
+            {/* ====== TEXT PATH (unchanged) ====== */}
             {widget.type === "text_path" && (
               <label className="setting-field">
                 <span>Text on Path</span>
@@ -1441,6 +2305,7 @@ const SettingsPanel = ({
               </label>
             )}
 
+            {/* ====== TABLEPRESS (unchanged) ====== */}
             {widget.type === "tablepress" && (
               <>
                 <label className="setting-field">
@@ -1512,7 +2377,7 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== HEADING ====== */}
+            {/* ====== HEADING (unchanged) ====== */}
             {isHeading && (
               <div className="content-section-elementor">
                 <div className="elementor-section-header">
@@ -1598,7 +2463,7 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== TEXT ====== */}
+            {/* ====== TEXT (unchanged) ====== */}
             {widget.type === "text" && (
               <RichTextEditor
                 value={widget.content || ""}
@@ -1608,7 +2473,7 @@ const SettingsPanel = ({
               />
             )}
 
-            {/* ====== BUTTON ====== */}
+            {/* ====== BUTTON (unchanged) ====== */}
             {isButton && (
               <>
                 <label className="setting-field">
@@ -1660,7 +2525,7 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== IMAGE / SITE LOGO ====== */}
+            {/* ====== IMAGE / SITE LOGO (unchanged) ====== */}
             {isImageWidget && (
               <>
                 <label className="setting-field">
@@ -1764,7 +2629,7 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== NAV MENU ====== */}
+            {/* ====== NAV MENU (unchanged) ====== */}
             {isMenuWidget && (
               <>
                 <div className="setting-field">
@@ -1938,7 +2803,7 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== SLIDER ====== */}
+            {/* ====== SLIDER (unchanged) ====== */}
             {isSlider && (
               <SliderSettings
                 widget={widget}
@@ -1947,7 +2812,7 @@ const SettingsPanel = ({
               />
             )}
 
-            {/* ====== GALLERY ====== */}
+            {/* ====== GALLERY (unchanged) ====== */}
             {isGallery && (
               <div className="items-editor">
                 <div className="items-header">
@@ -2008,7 +2873,7 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== HTML ====== */}
+            {/* ====== HTML (unchanged) ====== */}
             {widget.type === "html" && (
               <label className="setting-field">
                 <span>HTML Code</span>
@@ -2022,7 +2887,7 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== VIDEO ====== */}
+            {/* ====== VIDEO (unchanged) ====== */}
             {widget.type === "video" && (
               <label className="setting-field">
                 <span>Video URL</span>
@@ -2035,7 +2900,7 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== COPYRIGHT ====== */}
+            {/* ====== COPYRIGHT (unchanged) ====== */}
             {widget.type === "copyright" && (
               <label className="setting-field">
                 <span>Copyright Text</span>
@@ -2048,7 +2913,7 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== SITE TITLE / TAGLINE ====== */}
+            {/* ====== SITE TITLE / TAGLINE (unchanged) ====== */}
             {(widget.type === "site_title" ||
               widget.type === "site_tagline") && (
               <label className="setting-field">
@@ -2061,6 +2926,7 @@ const SettingsPanel = ({
               </label>
             )}
 
+            {/* ====== ICON LIST (unchanged) ====== */}
             {isIconList && (
               <div className="items-editor">
                 <div className="items-header">
@@ -2105,7 +2971,13 @@ const SettingsPanel = ({
                     </label>
                     <div className="setting-field">
                       <span>Choose Icon</span>
-                      <div className="icon-library-grid" role="group" aria-label={`Choose icon for ${item.title || "list item"}`}>
+                      <div
+                        className="icon-library-grid"
+                        role="group"
+                        aria-label={`Choose icon for ${
+                          item.title || "list item"
+                        }`}
+                      >
                         {ICON_LIBRARY.map(({ name, label, Icon }) => (
                           <button
                             type="button"
@@ -2113,7 +2985,11 @@ const SettingsPanel = ({
                             title={label}
                             aria-label={label}
                             aria-pressed={item.icon === name}
-                            className={item.icon === name ? "icon-library-option selected" : "icon-library-option"}
+                            className={
+                              item.icon === name
+                                ? "icon-library-option selected"
+                                : "icon-library-option"
+                            }
                             onClick={() => {
                               const items = [...(widget.items || [])];
                               items[index] = { ...item, icon: name, image: "" };
@@ -2202,6 +3078,7 @@ const SettingsPanel = ({
               </div>
             )}
 
+            {/* ====== ICON BOX (unchanged) ====== */}
             {widget.type === "icon_box" && (
               <>
                 <label className="setting-field">
@@ -2251,6 +3128,7 @@ const SettingsPanel = ({
               </>
             )}
 
+            {/* ====== COUNTER (unchanged) ====== */}
             {widget.type === "counter" && (
               <>
                 <label className="setting-field">
@@ -2293,6 +3171,7 @@ const SettingsPanel = ({
               </>
             )}
 
+            {/* ====== TESTIMONIAL / PROGRESS BAR (unchanged) ====== */}
             {(widget.type === "testimonial" ||
               widget.type === "progress_bar") && (
               <div className="items-editor">
@@ -2364,6 +3243,7 @@ const SettingsPanel = ({
               </div>
             )}
 
+            {/* ====== SOCIAL ICONS (unchanged) ====== */}
             {widget.type === "social_icons" && (
               <div className="items-editor">
                 <div className="items-header">
@@ -2449,7 +3329,7 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== ACCORDION / TABS / TOGGLE ====== */}
+            {/* ====== ACCORDION / TABS / TOGGLE (unchanged) ====== */}
             {["accordion", "tabs", "toggle"].includes(widget.type) && (
               <div className="items-editor">
                 <div className="items-header">
@@ -2511,11 +3391,10 @@ const SettingsPanel = ({
         )}
 
         {/* ============================================ */}
-        {/* ====== STYLE TAB =========================== */}
+        {/* ====== STYLE TAB (unchanged) =============== */}
         {/* ============================================ */}
         {activeTab === "style" && (
           <>
-            {/* ============ MENU ITEM STYLE ============ */}
             {isMenuWidget && (
               <div className="settings-section">
                 <div
@@ -3517,7 +4396,7 @@ const SettingsPanel = ({
         )}
 
         {/* ============================================ */}
-        {/* ====== ADVANCED TAB ======================== */}
+        {/* ====== ADVANCED TAB (unchanged) =========== */}
         {/* ============================================ */}
         {activeTab === "advanced" && (
           <>

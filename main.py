@@ -22,7 +22,7 @@ from backend.routes.page_builder import router as page_builder_router
 from backend.routes.public import router as public_router
 from backend.routes.forms import router as forms_router
 from backend.routes import header_footer
-
+from backend.routes.addresses import router as addresses_router
 
 app = FastAPI()
 
@@ -93,6 +93,7 @@ app.include_router(page_builder_router)
 app.include_router(public_router)
 app.include_router(forms_router)
 app.include_router(header_footer.router)
+app.include_router(addresses_router) 
 
 
 @app.get("/")

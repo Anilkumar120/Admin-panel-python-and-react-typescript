@@ -16,6 +16,11 @@ import ResizeHandles from "./ResizeHandles";
 import MediaPicker, { type PickedMedia } from "./MediaPicker";
 import { getImageUrl } from "../../api/products";
 import BuilderIcon from "../../components/BuilderIcon";
+import { lazy, Suspense } from "react";
+
+const StorefrontWidget = lazy(
+  () => import("../../pages/Storefront/Storefront"),
+);
 
 // ============ STYLE INJECTOR ============
 const StyleInjector = ({ css }: { css: string }) => {
@@ -215,8 +220,7 @@ export const renderWidgetStyles = (
       ? resolvedFlexDirection || "row"
       : resolvedFlexDirection;
 
-  const isFlexOrGrid =
-    resolvedDisplay === "flex" || resolvedDisplay === "grid";
+  const isFlexOrGrid = resolvedDisplay === "flex" || resolvedDisplay === "grid";
 
   const normalizeGap = (val: unknown): string | undefined => {
     if (val === undefined || val === null || val === "") return undefined;
@@ -348,7 +352,9 @@ const CanvasMenuWidget = ({
         ];
 
   const menuGap = s.gap ?? 24;
-  const menuJustify = (rs.justifyContent || s.justifyContent || "center") as any;
+  const menuJustify = (rs.justifyContent ||
+    s.justifyContent ||
+    "center") as any;
   const hamburgerColor = s.hamburgerColor || color || "#0c2f55";
   const mobileMenuBg = s.mobileMenuBgColor || "#ffffff";
   const breakpoint = s.mobileBreakpoint === "tablet" ? 1024 : 768;
@@ -755,7 +761,17 @@ const WidgetContent = ({
   switch (widget.type) {
     case "heading": {
       const tag = (s.htmlTag || "h2").toLowerCase();
-      const validTags = ["h1", "h2", "h3", "h4", "h5", "h6", "p", "div", "span"];
+      const validTags = [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "p",
+        "div",
+        "span",
+      ];
       const HeadingTag = (validTags.includes(tag) ? tag : "h2") as any;
       const headingAlign = (rs.textAlign ?? s.textAlign ?? "left") as any;
       const hover = getHoverAndAnimation(s, widget.id);
@@ -784,7 +800,9 @@ const WidgetContent = ({
                   width: s.width || undefined,
                   maxWidth: s.maxWidth || undefined,
                 }}
-                dangerouslySetInnerHTML={{ __html: widget.content || "Heading" }}
+                dangerouslySetInnerHTML={{
+                  __html: widget.content || "Heading",
+                }}
               />
             </div>
           </MaybeLink>
@@ -1353,7 +1371,9 @@ const WidgetContent = ({
           <h2 style={{ margin: "0 0 8px", fontSize: 24 }}>
             {widget.settings?.profileName || "Your Name"}
           </h2>
-          {widget.content && <p style={{ margin: "0 0 20px" }}>{widget.content}</p>}
+          {widget.content && (
+            <p style={{ margin: "0 0 20px" }}>{widget.content}</p>
+          )}
           <div style={{ display: "grid", gap: 10 }}>
             {(widget.items || []).map((item) => (
               <a
@@ -1373,9 +1393,7 @@ const WidgetContent = ({
                   background:
                     bioLayout === "minimalist" ? "transparent" : "#ffffff",
                   border:
-                    bioLayout === "minimalist"
-                      ? "none"
-                      : "1px solid #dce2e8",
+                    bioLayout === "minimalist" ? "none" : "1px solid #dce2e8",
                   color: color || "#17202a",
                   textDecoration: "none",
                   fontWeight: 600,
@@ -2148,6 +2166,74 @@ const WidgetContent = ({
         </div>
       );
 
+    // ============ STORE WIDGETS (Live Preview) ============
+    case "cart":
+    case "checkout":
+    case "my_account":
+    case "order_summary":
+      return (
+        <div
+          style={{
+            background: "#fff",
+            border: "1px dashed #cfd8e3",
+            borderRadius: 8,
+            padding: 16,
+            minHeight: 240,
+            pointerEvents: isEditMode ? "none" : "auto",
+            width: "100%",
+            alignSelf: "stretch",
+            boxSizing: "border-box",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              color: "#93003c",
+              fontWeight: 700,
+              marginBottom: 10,
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "#93003c",
+                display: "inline-block",
+              }}
+            />
+            Live Preview — {widget.label}
+          </div>
+
+          <Suspense
+            fallback={
+              <div style={{ padding: 20, color: "#888", fontSize: 13 }}>
+                Loading store section…
+              </div>
+            }
+          >
+            <StorefrontWidget
+              page={
+                widget.type === "my_account"
+                  ? "account"
+                  : widget.type === "order_summary"
+                    ? "received"
+                    : widget.type
+              }
+              embedded
+              previewMode
+              settings={widget.settings}
+            />
+          </Suspense>
+        </div>
+      );
+
     // ============ PRODUCT WIDGETS (canvas preview) ============
     case "product_title":
       return (
@@ -2473,9 +2559,7 @@ const WidgetContent = ({
                 style={{ width: "100%" }}
               />
               <div style={{ padding: 12 }}>
-                <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>
-                  Product {i}
-                </h4>
+                <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Product {i}</h4>
                 <div
                   style={{ color: "#0c2f55", fontWeight: 700, fontSize: 14 }}
                 >
@@ -2602,7 +2686,10 @@ const WidgetContent = ({
           style={{ width: "100%", overflow: "visible" }}
         >
           <defs>
-            <path id={`text-path-${widget.id}`} d="M 20,145 Q 160,-20 300,145" />
+            <path
+              id={`text-path-${widget.id}`}
+              d="M 20,145 Q 160,-20 300,145"
+            />
           </defs>
           <text fill={color || "#0c2f55"} fontSize={fontSize || 22}>
             <textPath
