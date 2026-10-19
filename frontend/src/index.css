@@ -4864,7 +4864,6 @@ textarea {
 
 /* ============ PUBLIC VIEW ============ */
 .public-builder-view {
-  min-height: 100vh;
   background: #fff;
 }
 
