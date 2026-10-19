@@ -50,7 +50,7 @@
   display: flex;
   flex: 1;
   gap: 8px;
-  max-width: 420px;
+  max-width: fit-content;
 }
 
 .builder-page-details input {
