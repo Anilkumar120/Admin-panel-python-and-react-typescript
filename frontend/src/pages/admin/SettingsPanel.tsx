@@ -46,7 +46,37 @@ type ContainerJustify =
 type ContainerAlign = "flex-start" | "center" | "flex-end" | "stretch";
 type ContainerWrap = "nowrap" | "wrap" | "wrap-reverse";
 
-// ============ DYNAMIC LINK PICKER (unchanged) ============
+// ============ NUMBER INPUT WITH KEYBOARD SUPPORT ============
+const NumberInput = ({ value, onChange, min, max, step = 1, ...props }: any) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      e.preventDefault();
+      const currentVal = Number(value) || 0;
+      const newValue = e.key === "ArrowUp" ? currentVal + step : currentVal - step;
+      
+      let finalValue = newValue;
+      if (min !== undefined) finalValue = Math.max(min, finalValue);
+      if (max !== undefined) finalValue = Math.min(max, finalValue);
+      
+      onChange(finalValue);
+    }
+  };
+
+  return (
+    <input
+      type="number"
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      onKeyDown={handleKeyDown}
+      min={min}
+      max={max}
+      step={step}
+      {...props}
+    />
+  );
+};
+
+// ============ DYNAMIC LINK PICKER ============
 interface LinkOption {
   id: string;
   label: string;
@@ -310,6 +340,10 @@ const SettingsPanel = ({
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [linkInput, setLinkInput] = useState(widget.link?.url || "");
 
+  // ✅ FIX: Chain Link States for Spacing
+  const [linkedPadding, setLinkedPadding] = useState(false);
+  const [linkedMargin, setLinkedMargin] = useState(false);
+
   const [availableMenus, setAvailableMenus] = useState<
     { id: string; name: string; items: any[] }[]
   >([]);
@@ -383,6 +417,7 @@ const SettingsPanel = ({
     onChangeStyle(changes, device !== "desktop" ? device : undefined);
   };
 
+  // ✅ FIX: Spacing logic with Chain Link support
   const updateSpacing = (
     key: "padding" | "margin",
     side: "top" | "right" | "bottom" | "left",
@@ -390,7 +425,17 @@ const SettingsPanel = ({
   ) => {
     const current = rs?.[key] ||
       s[key] || { top: 0, right: 0, bottom: 0, left: 0 };
-    updateStyle({ [key]: { ...current, [side]: value } } as any);
+      
+    let newSpacing;
+    if (key === "padding" && linkedPadding) {
+      newSpacing = { top: value, right: value, bottom: value, left: value };
+    } else if (key === "margin" && linkedMargin) {
+      newSpacing = { top: value, right: value, bottom: value, left: value };
+    } else {
+      newSpacing = { ...current, [side]: value };
+    }
+    
+    updateStyle({ [key]: newSpacing } as any);
   };
 
   const toggleHideForDevice = (targetDevice: ResponsiveDevice) => {
@@ -429,8 +474,6 @@ const SettingsPanel = ({
     widget.type,
   );
 
-  // ✅ NEW: Elementor-style store widgets
-    // ✅ NEW: Elementor-style store widgets
   const isCartWidget = widget.type === "cart";
   const isCheckoutWidget = widget.type === "checkout";
   const isMyAccountWidget = widget.type === "my_account";
@@ -479,6 +522,8 @@ const SettingsPanel = ({
         onChangeUrl(picked.url);
       } else {
         onChangeUrl(picked.url);
+        onChangeContent(""); // ✅ Clear text icon
+        onChangeSettings({ customIcon: null }); // ✅ Clear library icon
         onChangeSettings({
           accessibility: {
             ...widget.accessibility,
@@ -602,7 +647,7 @@ const SettingsPanel = ({
         {activeTab === "content" && (
           <div className="settings-section">
             {/* ============================================================ */}
-            {/* 🛒 CART WIDGET — Elementor-style content options            */}
+            {/* 🛒 CART WIDGET */}
             {/* ============================================================ */}
             {isCartWidget && (
               <>
@@ -799,7 +844,7 @@ const SettingsPanel = ({
             )}
 
             {/* ============================================================ */}
-            {/* 💳 CHECKOUT WIDGET — Elementor-style content options         */}
+            {/* 💳 CHECKOUT WIDGET */}
             {/* ============================================================ */}
             {isCheckoutWidget && (
               <>
@@ -1008,7 +1053,7 @@ const SettingsPanel = ({
             )}
 
             {/* ============================================================ */}
-            {/* 👤 MY ACCOUNT WIDGET — Elementor-style content options       */}
+            {/* 👤 MY ACCOUNT WIDGET */}
             {/* ============================================================ */}
             {isMyAccountWidget && (
               <>
@@ -1202,7 +1247,7 @@ const SettingsPanel = ({
             )}
 
             {/* ============================================================ */}
-            {/* 🧾 ORDER SUMMARY WIDGET — Elementor-style content options    */}
+            {/* 🧾 ORDER SUMMARY WIDGET */}
             {/* ============================================================ */}
             {isOrderSummaryWidget && (
               <>
@@ -1439,7 +1484,7 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== PRODUCT PREVIEW (existing, unchanged) ====== */}
+            {/* ====== PRODUCT PREVIEW ====== */}
             {isProductWidget &&
               !["products", "product_grid"].includes(widget.type) && (
                 <div className="items-editor">
@@ -1512,7 +1557,7 @@ const SettingsPanel = ({
                 </div>
               )}
 
-            {/* ====== CONTAINER (unchanged) ====== */}
+            {/* ====== CONTAINER ====== */}
             {isContainer && (
               <>
                 {device !== "desktop" && (
@@ -1826,15 +1871,59 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== ICON (unchanged) ====== */}
+            {/* ====== ICON ====== */}
             {widget.type === "icon" && (
               <div className="items-editor">
                 <h4>Choose Icon</h4>
+                
+                {/* 1. Custom Icon Library */}
+                <div className="setting-field" style={{ marginBottom: 20 }}>
+                  <span>Icon Library</span>
+                  <div
+                    className="icon-library-grid"
+                    role="group"
+                    style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", marginTop: 8 }}
+                  >
+                    {ICON_LIBRARY.map(({ name, label, Icon }) => (
+                      <button
+                        type="button"
+                        key={name}
+                        title={label}
+                        onClick={() => {
+                          onChangeContent("");
+                          onChangeUrl("");
+                          onChangeSettings({ customIcon: name }); 
+                        }}
+                        style={{
+                          padding: 10,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 4,
+                          border: widget.settings?.customIcon === name ? "2px solid #2563eb" : "1px solid #d1d5db",
+                          borderRadius: 6,
+                          background: "#fff",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <Icon size={20} />
+                        <span style={{ fontSize: 10 }}>{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Custom Character (Text/Emoji) */}
                 <label className="setting-field">
                   <span>Custom icon character</span>
                   <input
-                    value={widget.content || "★"}
-                    onChange={(event) => onChangeContent(event.target.value)}
+                    value={widget.content || ""}
+                    onChange={(event) => {
+                      onChangeContent(event.target.value);
+                      onChangeUrl("");
+                      onChangeSettings({ customIcon: null });
+                    }}
                     placeholder="Paste a symbol or emoji"
                   />
                 </label>
@@ -1842,54 +1931,52 @@ const SettingsPanel = ({
                   className="setting-field"
                   role="group"
                   aria-label="Icon choices"
-                  style={{ display: "flex", flexWrap: "wrap", gap: 8 }}
+                  style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}
                 >
                   {[
-                    ["Star", "★"],
-                    ["Heart", "♥"],
-                    ["Check", "✓"],
-                    ["Arrow", "→"],
-                    ["Phone", "☎"],
-                    ["Email", "✉"],
-                    ["Settings", "⚙"],
-                    ["Lightning", "⚡"],
-                    ["Home", "⌂"],
-                    ["Plus", "+"],
-                    ["Globe", "◎"],
-                    ["Music", "♫"],
+                    ["Star", "★"], ["Heart", "♥"], ["Check", "✓"], ["Arrow", "→"],
+                    ["Phone", "☎"], ["Email", "✉"], ["Settings", "⚙"], ["Lightning", "⚡"],
+                    ["Home", "⌂"], ["Plus", "+"], ["Globe", "◎"], ["Music", "♫"],
                   ].map(([label, symbol]) => (
                     <button
                       key={label}
                       type="button"
                       title={label}
-                      aria-label={`${label} icon`}
-                      aria-pressed={(widget.content || "★") === symbol}
-                      onClick={() => onChangeContent(symbol)}
+                      onClick={() => {
+                        onChangeContent(symbol);
+                        onChangeUrl("");
+                        onChangeSettings({ customIcon: null });
+                      }}
                       style={{
-                        width: 42,
-                        height: 42,
-                        fontSize: 22,
-                        border:
-                          (widget.content || "★") === symbol
-                            ? "2px solid #2563eb"
-                            : "1px solid #d1d5db",
-                        borderRadius: 6,
-                        background: "#fff",
-                        cursor: "pointer",
+                        width: 42, height: 42, fontSize: 22,
+                        border: (widget.content || "★") === symbol ? "2px solid #2563eb" : "1px solid #d1d5db",
+                        borderRadius: 6, background: "#fff", cursor: "pointer",
                       }}
                     >
                       {symbol}
                     </button>
                   ))}
                 </div>
+
+                {/* 3. Image Upload */}
                 <div className="setting-field">
                   <span>Image icon (optional)</span>
                   {widget.url && (
-                    <img
-                      src={widget.url}
-                      alt="Selected icon"
-                      className="icon-list-image-preview"
-                    />
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      <img
+                        src={widget.url}
+                        alt="Selected icon"
+                        className="icon-list-image-preview"
+                        style={{ width: 50, height: 50, objectFit: "contain" }}
+                      />
+                      <button
+                        type="button"
+                        className="remove-media-btn"
+                        onClick={() => onChangeUrl("")}
+                      >
+                        Remove Image
+                      </button>
+                    </div>
                   )}
                   <button
                     type="button"
@@ -1898,20 +1985,11 @@ const SettingsPanel = ({
                   >
                     Choose or Upload Icon Image
                   </button>
-                  {widget.url && (
-                    <button
-                      type="button"
-                      className="remove-media-btn"
-                      onClick={() => onChangeUrl("")}
-                    >
-                      Remove Image
-                    </button>
-                  )}
                 </div>
               </div>
             )}
 
-            {/* ====== PRODUCTS GRID (unchanged) ====== */}
+            {/* ====== PRODUCTS GRID ====== */}
             {["products", "product_grid"].includes(widget.type) && (
               <div className="items-editor">
                 <h4>Product Query</h4>
@@ -1952,7 +2030,7 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== LINK BIO (unchanged) ====== */}
+            {/* ====== LINK BIO ====== */}
             {isLinkBio && (
               <div className="items-editor">
                 <h4>Link in Bio Profile</h4>
@@ -2072,7 +2150,7 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== IMAGE BOX (unchanged) ====== */}
+            {/* ====== IMAGE BOX ====== */}
             {widget.type === "image_box" && (
               <>
                 <label className="setting-field">
@@ -2095,7 +2173,7 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== MAP (unchanged) ====== */}
+            {/* ====== MAP ====== */}
             {widget.type === "map" && (
               <label className="setting-field">
                 <span>Map Location</span>
@@ -2109,7 +2187,7 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== SOUNDCLOUD (unchanged) ====== */}
+            {/* ====== SOUNDCLOUD ====== */}
             {widget.type === "soundcloud" && (
               <label className="setting-field">
                 <span>SoundCloud Track URL</span>
@@ -2122,7 +2200,7 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== FORM (unchanged) ====== */}
+            {/* ====== FORM ====== */}
             {widget.type === "form" && (
               <>
                 <label className="setting-field">
@@ -2151,7 +2229,7 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== SHORTCODE (unchanged) ====== */}
+            {/* ====== SHORTCODE ====== */}
             {widget.type === "shortcode" && (
               <label className="setting-field">
                 <span>Shortcode</span>
@@ -2168,7 +2246,7 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== MENU ANCHOR (unchanged) ====== */}
+            {/* ====== MENU ANCHOR ====== */}
             {widget.type === "menu_anchor" && (
               <label className="setting-field">
                 <span>Anchor ID</span>
@@ -2180,7 +2258,7 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== READ MORE / SIDEBAR (unchanged) ====== */}
+            {/* ====== READ MORE / SIDEBAR ====== */}
             {(widget.type === "read_more" || widget.type === "sidebar") && (
               <>
                 <label className="setting-field">
@@ -2205,7 +2283,7 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== SIDEBAR LINKS (unchanged) ====== */}
+            {/* ====== SIDEBAR LINKS ====== */}
             {widget.type === "sidebar" && (
               <div className="items-editor">
                 <div className="items-header">
@@ -2271,7 +2349,7 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== RATING (unchanged) ====== */}
+            {/* ====== RATING ====== */}
             {widget.type === "rating" && (
               <label className="setting-field">
                 <span>Rating (0–5)</span>
@@ -2293,7 +2371,7 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== TEXT PATH (unchanged) ====== */}
+            {/* ====== TEXT PATH ====== */}
             {widget.type === "text_path" && (
               <label className="setting-field">
                 <span>Text on Path</span>
@@ -2305,7 +2383,7 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== TABLEPRESS (unchanged) ====== */}
+            {/* ====== TABLEPRESS ====== */}
             {widget.type === "tablepress" && (
               <>
                 <label className="setting-field">
@@ -2377,7 +2455,7 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== HEADING (unchanged) ====== */}
+            {/* ====== HEADING ====== */}
             {isHeading && (
               <div className="content-section-elementor">
                 <div className="elementor-section-header">
@@ -2463,7 +2541,7 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== TEXT (unchanged) ====== */}
+            {/* ====== TEXT ====== */}
             {widget.type === "text" && (
               <RichTextEditor
                 value={widget.content || ""}
@@ -2473,7 +2551,7 @@ const SettingsPanel = ({
               />
             )}
 
-            {/* ====== BUTTON (unchanged) ====== */}
+            {/* ====== BUTTON ====== */}
             {isButton && (
               <>
                 <label className="setting-field">
@@ -2525,7 +2603,7 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== IMAGE / SITE LOGO (unchanged) ====== */}
+            {/* ====== IMAGE / SITE LOGO ====== */}
             {isImageWidget && (
               <>
                 <label className="setting-field">
@@ -2629,7 +2707,7 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== NAV MENU (unchanged) ====== */}
+            {/* ====== NAV MENU ====== */}
             {isMenuWidget && (
               <>
                 <div className="setting-field">
@@ -2803,7 +2881,7 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== SLIDER (unchanged) ====== */}
+            {/* ====== SLIDER ====== */}
             {isSlider && (
               <SliderSettings
                 widget={widget}
@@ -2812,7 +2890,7 @@ const SettingsPanel = ({
               />
             )}
 
-            {/* ====== GALLERY (unchanged) ====== */}
+            {/* ====== GALLERY ====== */}
             {isGallery && (
               <div className="items-editor">
                 <div className="items-header">
@@ -2873,7 +2951,7 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== HTML (unchanged) ====== */}
+            {/* ====== HTML ====== */}
             {widget.type === "html" && (
               <label className="setting-field">
                 <span>HTML Code</span>
@@ -2887,7 +2965,7 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== VIDEO (unchanged) ====== */}
+            {/* ====== VIDEO ====== */}
             {widget.type === "video" && (
               <label className="setting-field">
                 <span>Video URL</span>
@@ -2900,7 +2978,7 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== COPYRIGHT (unchanged) ====== */}
+            {/* ====== COPYRIGHT ====== */}
             {widget.type === "copyright" && (
               <label className="setting-field">
                 <span>Copyright Text</span>
@@ -2913,7 +2991,7 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== SITE TITLE / TAGLINE (unchanged) ====== */}
+            {/* ====== SITE TITLE / TAGLINE ====== */}
             {(widget.type === "site_title" ||
               widget.type === "site_tagline") && (
               <label className="setting-field">
@@ -2926,7 +3004,7 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== ICON LIST (unchanged) ====== */}
+            {/* ====== ICON LIST ====== */}
             {isIconList && (
               <div className="items-editor">
                 <div className="items-header">
@@ -3078,7 +3156,7 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== ICON BOX (unchanged) ====== */}
+            {/* ====== ICON BOX ====== */}
             {widget.type === "icon_box" && (
               <>
                 <label className="setting-field">
@@ -3128,7 +3206,7 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== COUNTER (unchanged) ====== */}
+            {/* ====== COUNTER ====== */}
             {widget.type === "counter" && (
               <>
                 <label className="setting-field">
@@ -3171,7 +3249,7 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== TESTIMONIAL / PROGRESS BAR (unchanged) ====== */}
+            {/* ====== TESTIMONIAL / PROGRESS BAR ====== */}
             {(widget.type === "testimonial" ||
               widget.type === "progress_bar") && (
               <div className="items-editor">
@@ -3243,7 +3321,7 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== SOCIAL ICONS (unchanged) ====== */}
+            {/* ====== SOCIAL ICONS ====== */}
             {widget.type === "social_icons" && (
               <div className="items-editor">
                 <div className="items-header">
@@ -3329,7 +3407,7 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== ACCORDION / TABS / TOGGLE (unchanged) ====== */}
+            {/* ====== ACCORDION / TABS / TOGGLE ====== */}
             {["accordion", "tabs", "toggle"].includes(widget.type) && (
               <div className="items-editor">
                 <div className="items-header">
@@ -3391,7 +3469,7 @@ const SettingsPanel = ({
         )}
 
         {/* ============================================ */}
-        {/* ====== STYLE TAB (unchanged) =============== */}
+        {/* ====== STYLE TAB =============== */}
         {/* ============================================ */}
         {activeTab === "style" && (
           <>
@@ -4220,7 +4298,7 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ============ SPACING ============ */}
+            {/* ============ SPACING WITH CHAIN LINK ============ */}
             <div className="settings-section">
               <div
                 className="collapsible-header"
@@ -4230,95 +4308,74 @@ const SettingsPanel = ({
               </div>
               {openSections.spacing && (
                 <div className="collapsible-content">
-                  <label className="setting-field">
-                    <span>Padding (px)</span>
-                  </label>
+                  
+                  {/* Padding */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <label className="setting-field" style={{ margin: 0 }}>Padding (px)</label>
+                    <button 
+                      type="button" 
+                      onClick={() => setLinkedPadding(!linkedPadding)}
+                      style={{ background: linkedPadding ? '#e0e7ff' : 'transparent', border: '1px solid #ccc', padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
+                      title="Link values"
+                    >
+                      🔗 {linkedPadding ? "Linked" : "Unlinked"}
+                    </button>
+                  </div>
                   <div className="spacing-grid">
-                    <input
-                      type="number"
+                    <NumberInput
                       placeholder="Top"
                       value={(rs?.padding || s.padding)?.top || 0}
-                      onChange={(e) =>
-                        updateSpacing("padding", "top", Number(e.target.value))
-                      }
+                      onChange={(val: number) => updateSpacing("padding", "top", val)}
                     />
-                    <input
-                      type="number"
+                    <NumberInput
                       placeholder="Right"
                       value={(rs?.padding || s.padding)?.right || 0}
-                      onChange={(e) =>
-                        updateSpacing(
-                          "padding",
-                          "right",
-                          Number(e.target.value),
-                        )
-                      }
+                      onChange={(val: number) => updateSpacing("padding", "right", val)}
                     />
-                    <input
-                      type="number"
+                    <NumberInput
                       placeholder="Bottom"
                       value={(rs?.padding || s.padding)?.bottom || 0}
-                      onChange={(e) =>
-                        updateSpacing(
-                          "padding",
-                          "bottom",
-                          Number(e.target.value),
-                        )
-                      }
+                      onChange={(val: number) => updateSpacing("padding", "bottom", val)}
                     />
-                    <input
-                      type="number"
+                    <NumberInput
                       placeholder="Left"
                       value={(rs?.padding || s.padding)?.left || 0}
-                      onChange={(e) =>
-                        updateSpacing(
-                          "padding",
-                          "left",
-                          Number(e.target.value),
-                        )
-                      }
+                      onChange={(val: number) => updateSpacing("padding", "left", val)}
                     />
                   </div>
 
-                  <label className="setting-field" style={{ marginTop: 12 }}>
-                    <span>Margin (px)</span>
-                  </label>
+                  {/* Margin */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 8 }}>
+                    <label className="setting-field" style={{ margin: 0 }}>Margin (px)</label>
+                    <button 
+                      type="button" 
+                      onClick={() => setLinkedMargin(!linkedMargin)}
+                      style={{ background: linkedMargin ? '#e0e7ff' : 'transparent', border: '1px solid #ccc', padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
+                      title="Link values"
+                    >
+                      🔗 {linkedMargin ? "Linked" : "Unlinked"}
+                    </button>
+                  </div>
                   <div className="spacing-grid">
-                    <input
-                      type="number"
+                    <NumberInput
                       placeholder="Top"
                       value={(rs?.margin || s.margin)?.top || 0}
-                      onChange={(e) =>
-                        updateSpacing("margin", "top", Number(e.target.value))
-                      }
+                      onChange={(val: number) => updateSpacing("margin", "top", val)}
                     />
-                    <input
-                      type="number"
+                    <NumberInput
                       placeholder="Right"
                       value={(rs?.margin || s.margin)?.right || 0}
-                      onChange={(e) =>
-                        updateSpacing("margin", "right", Number(e.target.value))
-                      }
+                      onChange={(val: number) => updateSpacing("margin", "right", val)}
                     />
-                    <input
-                      type="number"
+                    <NumberInput
                       placeholder="Bottom"
                       value={(rs?.margin || s.margin)?.bottom || 0}
-                      onChange={(e) =>
-                        updateSpacing(
-                          "margin",
-                          "bottom",
-                          Number(e.target.value),
-                        )
-                      }
+                      onChange={(val: number) => updateSpacing("margin", "bottom", val)}
                     />
-                    <input
-                      type="number"
+                    <NumberInput
                       placeholder="Left"
                       value={(rs?.margin || s.margin)?.left || 0}
-                      onChange={(e) =>
-                        updateSpacing("margin", "left", Number(e.target.value))
-                      }
+                      onChange={(val: number) => updateSpacing("margin", "left", val)}
                     />
                   </div>
                 </div>
@@ -4396,7 +4453,7 @@ const SettingsPanel = ({
         )}
 
         {/* ============================================ */}
-        {/* ====== ADVANCED TAB (unchanged) =========== */}
+        {/* ====== ADVANCED TAB =========== */}
         {/* ============================================ */}
         {activeTab === "advanced" && (
           <>

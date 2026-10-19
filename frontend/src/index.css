@@ -1,3 +1,36 @@
+/* ============================================================
+   FONTS + TERMINAL  (appended — safe to remove)
+   ============================================================ */
+
+:root {
+  --font-sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", Consolas, "Courier New", monospace;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-sans);
+}
+
+.lucide {
+  stroke-width: 2;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.nav-link .lucide {
+  width: 18px;
+  height: 18px;
+  color: #d1d5db;
+  transition: color 0.2s;
+}
+.nav-link:hover .lucide,
+.nav-link.active .lucide {
+  color: #ffffff;
+}
 * {
   box-sizing: border-box;
 }

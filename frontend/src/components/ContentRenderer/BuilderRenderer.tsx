@@ -908,8 +908,7 @@ const ProductVariationsWidget = ({ product }: { product?: ProductData }) => {
   );
 };
 
-// ============ STYLE RENDERER (FIXED gap) ============
-
+// ============ STYLE RENDERER ============
 const renderStyles = (
   style: any,
   device: ResponsiveDevice,
@@ -986,7 +985,7 @@ const renderStyles = (
     width: style.width,
     height: style.height,
     minWidth: style.minWidth,
-    maxWidth: style.maxWidth,
+    maxWidth: "100%", // ✅ FIX: Public view box break nahi hoga
     minHeight: style.minHeight,
     maxHeight: style.maxHeight,
 
@@ -1006,7 +1005,7 @@ const renderStyles = (
     bottom: style.bottom,
     left: style.left,
     zIndex: style.zIndex,
-    overflow: style.overflow,
+    overflow: "hidden", // ✅ FIX: Bahar nahi jayega
 
     display,
     flexDirection: flexDirection as React.CSSProperties["flexDirection"],
@@ -1062,7 +1061,7 @@ const MaybeLink = ({
   );
 };
 
-// ============ SLIDER RENDERER (with buttons + description) ============
+// ============ SLIDER RENDERER ============
 const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
   const settings = widget.settings || {};
   const slides = widget.items || [];
@@ -1230,7 +1229,6 @@ const SliderRenderer = ({ widget }: { widget: PageWidget }) => {
             </p>
           )}
 
-          {/* ✅ Buttons */}
           {(currentItem?.button1Text || currentItem?.button2Text) && (
             <div
               style={{
@@ -1732,6 +1730,60 @@ const SiteLogoRenderer = ({
   );
 };
 
+// ============ CART DROPDOWN WIDGET ============
+const CartDropdownWidget = () => {
+  const [showCart, setShowCart] = useState(false);
+
+  return (
+    <div className="custom-cart-widget" style={{ position: "relative", display: "inline-block" }}>
+      <div 
+        className="cart-icon-holder" 
+        style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: "5px 0" }}
+        onClick={() => setShowCart(!showCart)}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="9" cy="21" r="1"></circle>
+          <circle cx="20" cy="21" r="1"></circle>
+          <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+        </svg>
+        <span className="cart-badge" style={{ background: "#cca06b", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: "bold" }}>1</span>
+      </div>
+
+      {showCart && (
+        <div 
+          className="cart-dropdown-panel" 
+          style={{ position: "absolute", top: "100%", right: 0, width: 340, background: "#fff", boxShadow: "0 10px 40px rgba(0,0,0,0.1)", borderRadius: 8, padding: 24, zIndex: 100, marginTop: 15 }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <h4 style={{ margin: 0, fontSize: 14, color: "#888", fontWeight: 600, textTransform: "uppercase" }}>Shopping Cart</h4>
+            <button style={{ background: "none", border: "none", cursor: "pointer", color: "#888" }}>🗑️</button>
+          </div>
+          
+          <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
+            <img src="https://via.placeholder.com/70" alt="Product" style={{ width: 70, height: 70, borderRadius: 8, objectFit: "cover", border: "1px solid #eee" }} />
+            <div style={{ flex: 1 }}>
+              <h5 style={{ margin: "0 0 6px", fontSize: 14, color: "#333", fontWeight: 500, lineHeight: 1.4 }}>Wedding Engagement Cubic Silver Band Ring</h5>
+              <p style={{ margin: 0, color: "#888", fontSize: 13 }}>1 × $249.00</p>
+            </div>
+          </div>
+
+          <hr style={{ border: "none", borderTop: "1px solid #eee", margin: "20px 0" }} />
+
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20, fontSize: 14, color: "#333" }}>
+            <span>Subtotal :</span>
+            <span style={{ fontWeight: 600, color: "#cca06b" }}>$249.00</span>
+          </div>
+
+          <div style={{ display: "flex", gap: 12 }}>
+            <button style={{ flex: 1, padding: "12px 0", background: "#fff", border: "1px solid #cca06b", color: "#cca06b", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>View Cart</button>
+            <button style={{ flex: 1, padding: "12px 0", background: "#cca06b", border: "1px solid #cca06b", color: "#fff", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>Checkout</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ============ WIDGET RENDERER ============
 const WidgetRenderer = ({
   widget,
@@ -1933,6 +1985,8 @@ const WidgetRenderer = ({
       );
 
     case "cart":
+      return <CartDropdownWidget />;
+      
     case "checkout":
     case "my_account":
     case "order_summary":

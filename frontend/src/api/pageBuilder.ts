@@ -463,6 +463,9 @@ export interface WidgetSettings {
   dynamicField?: string;
   altText?: string;
 
+  // ✅ Yahan customIcon add kiya gaya hai
+  customIcon?: string | null;
+
   previewProductId?: string;
   previewProduct?: {
     id: string;

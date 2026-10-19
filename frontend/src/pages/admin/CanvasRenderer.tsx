@@ -16,6 +16,7 @@ import ResizeHandles from "./ResizeHandles";
 import MediaPicker, { type PickedMedia } from "./MediaPicker";
 import { getImageUrl } from "../../api/products";
 import BuilderIcon from "../../components/BuilderIcon";
+import { ICON_LIBRARY } from "../../components/iconLibrary"; // ✅ Added Import
 import { lazy, Suspense } from "react";
 
 const StorefrontWidget = lazy(
@@ -286,7 +287,7 @@ export const renderWidgetStyles = (
     width: style.width || undefined,
     height: style.height || undefined,
     minWidth: style.minWidth || undefined,
-    maxWidth: style.maxWidth || undefined,
+    maxWidth: "100%", // ✅ FIX: Box break nahi hoga
     minHeight: style.minHeight || undefined,
     maxHeight: style.maxHeight || undefined,
     padding: getPadding(),
@@ -303,7 +304,7 @@ export const renderWidgetStyles = (
     bottom: style.bottom || undefined,
     left: style.left || undefined,
     zIndex: style.zIndex || undefined,
-    overflow: style.overflow || undefined,
+    overflow: "hidden", // ✅ FIX: Bahar nahi jayega
     cursor: style.cursor || undefined,
     ...responsiveStyle,
   };
@@ -1212,7 +1213,12 @@ const WidgetContent = ({
         </ul>
       );
 
-    case "icon":
+    case "icon": {
+      // ✅ Custom Icon Library support
+      const CustomIconComponent = widget.settings?.customIcon 
+        ? ICON_LIBRARY.find((i: any) => i.name === widget.settings?.customIcon)?.Icon 
+        : null;
+
       return (
         <MaybeLink widget={widget}>
           <div
@@ -1222,25 +1228,33 @@ const WidgetContent = ({
               color: color || "#0c2f55",
               lineHeight: 1,
               padding: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             {widget.url ? (
+              // ✅ Image Icon support
               <img
-                src={widget.url}
-                alt={widget.accessibility?.altText || ""}
+                src={widget.url.startsWith("http") ? widget.url : `${getImageUrl(widget.url)}`}
+                alt="Icon"
                 style={{
                   width: `${fontSize || 48}px`,
                   height: `${fontSize || 48}px`,
                   objectFit: "contain",
-                  verticalAlign: "middle",
                 }}
               />
+            ) : CustomIconComponent ? (
+              // ✅ Library Icon support
+              <CustomIconComponent size={fontSize || 48} />
             ) : (
+              // ✅ Text Icon support
               widget.content || "★"
             )}
           </div>
         </MaybeLink>
       );
+    }
 
     case "icon_box":
       return (
@@ -2845,13 +2859,17 @@ const CanvasRenderer = ({
       if (!el) return;
 
       const rect = el.getBoundingClientRect();
-      let newWidth = rect.width;
-      let newHeight = rect.height;
+      let currentWidth = parseInt(widget.style.width || `${rect.width}px`, 10) || rect.width;
+      let currentHeight = parseInt(widget.style.height || `${rect.height}px`, 10) || rect.height;
 
-      if (direction.includes("e")) newWidth = rect.width + deltaX;
-      if (direction.includes("w")) newWidth = rect.width - deltaX;
-      if (direction.includes("s")) newHeight = rect.height + deltaY;
-      if (direction.includes("n")) newHeight = rect.height - deltaY;
+      let newWidth = currentWidth;
+      let newHeight = currentHeight;
+
+      // ✅ FIX: Independent Width / Height Resizing
+      if (direction.includes("e")) newWidth = currentWidth + deltaX;
+      if (direction.includes("w")) newWidth = currentWidth - deltaX;
+      if (direction.includes("s")) newHeight = currentHeight + deltaY;
+      if (direction.includes("n")) newHeight = currentHeight - deltaY;
 
       newWidth = Math.max(30, newWidth);
       newHeight = Math.max(20, newHeight);
@@ -2866,7 +2884,7 @@ const CanvasRenderer = ({
         height: `${Math.round(newHeight)}px`,
       });
     },
-    [widget.id, onResize],
+    [widget.id, widget.style.width, widget.style.height, onResize],
   );
 
   const handleResizeEnd = useCallback(() => setResizing(null), []);
@@ -2883,11 +2901,17 @@ const CanvasRenderer = ({
     if (
       widget.type === "image" ||
       widget.type === "video" ||
-      widget.type === "site_logo"
+      widget.type === "site_logo" ||
+      widget.type === "icon" // ✅ FIX: Icon image upload support
     ) {
       const picked = pickedArray[0];
       onUpdateWidget(widget.id, {
         url: picked.url,
+        content: "", // Clear text icon
+        settings: {
+          ...widget.settings,
+          customIcon: null, // Clear library icon
+        },
         accessibility: { ...widget.accessibility, altText: picked.alt },
       });
     } else if (["gallery", "carousel", "slider"].includes(widget.type)) {

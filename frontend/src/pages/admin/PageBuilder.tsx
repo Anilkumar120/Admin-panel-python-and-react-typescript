@@ -753,9 +753,10 @@ const PageBuilder = ({
   });
   const [device, setDevice] = useState<ResponsiveDevice>("desktop");
 
+  // ✅ FIX: Default tab changed to "widgets"
   const [leftPanelMode, setLeftPanelMode] = useState<
     "settings" | "widgets" | "globals" | "conditions"
-  >("settings");
+  >("widgets");
   const [showLeftPanel, setShowLeftPanel] = useState(true);
 
   const [showStructurePopup, setShowStructurePopup] = useState(false);
