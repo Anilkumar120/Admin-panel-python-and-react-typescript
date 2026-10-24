@@ -66,13 +66,23 @@ export interface TemplateSources {
 
 // ============ ADMIN ============
 
-export const listTemplates = async (type: TemplateType): Promise<HeaderFooterTemplate[]> => {
-  const res = await axios.get(`${TEMPLATES_URL}/list/${type}`, { headers: getHeaders() });
+export const listTemplates = async (
+  type: TemplateType
+): Promise<HeaderFooterTemplate[]> => {
+  const res = await axios.get(`${TEMPLATES_URL}/list/${type}`, {
+    headers: getHeaders(),
+  });
+
   return res.data.templates;
 };
 
-export const getTemplate = async (id: string): Promise<HeaderFooterTemplate> => {
-  const res = await axios.get(`${TEMPLATES_URL}/${id}`, { headers: getHeaders() });
+export const getTemplate = async (
+  id: string
+): Promise<HeaderFooterTemplate> => {
+  const res = await axios.get(`${TEMPLATES_URL}/${id}`, {
+    headers: getHeaders(),
+  });
+
   return res.data;
 };
 
@@ -86,7 +96,10 @@ export const createTemplate = async (data: {
   conditions?: TemplateConditions;
   is_default?: boolean;
 }) => {
-  const res = await axios.post(TEMPLATES_URL, data, { headers: getHeaders() });
+  const res = await axios.post(TEMPLATES_URL, data, {
+    headers: getHeaders(),
+  });
+
   return res.data;
 };
 
@@ -103,22 +116,36 @@ export const updateTemplate = async (
     is_default?: boolean;
   }
 ) => {
-  const res = await axios.put(`${TEMPLATES_URL}/${id}`, data, { headers: getHeaders() });
+  const res = await axios.put(`${TEMPLATES_URL}/${id}`, data, {
+    headers: getHeaders(),
+  });
+
   return res.data;
 };
 
 export const deleteTemplate = async (id: string) => {
-  const res = await axios.delete(`${TEMPLATES_URL}/${id}`, { headers: getHeaders() });
+  const res = await axios.delete(`${TEMPLATES_URL}/${id}`, {
+    headers: getHeaders(),
+  });
+
   return res.data;
 };
 
 export const duplicateTemplate = async (id: string) => {
-  const res = await axios.post(`${TEMPLATES_URL}/${id}/duplicate`, {}, { headers: getHeaders() });
+  const res = await axios.post(
+    `${TEMPLATES_URL}/${id}/duplicate`,
+    {},
+    { headers: getHeaders() }
+  );
+
   return res.data;
 };
 
 export const getAllSources = async (): Promise<TemplateSources> => {
-  const res = await axios.get(`${TEMPLATES_URL}/sources/all`, { headers: getHeaders() });
+  const res = await axios.get(`${TEMPLATES_URL}/sources/all`, {
+    headers: getHeaders(),
+  });
+
   return res.data;
 };
 
@@ -131,10 +158,16 @@ export const fetchActiveHeader = async (
 ): Promise<HeaderFooterTemplate | null> => {
   try {
     const res = await axios.get(`${PUBLIC_URL}/header`, {
-      params: { url_path: urlPath, post_type: postType, slug: slug },
+      params: {
+        url_path: urlPath,
+        post_type: postType,
+        slug,
+      },
     });
-    return res.data.template || null;
-  } catch {
+
+    return res.data?.template || null;
+  } catch (error) {
+    console.error("Failed to fetch active header:", error);
     return null;
   }
 };
@@ -146,10 +179,16 @@ export const fetchActiveFooter = async (
 ): Promise<HeaderFooterTemplate | null> => {
   try {
     const res = await axios.get(`${PUBLIC_URL}/footer`, {
-      params: { url_path: urlPath, post_type: postType, slug: slug },
+      params: {
+        url_path: urlPath,
+        post_type: postType,
+        slug,
+      },
     });
-    return res.data.template || null;
-  } catch {
+
+    return res.data?.template || null;
+  } catch (error) {
+    console.error("Failed to fetch active footer:", error);
     return null;
   }
 };
@@ -158,10 +197,20 @@ export const fetchActiveTemplate = async (
   type: TemplateType,
   urlPath: string,
   postType?: string,
-  slug?: string,
+  slug?: string
 ): Promise<HeaderFooterTemplate | null> => {
-  const res = await axios.get(`${TEMPLATES_URL}/active/${type}`, {
-    params: { url_path: urlPath, post_type: postType, slug },
-  });
-  return res.data.template || null;
+  try {
+    const res = await axios.get(`${TEMPLATES_URL}/active/${type}`, {
+      params: {
+        url_path: urlPath,
+        post_type: postType,
+        slug,
+      },
+    });
+
+    return res.data?.template || null;
+  } catch (error) {
+    console.error(`Failed to fetch active template (${type}):`, error);
+    return null;
+  }
 };
