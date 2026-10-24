@@ -317,6 +317,24 @@ export interface WidgetStyle {
   menuAnimation?: "slide" | "fade" | "scale";
   activeColor?: string;
   hoverUnderline?: boolean;
+
+  // ============================================================
+  // 🆕 ELEMENTOR-STYLE ADDITIONS
+  // ============================================================
+  /** Per-widget Custom CSS. Use `selector` to target this widget. */
+  customCSS?: string;
+  /** Sticky positioning */
+  sticky?: "none" | "top" | "bottom";
+  /** Sticky offset in px */
+  stickyOffset?: number;
+  /** Scroll-triggered animation */
+  scrollAnimation?: string;
+  /** Entrance animation (on page load) */
+  entranceAnimation?: string;
+  /** Entrance animation duration (ms) */
+  entranceAnimationDuration?: number;
+  /** Entrance animation delay (ms) */
+  entranceAnimationDelay?: number;
 }
 
 export interface LinkSettings {
@@ -463,7 +481,6 @@ export interface WidgetSettings {
   dynamicField?: string;
   altText?: string;
 
-  // ✅ Yahan customIcon add kiya gaya hai
   customIcon?: string | null;
 
   previewProductId?: string;
@@ -597,6 +614,16 @@ export interface WidgetSettings {
   continueShoppingButtonText?: string;
   continueShoppingLink?: string;
   emptyOrderText?: string;
+
+
+  // Search Widget Settings
+  searchPlaceholder?: string;
+  searchButtonText?: string;
+  searchLabel?: string;
+
+  // Google Maps Widget Settings
+  mapZoom?: number;
+  mapHeight?: number;
 }
 
 export interface PageWidget {
@@ -668,6 +695,7 @@ export interface CreatePageData {
 }
 
 export type UpdatePageData = Partial<CreatePageData>;
+
 // ============ API FUNCTIONS ============
 
 export const getPages = async (params?: {

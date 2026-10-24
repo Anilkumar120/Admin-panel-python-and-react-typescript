@@ -1,8 +1,12 @@
 
 import os
 import uuid
+import ipaddress
+import socket
 from datetime import datetime, timezone
+from urllib.parse import urljoin, urlparse
 
+import httpx
 from bson import ObjectId
 from gridfs import GridFSBucket
 from gridfs.errors import NoFile
@@ -14,6 +18,7 @@ from fastapi import (
     Depends,
 )
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, HttpUrl
 
 from backend.database.connection import media_collection
 from backend.utils.permissions import require_permission
@@ -25,52 +30,65 @@ router = APIRouter(
 )
 
 
-# Project paths
+# --------------------------------------------------
+# CONFIGURATION
+# --------------------------------------------------
+
 PROJECT_ROOT = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..")
 )
 
-# Retained only for compatibility with previously uploaded local files.
 UPLOAD_DIR = os.path.join(
     PROJECT_ROOT,
     "uploads",
     "media",
 )
 
-
-# MongoDB GridFS storage for persistent media files.
-# Creates media_files.files and media_files.chunks collections.
 media_bucket = GridFSBucket(
     media_collection.database,
     bucket_name="media_files",
 )
 
+MAX_REMOTE_IMAGE_SIZE = 10 * 1024 * 1024
+MAX_IMAGE_REDIRECTS = 5
+
+REMOTE_IMAGE_TIMEOUT = httpx.Timeout(
+    timeout=60.0,
+    connect=10.0,
+    read=60.0,
+    write=20.0,
+    pool=10.0,
+)
 
 ALLOWED_EXTENSIONS = {
-    "jpg",
-    "jpeg",
-    "png",
-    "webp",
-    "gif",
-    "svg",
-    "pdf",
-    "doc",
-    "docx",
-    "xls",
-    "xlsx",
-    "csv",
-    "psd",
+    "jpg", "jpeg", "png", "webp", "gif", "svg",
+    "pdf", "doc", "docx", "xls", "xlsx", "csv", "psd",
+}
+
+REMOTE_IMAGE_TYPES = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "image/avif": "avif",
 }
 
 
+# --------------------------------------------------
+# REQUEST MODELS
+# --------------------------------------------------
+
+class ImportMediaRequest(BaseModel):
+    url: HttpUrl
+
+
+# --------------------------------------------------
+# HELPERS
+# --------------------------------------------------
+
 def get_file_type(extension: str) -> str:
     if extension in {
-        "jpg",
-        "jpeg",
-        "png",
-        "webp",
-        "gif",
-        "svg",
+        "jpg", "jpeg", "png", "webp", "gif", "svg", "avif"
     }:
         return "image"
 
@@ -86,45 +104,7 @@ def get_file_type(extension: str) -> str:
     return "other"
 
 
-def delete_media_file(media: dict) -> None:
-    """
-    Delete a GridFS file, or a legacy local file.
-    """
-
-    gridfs_id = media.get("gridfs_id")
-
-    if gridfs_id:
-        try:
-            media_bucket.delete(
-                ObjectId(str(gridfs_id))
-            )
-        except NoFile:
-            pass
-
-        return
-
-    # Compatibility with records created before GridFS.
-    file_name = media.get("file_name")
-
-    if file_name:
-        file_path = os.path.abspath(
-            os.path.join(UPLOAD_DIR, file_name)
-        )
-
-        # Prevent paths outside the upload directory.
-        if (
-            os.path.commonpath([UPLOAD_DIR, file_path])
-            == os.path.abspath(UPLOAD_DIR)
-            and os.path.isfile(file_path)
-        ):
-            os.remove(file_path)
-
-
 def serialize_media(media: dict) -> dict:
-    """
-    Convert MongoDB ObjectId fields to strings for JSON.
-    """
-
     media["_id"] = str(media["_id"])
 
     if media.get("gridfs_id"):
@@ -134,10 +114,6 @@ def serialize_media(media: dict) -> dict:
 
 
 def stream_gridfs_file(file_stream):
-    """
-    Stream a file in chunks instead of loading it all into memory.
-    """
-
     try:
         while True:
             chunk = file_stream.read(1024 * 1024)
@@ -150,6 +126,110 @@ def stream_gridfs_file(file_stream):
         file_stream.close()
 
 
+def delete_media_file(media: dict) -> None:
+    gridfs_id = media.get("gridfs_id")
+
+    if gridfs_id:
+        try:
+            media_bucket.delete(ObjectId(str(gridfs_id)))
+        except NoFile:
+            pass
+
+        return
+
+    file_name = media.get("file_name")
+
+    if file_name:
+        upload_root = os.path.abspath(UPLOAD_DIR)
+        file_path = os.path.abspath(
+            os.path.join(upload_root, file_name)
+        )
+
+        if (
+            os.path.commonpath([upload_root, file_path]) == upload_root
+            and os.path.isfile(file_path)
+        ):
+            os.remove(file_path)
+
+
+def validate_remote_url(url: str) -> str:
+    """Allow only public HTTP/HTTPS destinations."""
+
+    parsed = urlparse(url)
+
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="A valid public HTTP/HTTPS image URL is required",
+        )
+
+    hostname = parsed.hostname
+
+    try:
+        port = parsed.port or (
+            443 if parsed.scheme == "https" else 80
+        )
+
+        addresses = socket.getaddrinfo(
+            hostname,
+            port,
+            type=socket.SOCK_STREAM,
+        )
+
+        if not addresses:
+            raise ValueError("No IP addresses found")
+
+        for address in addresses:
+            ip = ipaddress.ip_address(address[4][0])
+
+            if not ip.is_global:
+                raise ValueError("Non-public IP address")
+
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Image URL must point to a publicly accessible server"
+            ),
+        )
+
+    return url
+
+
+def detect_image_extension(content: bytes) -> str | None:
+    """Detect supported image formats from binary signatures."""
+
+    if content.startswith(b"\xff\xd8\xff"):
+        return "jpg"
+
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+
+    if content.startswith((b"GIF87a", b"GIF89a")):
+        return "gif"
+
+    if (
+        len(content) >= 12
+        and content[:4] == b"RIFF"
+        and content[8:12] == b"WEBP"
+    ):
+        return "webp"
+
+    if (
+        len(content) >= 12
+        and content[4:8] == b"ftyp"
+        and content[8:12] in (b"avif", b"avis")
+    ):
+        return "avif"
+
+    return None
+
+
 # --------------------------------------------------
 # UPLOAD MEDIA
 # POST /api/media/upload
@@ -157,19 +237,13 @@ def stream_gridfs_file(file_stream):
 
 @router.post(
     "/upload",
-    dependencies=[
-        Depends(require_permission("media.upload"))
-    ],
+    dependencies=[Depends(require_permission("media.upload"))],
 )
-async def upload_media(
-    files: list[UploadFile] = File(...),
-):
+async def upload_media(files: list[UploadFile] = File(...)):
     uploaded = []
 
     for file in files:
-        original_name = (
-            os.path.basename(file.filename or "file")
-        )
+        original_name = os.path.basename(file.filename or "file")
 
         if "." not in original_name:
             await file.close()
@@ -187,12 +261,12 @@ async def upload_media(
                 detail=f"Unsupported file type: {extension}",
             )
 
-        unique_name = (
-            f"{uuid.uuid4().hex}.{extension}"
-        )
+        unique_name = f"{uuid.uuid4().hex}.{extension}"
 
-        content = await file.read()
-        await file.close()
+        try:
+            content = await file.read()
+        finally:
+            await file.close()
 
         if not content:
             raise HTTPException(
@@ -203,15 +277,15 @@ async def upload_media(
         gridfs_id = None
 
         try:
-            # Save file content in MongoDB GridFS.
+            mime_type = (
+                file.content_type or "application/octet-stream"
+            )
+
             gridfs_id = media_bucket.upload_from_stream(
                 unique_name,
                 content,
                 metadata={
-                    "contentType": (
-                        file.content_type
-                        or "application/octet-stream"
-                    ),
+                    "contentType": mime_type,
                     "original_name": original_name,
                 },
             )
@@ -224,10 +298,7 @@ async def upload_media(
                 "title": original_name,
                 "alt_text": "",
                 "description": "",
-                "mime_type": (
-                    file.content_type
-                    or "application/octet-stream"
-                ),
+                "mime_type": mime_type,
                 "file_type": get_file_type(extension),
                 "extension": extension,
                 "file_size": len(content),
@@ -238,22 +309,14 @@ async def upload_media(
                 "updated_at": now,
             }
 
-            result = media_collection.insert_one(
-                media_data
-            )
+            result = media_collection.insert_one(media_data)
 
-            media_data["_id"] = str(
-                result.inserted_id
-            )
-            media_data["gridfs_id"] = str(
-                gridfs_id
-            )
+            media_data["_id"] = str(result.inserted_id)
+            media_data["gridfs_id"] = str(gridfs_id)
 
             uploaded.append(media_data)
 
         except Exception:
-            # Avoid leaving an orphaned GridFS file if
-            # saving its metadata fails.
             if gridfs_id is not None:
                 try:
                     media_bucket.delete(gridfs_id)
@@ -262,7 +325,7 @@ async def upload_media(
 
             raise HTTPException(
                 status_code=500,
-                detail="Media upload failed. Check the backend runtime logs.",
+                detail="Media upload failed. Check backend logs.",
             )
 
     return {
@@ -272,18 +335,222 @@ async def upload_media(
 
 
 # --------------------------------------------------
-# SERVE MEDIA FILE
+# IMPORT REMOTE IMAGE
+# POST /api/media/import-url
+# --------------------------------------------------
+
+@router.post(
+    "/import-url",
+    dependencies=[Depends(require_permission("media.upload"))],
+)
+async def import_media_from_url(payload: ImportMediaRequest):
+    url = validate_remote_url(str(payload.url))
+
+    content = bytearray()
+    final_url = url
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=REMOTE_IMAGE_TIMEOUT,
+            follow_redirects=False,
+            trust_env=False,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (compatible; ProductImageImporter/1.0)"
+                ),
+                "Accept": (
+                    "image/avif,image/webp,image/png,"
+                    "image/jpeg,image/gif,*/*"
+                ),
+            },
+        ) as client:
+
+            for redirect_count in range(MAX_IMAGE_REDIRECTS + 1):
+                # Validate each destination before making a request.
+                final_url = validate_remote_url(final_url)
+
+                async with client.stream(
+                    "GET",
+                    final_url,
+                ) as response:
+
+                    if response.is_redirect:
+                        if redirect_count >= MAX_IMAGE_REDIRECTS:
+                            raise HTTPException(
+                                status_code=400,
+                                detail="Too many image redirects",
+                            )
+
+                        location = response.headers.get("location")
+
+                        if not location:
+                            raise HTTPException(
+                                status_code=400,
+                                detail="Image redirect has no destination",
+                            )
+
+                        final_url = urljoin(final_url, location)
+                        continue
+
+                    if response.status_code >= 400:
+                        raise HTTPException(
+                            status_code=502,
+                            detail=(
+                                "Remote image server returned HTTP "
+                                f"{response.status_code}"
+                            ),
+                        )
+
+                    content_length = response.headers.get(
+                        "content-length"
+                    )
+
+                    if content_length:
+                        try:
+                            if int(content_length) > MAX_REMOTE_IMAGE_SIZE:
+                                raise HTTPException(
+                                    status_code=413,
+                                    detail=(
+                                        "Image exceeds the 10 MB size limit"
+                                    ),
+                                )
+                        except ValueError:
+                            pass
+
+                    async for chunk in response.aiter_bytes():
+                        content.extend(chunk)
+
+                        if len(content) > MAX_REMOTE_IMAGE_SIZE:
+                            raise HTTPException(
+                                status_code=413,
+                                detail=(
+                                    "Image exceeds the 10 MB size limit"
+                                ),
+                            )
+
+                    break
+
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Unable to follow image URL redirects",
+                )
+
+    except HTTPException:
+        raise
+
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "Remote image download timed out. "
+                "Check remote server and backend network connectivity."
+            ),
+        )
+
+    except httpx.HTTPError:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Unable to download the image from the remote server"
+            ),
+        )
+
+    if not content:
+        raise HTTPException(
+            status_code=400,
+            detail="Downloaded image is empty",
+        )
+
+    extension = detect_image_extension(bytes(content))
+
+    if not extension:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Downloaded file is not a supported image. "
+                "Supported formats: JPEG, PNG, WEBP, GIF and AVIF."
+            ),
+        )
+
+    actual_content_type = {
+        "jpg": "image/jpeg",
+        "png": "image/png",
+        "webp": "image/webp",
+        "gif": "image/gif",
+        "avif": "image/avif",
+    }[extension]
+
+    original_name = f"imported-image.{extension}"
+    unique_name = f"{uuid.uuid4().hex}.{extension}"
+    gridfs_id = None
+
+    try:
+        gridfs_id = media_bucket.upload_from_stream(
+            unique_name,
+            bytes(content),
+            metadata={
+                "contentType": actual_content_type,
+                "original_name": original_name,
+                "source_url": url,
+                "final_source_url": final_url,
+            },
+        )
+
+        now = datetime.now(timezone.utc)
+
+        media_data = {
+            "file_name": unique_name,
+            "original_name": original_name,
+            "title": original_name,
+            "alt_text": "",
+            "description": f"Imported from {url}",
+            "mime_type": actual_content_type,
+            "file_type": "image",
+            "extension": extension,
+            "file_size": len(content),
+            "gridfs_id": gridfs_id,
+            "url": f"/api/media/file/{gridfs_id}",
+            "is_deleted": False,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+        result = media_collection.insert_one(media_data)
+
+        media_data["_id"] = str(result.inserted_id)
+        media_data["gridfs_id"] = str(gridfs_id)
+
+        return {
+            "message": "Image imported successfully",
+            "media_id": str(result.inserted_id),
+            "gridfs_id": str(gridfs_id),
+            "url": media_data["url"],
+            "item": media_data,
+        }
+
+    except Exception:
+        if gridfs_id is not None:
+            try:
+                media_bucket.delete(gridfs_id)
+            except Exception:
+                pass
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to save imported image. Check backend logs."
+            ),
+        )
+
+
+# --------------------------------------------------
+# SERVE GRIDFS FILE
 # GET /api/media/file/{file_id}
 # --------------------------------------------------
 
 @router.get("/file/{file_id}")
 async def get_media_file(file_id: str):
-    """
-    File URLs are directly accessible to browser image elements.
-    Access control for uploading and managing media remains enforced
-    by the corresponding management endpoints.
-    """
-
     if not ObjectId.is_valid(file_id):
         raise HTTPException(
             status_code=400,
@@ -306,23 +573,20 @@ async def get_media_file(file_id: str):
         )
 
     metadata = file_stream.metadata or {}
-
     content_type = metadata.get(
         "contentType",
         "application/octet-stream",
     )
 
-    headers = {
-        "Content-Disposition": (
-            f'inline; filename="{file_stream.filename}"'
-        ),
-        "X-Content-Type-Options": "nosniff",
-    }
-
     return StreamingResponse(
         stream_gridfs_file(file_stream),
         media_type=content_type,
-        headers=headers,
+        headers={
+            "Content-Disposition": (
+                f'inline; filename="{file_stream.filename}"'
+            ),
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
@@ -333,9 +597,7 @@ async def get_media_file(file_id: str):
 
 @router.get(
     "/",
-    dependencies=[
-        Depends(require_permission("media.view"))
-    ],
+    dependencies=[Depends(require_permission("media.view"))],
 )
 async def get_media(
     search: str = "",
@@ -356,18 +618,8 @@ async def get_media(
 
     if search:
         query["$or"] = [
-            {
-                "original_name": {
-                    "$regex": search,
-                    "$options": "i",
-                }
-            },
-            {
-                "title": {
-                    "$regex": search,
-                    "$options": "i",
-                }
-            },
+            {"original_name": {"$regex": search, "$options": "i"}},
+            {"title": {"$regex": search, "$options": "i"}},
         ]
 
     if file_type:
@@ -383,10 +635,59 @@ async def get_media(
     )
 
     return {
-        "items": [
-            serialize_media(item)
-            for item in items
-        ],
+        "items": [serialize_media(item) for item in items],
+        "total": total,
+        "page": page,
+        "limit": limit,
+    }
+
+
+# --------------------------------------------------
+# GET MEDIA TRASH
+# GET /api/media/trash
+# --------------------------------------------------
+
+@router.get(
+    "/trash",
+    dependencies=[Depends(require_permission("media.view"))],
+)
+async def get_media_trash(
+    search: str = "",
+    file_type: str = "",
+    page: int = 1,
+    limit: int = 50,
+):
+    if page < 1 or limit < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Page and limit must be positive",
+        )
+
+    limit = min(limit, 100)
+    skip = (page - 1) * limit
+
+    query = {"is_deleted": True}
+
+    if search:
+        query["$or"] = [
+            {"original_name": {"$regex": search, "$options": "i"}},
+            {"title": {"$regex": search, "$options": "i"}},
+        ]
+
+    if file_type:
+        query["file_type"] = file_type
+
+    total = media_collection.count_documents(query)
+
+    items = list(
+        media_collection.find(query)
+        .sort("updated_at", -1)
+        .skip(skip)
+        .limit(limit)
+    )
+
+    return {
+        "items": [serialize_media(item) for item in items],
         "total": total,
         "page": page,
         "limit": limit,
@@ -400,13 +701,9 @@ async def get_media(
 
 @router.post(
     "/bulk-delete",
-    dependencies=[
-        Depends(require_permission("media.delete"))
-    ],
+    dependencies=[Depends(require_permission("media.delete"))],
 )
-async def bulk_delete_media(
-    media_ids: list[str],
-):
+async def bulk_delete_media(media_ids: list[str]):
     object_ids = [
         ObjectId(media_id)
         for media_id in media_ids
@@ -436,86 +733,15 @@ async def bulk_delete_media(
 
 
 # --------------------------------------------------
-# GET TRASH
-# GET /api/media/trash
-# --------------------------------------------------
-
-@router.get(
-    "/trash",
-    dependencies=[
-        Depends(require_permission("media.view"))
-    ],
-)
-async def get_media_trash(
-    search: str = "",
-    file_type: str = "",
-    page: int = 1,
-    limit: int = 50,
-):
-    if page < 1 or limit < 1:
-        raise HTTPException(
-            status_code=400,
-            detail="Page and limit must be positive",
-        )
-
-    limit = min(limit, 100)
-    skip = (page - 1) * limit
-
-    query = {"is_deleted": True}
-
-    if search:
-        query["$or"] = [
-            {
-                "original_name": {
-                    "$regex": search,
-                    "$options": "i",
-                }
-            },
-            {
-                "title": {
-                    "$regex": search,
-                    "$options": "i",
-                }
-            },
-        ]
-
-    if file_type:
-        query["file_type"] = file_type
-
-    total = media_collection.count_documents(query)
-
-    items = list(
-        media_collection.find(query)
-        .sort("updated_at", -1)
-        .skip(skip)
-        .limit(limit)
-    )
-
-    return {
-        "items": [
-            serialize_media(item)
-            for item in items
-        ],
-        "total": total,
-        "page": page,
-        "limit": limit,
-    }
-
-
-# --------------------------------------------------
 # BULK RESTORE
 # POST /api/media/bulk-restore
 # --------------------------------------------------
 
 @router.post(
     "/bulk-restore",
-    dependencies=[
-        Depends(require_permission("media.edit"))
-    ],
+    dependencies=[Depends(require_permission("media.edit"))],
 )
-async def bulk_restore_media(
-    media_ids: list[str],
-):
+async def bulk_restore_media(media_ids: list[str]):
     object_ids = [
         ObjectId(media_id)
         for media_id in media_ids
@@ -554,13 +780,9 @@ async def bulk_restore_media(
 
 @router.post(
     "/bulk-permanent-delete",
-    dependencies=[
-        Depends(require_permission("media.delete"))
-    ],
+    dependencies=[Depends(require_permission("media.delete"))],
 )
-async def bulk_permanent_delete_media(
-    media_ids: list[str],
-):
+async def bulk_permanent_delete_media(media_ids: list[str]):
     object_ids = [
         ObjectId(media_id)
         for media_id in media_ids
@@ -609,15 +831,11 @@ async def bulk_permanent_delete_media(
 
 @router.delete(
     "/empty-trash",
-    dependencies=[
-        Depends(require_permission("media.delete"))
-    ],
+    dependencies=[Depends(require_permission("media.delete"))],
 )
 async def empty_media_trash():
     media_items = list(
-        media_collection.find(
-            {"is_deleted": True}
-        )
+        media_collection.find({"is_deleted": True})
     )
 
     deleted_count = 0
@@ -647,13 +865,9 @@ async def empty_media_trash():
 
 @router.get(
     "/{media_id}",
-    dependencies=[
-        Depends(require_permission("media.view"))
-    ],
+    dependencies=[Depends(require_permission("media.view"))],
 )
-async def get_media_by_id(
-    media_id: str,
-):
+async def get_media_by_id(media_id: str):
     if not ObjectId.is_valid(media_id):
         raise HTTPException(
             status_code=400,
@@ -683,9 +897,7 @@ async def get_media_by_id(
 
 @router.put(
     "/{media_id}",
-    dependencies=[
-        Depends(require_permission("media.edit"))
-    ],
+    dependencies=[Depends(require_permission("media.edit"))],
 )
 async def update_media(
     media_id: str,
@@ -720,9 +932,7 @@ async def update_media(
             detail="Media not found",
         )
 
-    return {
-        "message": "Media updated successfully"
-    }
+    return {"message": "Media updated successfully"}
 
 
 # --------------------------------------------------
@@ -732,13 +942,9 @@ async def update_media(
 
 @router.delete(
     "/{media_id}",
-    dependencies=[
-        Depends(require_permission("media.delete"))
-    ],
+    dependencies=[Depends(require_permission("media.delete"))],
 )
-async def delete_media(
-    media_id: str,
-):
+async def delete_media(media_id: str):
     if not ObjectId.is_valid(media_id):
         raise HTTPException(
             status_code=400,
@@ -764,9 +970,7 @@ async def delete_media(
             detail="Media not found",
         )
 
-    return {
-        "message": "Media moved to trash"
-    }
+    return {"message": "Media moved to trash"}
 
 
 # --------------------------------------------------
@@ -776,13 +980,9 @@ async def delete_media(
 
 @router.post(
     "/{media_id}/restore",
-    dependencies=[
-        Depends(require_permission("media.edit"))
-    ],
+    dependencies=[Depends(require_permission("media.edit"))],
 )
-async def restore_media(
-    media_id: str,
-):
+async def restore_media(media_id: str):
     if not ObjectId.is_valid(media_id):
         raise HTTPException(
             status_code=400,
@@ -808,9 +1008,7 @@ async def restore_media(
             detail="Media not found in trash",
         )
 
-    return {
-        "message": "Media restored successfully"
-    }
+    return {"message": "Media restored successfully"}
 
 
 # --------------------------------------------------
@@ -820,13 +1018,9 @@ async def restore_media(
 
 @router.delete(
     "/{media_id}/permanent",
-    dependencies=[
-        Depends(require_permission("media.delete"))
-    ],
+    dependencies=[Depends(require_permission("media.delete"))],
 )
-async def permanent_delete_media(
-    media_id: str,
-):
+async def permanent_delete_media(media_id: str):
     if not ObjectId.is_valid(media_id):
         raise HTTPException(
             status_code=400,
@@ -861,6 +1055,4 @@ async def permanent_delete_media(
             detail="Media not found in trash",
         )
 
-    return {
-        "message": "Media permanently deleted"
-    }
+    return {"message": "Media permanently deleted"}

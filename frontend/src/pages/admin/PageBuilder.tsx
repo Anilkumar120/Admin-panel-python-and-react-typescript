@@ -18,6 +18,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import axios from "axios";
 import {
   createPage,
   getPage,
@@ -27,6 +28,7 @@ import {
   updateGlobalStyles,
   convertContentToBuilder,
 } from "../../api/pageBuilder";
+import { API_URL } from "../../api/config";
 import type { TemplateType } from "../../api/templates";
 import type {
   PageWidget,
@@ -580,9 +582,7 @@ const CanvasDropZone = ({
   return (
     <div
       ref={setNodeRef}
-      className={`canvas-drop-zone ${showHighlight ? "active" : ""} ${
-        isEmpty ? "empty" : "has-content"
-      }`}
+      className={`canvas-drop-zone ${showHighlight ? "active" : ""} ${isEmpty ? "empty" : "has-content"}`}
     >
       {isEmpty && (
         <div className="canvas-empty-state">
@@ -753,7 +753,6 @@ const PageBuilder = ({
   });
   const [device, setDevice] = useState<ResponsiveDevice>("desktop");
 
-  // ✅ FIX: Default tab changed to "widgets"
   const [leftPanelMode, setLeftPanelMode] = useState<
     "settings" | "widgets" | "globals" | "conditions"
   >("widgets");
@@ -771,6 +770,21 @@ const PageBuilder = ({
   const [history, setHistory] = useState<PageWidget[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 🆕 CLIPBOARD STATE for copy/paste
+  const [clipboard, setClipboard] = useState<PageWidget | null>(null);
+  const [clipboardStyle, setClipboardStyle] = useState<WidgetStyle | null>(null);
+
+  // 🆕 CONTEXT MENU STATE
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    widgetId: string;
+  } | null>(null);
+
+  // 🆕 SAVE AS TEMPLATE DIALOG
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
 
   const layoutRef = useRef<PageWidget[]>(layout);
 
@@ -1146,6 +1160,111 @@ const PageBuilder = ({
     [layout, findWidget, updateWidget, pushHistory],
   );
 
+  // 🆕 ELEMENT ACTIONS - Copy widget
+  const handleCopy = useCallback(() => {
+    if (!selectedId) return;
+    const widget = findWidget(layout, selectedId);
+    if (widget) {
+      setClipboard(JSON.parse(JSON.stringify(widget)));
+      setMessage("✅ Element copied. Press Ctrl+V to paste.");
+      setTimeout(() => setMessage(""), 2000);
+    }
+  }, [selectedId, layout, findWidget]);
+
+  // 🆕 ELEMENT ACTIONS - Paste widget
+  const handlePaste = useCallback(() => {
+    if (!clipboard) {
+      setMessage("Nothing to paste.");
+      return;
+    }
+    const clone = JSON.parse(JSON.stringify(clipboard)) as PageWidget;
+    clone.id = createId();
+    if (clone.children) {
+      clone.children = clone.children.map((c) => ({ ...c, id: createId() }));
+    }
+    const newLayout = [...layout, clone];
+    setLayout(newLayout);
+    pushHistory(newLayout);
+    setSelectedId(clone.id);
+    setMessage("✅ Element pasted.");
+    setTimeout(() => setMessage(""), 2000);
+  }, [clipboard, layout, pushHistory]);
+
+  // 🆕 ELEMENT ACTIONS - Copy style only
+  const handleCopyStyle = useCallback(() => {
+    if (!selectedId) return;
+    const widget = findWidget(layout, selectedId);
+    if (widget) {
+      setClipboardStyle(JSON.parse(JSON.stringify(widget.style)));
+      setMessage("✅ Style copied. Select another element and paste style.");
+      setTimeout(() => setMessage(""), 2000);
+    }
+  }, [selectedId, layout, findWidget]);
+
+  // 🆕 ELEMENT ACTIONS - Paste style to selected
+  const handlePasteStyle = useCallback(() => {
+    if (!selectedId || !clipboardStyle) return;
+    const current = findWidget(layout, selectedId);
+    if (!current) return;
+    const newLayout = updateWidget(layout, selectedId, {
+      style: { ...clipboardStyle },
+    });
+    setLayout(newLayout);
+    pushHistory(newLayout);
+    setMessage("✅ Style pasted.");
+    setTimeout(() => setMessage(""), 2000);
+  }, [selectedId, clipboardStyle, layout, findWidget, updateWidget, pushHistory]);
+
+  // 🆕 Right-click handler
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, widgetId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setSelectedId(widgetId);
+      setContextMenu({ x: e.clientX, y: e.clientY, widgetId });
+    },
+    [],
+  );
+
+  // 🆕 Close context menu on click
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [contextMenu]);
+
+  // 🆕 SAVE SELECTED AS TEMPLATE
+  const handleSaveAsTemplate = useCallback(async () => {
+    if (!selectedId || !templateName.trim()) return;
+    const widget = findWidget(layout, selectedId);
+    if (!widget) return;
+    try {
+      const token = localStorage.getItem("access_token");
+      await axios.post(
+        `${API_URL}/api/templates/save`,
+        {
+          name: templateName.trim(),
+          type: "section",
+          widget: JSON.parse(JSON.stringify(widget)),
+          page_id: pageId || "",
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      setMessage("✅ Template saved to library!");
+      setShowSaveTemplate(false);
+      setTemplateName("");
+    } catch (err) {
+      console.error(err);
+      setMessage("⚠️ Unable to save as template. (Endpoint may not exist yet)");
+      setShowSaveTemplate(false);
+    }
+  }, [selectedId, templateName, layout, findWidget, pageId]);
+
   const handleCanvasDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
@@ -1184,7 +1303,6 @@ const PageBuilder = ({
         return;
       }
 
-      // ============ INLINE DROP HANDLING ============
       if (overId.startsWith("inline-")) {
         const overData = over.data.current;
 
@@ -1196,7 +1314,6 @@ const PageBuilder = ({
           return;
         }
 
-        // Existing widget moved to inline position
         if (activeId && !activeId.startsWith("library-")) {
           const pId = overData?.parentId ?? null;
           const insertIndex = overData?.index ?? 0;
@@ -1533,7 +1650,6 @@ const PageBuilder = ({
               }${urlPostType ? `&postType=${urlPostType}` : ""}`,
               { replace: true },
             );
-
           }
         }
         setStatus(pageData.status);
@@ -1555,30 +1671,81 @@ const PageBuilder = ({
     ],
   );
 
+  // 🆕 EXTENDED KEYBOARD SHORTCUTS
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable;
+
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         void handleSave(false);
+        return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        if (isInput) return;
         e.preventDefault();
         undo();
+        return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && e.shiftKey) {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        (e.key === "y" || (e.key === "z" && e.shiftKey))
+      ) {
+        if (isInput) return;
         e.preventDefault();
         redo();
+        return;
       }
-      if (e.key === "Delete" && selectedId && !isPreview) {
-        const target = e.target as HTMLElement;
-        if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
-          handleDelete(selectedId);
-        }
+      if (e.key === "Delete" && selectedId && !isPreview && !isInput) {
+        handleDelete(selectedId);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "c" && !isInput) {
+        e.preventDefault();
+        handleCopy();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "v" && !isInput) {
+        e.preventDefault();
+        handlePaste();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === "c" && !isInput) {
+        e.preventDefault();
+        handleCopyStyle();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === "v" && !isInput) {
+        e.preventDefault();
+        handlePasteStyle();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "d" && !isInput) {
+        e.preventDefault();
+        if (selectedId) handleDuplicate(selectedId);
+        return;
+      }
+      if (e.key === "Escape") {
+        setSelectedId(null);
+        setContextMenu(null);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "p" && !isInput) {
+        e.preventDefault();
+        setIsPreview((v) => !v);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleSave, undo, redo, selectedId, isPreview, handleDelete]);
+  }, [
+    handleSave, undo, redo, selectedId, isPreview, handleDelete,
+    handleCopy, handlePaste, handleCopyStyle, handlePasteStyle,
+    handleDuplicate,
+  ]);
 
   if (loading) {
     return (
@@ -1719,7 +1886,7 @@ const PageBuilder = ({
             type="button"
             onClick={redo}
             disabled={historyIndex >= history.length - 1}
-            title="Redo (Ctrl+Shift+Z)"
+            title="Redo (Ctrl+Y)"
           >
             ↷
           </button>
@@ -1755,7 +1922,7 @@ const PageBuilder = ({
             type="button"
             className={isPreview ? "active" : ""}
             onClick={() => setIsPreview(!isPreview)}
-            title="Toggle Preview"
+            title="Toggle Preview (Ctrl+P)"
           >
             {isPreview ? "✎" : "👁"}
           </button>
@@ -1951,6 +2118,7 @@ const PageBuilder = ({
                         device={device}
                         isPreview={isPreview}
                         activeDragType={activeDragType}
+                        onContextMenu={handleContextMenu}
                       />
                     ))}
                   </SortableContext>
@@ -2032,6 +2200,185 @@ const PageBuilder = ({
           </div>
         )}
       </DndContext>
+
+      {/* 🆕 CONTEXT MENU */}
+      {contextMenu && (
+        <div
+          className="builder-context-menu"
+          style={{
+            position: "fixed",
+            left: contextMenu.x,
+            top: contextMenu.y,
+            zIndex: 100000,
+            background: "#fff",
+            border: "1px solid #d9dee7",
+            borderRadius: 6,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+            minWidth: 220,
+            padding: "6px 0",
+            fontSize: 13,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="ctx-menu-item"
+            onClick={() => {
+              handleCopy();
+              setContextMenu(null);
+            }}
+          >
+            <span>📋 Copy</span>
+            <kbd>Ctrl+C</kbd>
+          </button>
+          <button
+            type="button"
+            className="ctx-menu-item"
+            onClick={() => {
+              handlePaste();
+              setContextMenu(null);
+            }}
+            disabled={!clipboard}
+          >
+            <span>📌 Paste</span>
+            <kbd>Ctrl+V</kbd>
+          </button>
+          <button
+            type="button"
+            className="ctx-menu-item"
+            onClick={() => {
+              handleDuplicate(contextMenu.widgetId);
+              setContextMenu(null);
+            }}
+          >
+            <span>⧉ Duplicate</span>
+            <kbd>Ctrl+D</kbd>
+          </button>
+          <div className="ctx-menu-divider" />
+          <button
+            type="button"
+            className="ctx-menu-item"
+            onClick={() => {
+              handleCopyStyle();
+              setContextMenu(null);
+            }}
+          >
+            <span>🎨 Copy Style</span>
+            <kbd>Ctrl+Alt+C</kbd>
+          </button>
+          <button
+            type="button"
+            className="ctx-menu-item"
+            onClick={() => {
+              handlePasteStyle();
+              setContextMenu(null);
+            }}
+            disabled={!clipboardStyle}
+          >
+            <span>🖌️ Paste Style</span>
+            <kbd>Ctrl+Alt+V</kbd>
+          </button>
+          <div className="ctx-menu-divider" />
+          <button
+            type="button"
+            className="ctx-menu-item"
+            onClick={() => {
+              setShowSaveTemplate(true);
+              setTemplateName("");
+              setContextMenu(null);
+            }}
+          >
+            <span>💾 Save as Template</span>
+          </button>
+          <div className="ctx-menu-divider" />
+          <button
+            type="button"
+            className="ctx-menu-item danger"
+            onClick={() => {
+              handleDelete(contextMenu.widgetId);
+              setContextMenu(null);
+            }}
+          >
+            <span>🗑️ Delete</span>
+            <kbd>Del</kbd>
+          </button>
+        </div>
+      )}
+
+      {/* 🆕 SAVE AS TEMPLATE MODAL */}
+      {showSaveTemplate && (
+        <div
+          className="structure-popup-overlay"
+          onClick={() => setShowSaveTemplate(false)}
+        >
+          <div
+            className="structure-popup"
+            style={{ maxWidth: 380 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="structure-popup-header">
+              <h3>Save as Template</h3>
+              <button
+                type="button"
+                className="structure-popup-close"
+                onClick={() => setShowSaveTemplate(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <label className="setting-field">
+                <span>Template Name</span>
+                <input
+                  type="text"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="e.g., Hero Section"
+                  autoFocus
+                />
+              </label>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  justifyContent: "flex-end",
+                  marginTop: 16,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setShowSaveTemplate(false)}
+                  style={{
+                    padding: "8px 16px",
+                    border: "1px solid #d9dee7",
+                    borderRadius: 5,
+                    background: "#fff",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveAsTemplate()}
+                  disabled={!templateName.trim()}
+                  style={{
+                    padding: "8px 16px",
+                    border: "none",
+                    borderRadius: 5,
+                    background: "#93003c",
+                    color: "#fff",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  Save Template
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

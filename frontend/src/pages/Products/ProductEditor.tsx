@@ -47,6 +47,61 @@ type TermOptions = {
 
 const safeList = <T,>(value: T[] | undefined | null): T[] => value ?? [];
 
+/* FIX: Convert FastAPI validation errors into readable strings. */
+const getProductErrorMessage = (error: unknown): string => {
+  if (!axios.isAxiosError(error)) {
+    return "Unable to save this product. Please try again.";
+  }
+
+  const detail = error.response?.data?.detail;
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item: unknown) => {
+        if (typeof item === "string") {
+          return item;
+        }
+
+        if (item && typeof item === "object") {
+          const validation = item as {
+            loc?: unknown[];
+            msg?: unknown;
+          };
+
+          const location = Array.isArray(validation.loc)
+            ? validation.loc.map(String).join(".")
+            : "";
+
+          const message =
+            typeof validation.msg === "string"
+              ? validation.msg
+              : JSON.stringify(item);
+
+          return location ? `${location}: ${message}` : message;
+        }
+
+        return String(item);
+      })
+      .join("; ");
+  }
+
+  if (detail && typeof detail === "object") {
+    const validation = detail as { msg?: unknown };
+
+    if (typeof validation.msg === "string") {
+      return validation.msg;
+    }
+  }
+
+  return error.response?.status
+    ? `Unable to save product. HTTP ${error.response.status}.`
+    : "Unable to save this product. Please try again.";
+};
+
 const emptyDraft = (): ProductDraft => ({
   name: "",
   description: "",
@@ -106,18 +161,20 @@ const TABS: { id: ProductTab; label: string }[] = [
 const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
   const navigate = useNavigate();
   const { productId } = useParams();
+
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [productBase, setProductBase] = useState("products");
   const [featured, setFeatured] = useState<PickedMedia | null>(null);
-  const [mediaPicker, setMediaPicker] = useState<"featured" | "gallery" | null>(
-    null,
-  );
+  const [mediaPicker, setMediaPicker] = useState<
+    "featured" | "gallery" | null
+  >(null);
   const [tab, setTab] = useState<ProductTab>("general");
   const [loading, setLoading] = useState(edit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [termOptions, setTermOptions] = useState<TermOptions>(emptyTermOptions);
+  const [termOptions, setTermOptions] =
+    useState<TermOptions>(emptyTermOptions);
 
   const update = <K extends keyof ProductDraft>(
     key: K,
@@ -126,7 +183,9 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
 
   useEffect(() => {
     getPublicPermalinkSettings()
-      .then((settings) => setProductBase(settings.product_base || "products"))
+      .then((settings) =>
+        setProductBase(settings.product_base || "products"),
+      )
       .catch((loadError) => {
         console.error("PRODUCT PERMALINK SETTINGS ERROR:", loadError);
       });
@@ -134,6 +193,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
 
   useEffect(() => {
     let active = true;
+
     const token = localStorage.getItem("access_token");
     const headers = { Authorization: `Bearer ${token || ""}` };
 
@@ -141,10 +201,10 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
       (["categories", "tags", "brands", "attributes"] as const).map(
         async (type): Promise<[keyof TermOptions, string[]]> => {
           try {
-            const response = await axios.get<{ terms: { name: string }[] }>(
-              `${API_URL}/api/product-taxonomies/${type}`,
-              { headers },
-            );
+            const response = await axios.get<{
+              terms: { name: string }[];
+            }>(`${API_URL}/api/product-taxonomies/${type}`, { headers });
+
             return [
               type,
               safeList(response.data?.terms).map((term) => term.name),
@@ -157,10 +217,13 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
       ),
     ).then((entries) => {
       if (!active) return;
+
       const merged: TermOptions = emptyTermOptions();
+
       for (const [type, list] of entries) {
         merged[type] = list;
       }
+
       setTermOptions(merged);
     });
 
@@ -171,6 +234,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
 
   useEffect(() => {
     if (!edit || !productId) return;
+
     let active = true;
 
     getProduct(productId)
@@ -192,9 +256,11 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
           cross_sells: safeList(product.cross_sells),
           regular_price: product.regular_price ?? product.price,
         });
+
         setSlugManuallyEdited(false);
 
         const imageUrl = product.image || "";
+
         if (imageUrl) {
           setFeatured({
             id: product.media_id || "",
@@ -208,7 +274,10 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
       })
       .catch((loadError) => {
         console.error("PRODUCT LOAD ERROR:", loadError);
-        if (active) setError("Unable to load product. Please try again.");
+
+        if (active) {
+          setError("Unable to load product. Please try again.");
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -221,6 +290,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
 
   const handleMediaSelect = (selection: PickedMedia | PickedMedia[]) => {
     const media = Array.isArray(selection) ? selection : [selection];
+
     if (mediaPicker === "featured") {
       setFeatured(media[0] || null);
     } else {
@@ -232,21 +302,27 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
           alt: item.alt,
         })),
       ];
+
       const seen = new Set<string>();
+
       update(
         "gallery",
         combined.filter((item) => {
           if (!item.media_id) return true;
           if (seen.has(item.media_id)) return false;
+
           seen.add(item.media_id);
           return true;
         }),
       );
     }
+
     setMediaPicker(null);
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
     setError("");
     setSaving(true);
@@ -285,12 +361,13 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
           productData,
         );
       }
+
       navigate("/admin/products");
-    } catch (saveError: any) {
+    } catch (saveError: unknown) {
       console.error("PRODUCT SAVE ERROR:", saveError);
-      setError(
-        saveError.response?.data?.detail || "Unable to save this product.",
-      );
+
+      /* FIX: React now receives a string instead of an error object. */
+      setError(getProductErrorMessage(saveError));
     } finally {
       setSaving(false);
     }
@@ -323,7 +400,9 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                 ? undefined
                 : Number(event.target.value)
               : event.target.value;
+
           update(key, value as ProductDraft[typeof key]);
+
           if (key === "name" && !slugManuallyEdited) {
             update(
               "slug",
@@ -334,7 +413,10 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                 .replace(/^-+|-+$/g, ""),
             );
           }
-          if (key === "slug") setSlugManuallyEdited(Boolean(value));
+
+          if (key === "slug") {
+            setSlugManuallyEdited(Boolean(value));
+          }
         }}
       />
     </label>
@@ -372,20 +454,25 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
               required: true,
               placeholder: "Product name",
             })}
+
             {field("Slug", "slug", {
               placeholder: "Generated from product name if left empty",
             })}
+
             {draft.slug && (
               <small className="product-editor-permalink">
                 {window.location.origin}/{productBase}/{draft.slug}
               </small>
             )}
+
             <label className="product-editor-field">
               <span>Full description</span>
               <textarea
                 rows={6}
                 value={draft.description}
-                onChange={(event) => update("description", event.target.value)}
+                onChange={(event) =>
+                  update("description", event.target.value)
+                }
                 placeholder="Describe the product"
               />
             </label>
@@ -429,36 +516,43 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                         <option value="external">External / affiliate</option>
                       </select>
                     </label>
+
                     {field("Regular price (₹)", "regular_price", {
                       type: "number",
                       min: 0,
                       step: 0.01,
                     })}
+
                     {field("Sale price (₹)", "sale_price", {
                       type: "number",
                       min: 0,
                       step: 0.01,
                     })}
                   </div>
+
                   <div className="product-editor-row">
                     {field("Sale starts", "sale_start", {
                       type: "datetime-local",
                     })}
+
                     {field("Sale ends", "sale_end", {
                       type: "datetime-local",
                     })}
+
                     {field("Purchase cost (admin only)", "purchase_cost", {
                       type: "number",
                       min: 0,
                       step: 0.01,
                     })}
                   </div>
+
                   {draft.product_type === "external" && (
                     <div className="product-editor-row">
                       {field("Product URL", "external_url", {
                         type: "url",
                         placeholder: "https://",
                       })}
+
                       {field("Button text", "button_text", {
                         placeholder: "Buy product",
                       })}
@@ -472,11 +566,13 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                   <div className="product-editor-row">
                     {field("SKU", "sku")}
                     {field("Barcode (EAN / UPC / ISBN)", "barcode")}
+
                     {field("Stock quantity", "quantity", {
                       type: "number",
                       min: 0,
                     })}
                   </div>
+
                   <div className="product-editor-row">
                     <label className="product-editor-field">
                       <span>Stock status</span>
@@ -494,23 +590,28 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                         <option value="backorder">On backorder</option>
                       </select>
                     </label>
+
                     {field("Low stock threshold", "low_stock_threshold", {
                       type: "number",
                       min: 0,
                     })}
+
                     {field("Minimum quantity", "min_quantity", {
                       type: "number",
                       min: 1,
                     })}
+
                     {field("Maximum quantity (0 = unlimited)", "max_quantity", {
                       type: "number",
                       min: 0,
                     })}
+
                     {field("Quantity step", "quantity_step", {
                       type: "number",
                       min: 1,
                     })}
                   </div>
+
                   <div className="product-editor-checks">
                     {(
                       [
@@ -542,6 +643,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                       min: 0,
                       step: 0.01,
                     })}
+
                     {(["length", "width", "height"] as const).map(
                       (dimension) => (
                         <label className="product-editor-field" key={dimension}>
@@ -566,8 +668,10 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                         </label>
                       ),
                     )}
+
                     {field("Shipping class", "shipping_class")}
                   </div>
+
                   <div className="product-editor-checks">
                     <label>
                       <input
@@ -579,6 +683,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                       />
                       Virtual product
                     </label>
+
                     <label>
                       <input
                         type="checkbox"
@@ -590,13 +695,14 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                       Downloadable product
                     </label>
                   </div>
+
                   {Boolean(draft.downloadable) && (
                     <div className="product-editor-row">
-                      {field(
-                        "Download limit (0 = unlimited)",
-                        "download_limit",
-                        { type: "number", min: 0 },
-                      )}
+                      {field("Download limit (0 = unlimited)", "download_limit", {
+                        type: "number",
+                        min: 0,
+                      })}
+
                       {field(
                         "Download expiry (days, 0 = never)",
                         "download_expiry",
@@ -625,6 +731,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                       placeholder="Product IDs"
                     />
                   </label>
+
                   <label className="product-editor-field">
                     <span>Cross-sell product IDs (comma separated)</span>
                     <input
@@ -641,6 +748,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                       placeholder="Product IDs"
                     />
                   </label>
+
                   <small>
                     Enter product IDs for related, upsell, and cross-sell
                     recommendations.
@@ -671,6 +779,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                           )
                         }
                       />
+
                       <input
                         aria-label="Attribute values"
                         placeholder="Values, comma separated"
@@ -692,6 +801,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                           )
                         }
                       />
+
                       <label>
                         <input
                           type="checkbox"
@@ -709,6 +819,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                         />
                         Visible
                       </label>
+
                       <label>
                         <input
                           type="checkbox"
@@ -729,6 +840,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                         />
                         Used for variations
                       </label>
+
                       <button
                         type="button"
                         onClick={() =>
@@ -744,6 +856,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                       </button>
                     </div>
                   ))}
+
                   <button
                     type="button"
                     className="secondary-button"
@@ -771,6 +884,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                       Choose Variable product above to configure variations.
                     </p>
                   )}
+
                   {draft.product_type === "variable" &&
                     safeList(draft.variations).map((variation, index) => (
                       <div className="product-editor-variation" key={index}>
@@ -788,6 +902,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                             )
                           }
                         />
+
                         <input
                           placeholder="Attributes (e.g. Color=Blue)"
                           value={Object.entries(variation.attributes || {})
@@ -800,6 +915,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                                 .map((part) => part.trim().split("="))
                                 .filter((part) => part.length === 2),
                             );
+
                             update(
                               "variations",
                               safeList(draft.variations).map((item, i) =>
@@ -808,6 +924,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                             );
                           }}
                         />
+
                         <input
                           aria-label="Variation price"
                           type="number"
@@ -829,6 +946,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                             )
                           }
                         />
+
                         <input
                           aria-label="Variation stock"
                           type="number"
@@ -849,6 +967,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                             )
                           }
                         />
+
                         <button
                           type="button"
                           onClick={() =>
@@ -864,6 +983,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                         </button>
                       </div>
                     ))}
+
                   {draft.product_type === "variable" && (
                     <button
                       type="button"
@@ -899,10 +1019,12 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                       }
                     />
                   </label>
+
                   <div className="product-editor-row">
                     {field("Menu order", "menu_order", { type: "number" })}
                     {field("Tax class", "tax_class")}
                   </div>
+
                   <label className="product-editor-checks">
                     <input
                       type="checkbox"
@@ -930,13 +1052,18 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
           </label>
 
           <div className="product-editor-footer-actions">
-            <button type="submit" className="primary-button" disabled={saving}>
+            <button
+              type="submit"
+              className="primary-button"
+              disabled={saving}
+            >
               {saving
                 ? "Saving..."
                 : edit
                   ? "Update Product"
                   : "Publish Product"}
             </button>
+
             <button
               type="button"
               className="secondary-button"
@@ -951,6 +1078,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
         <aside className="product-editor-sidebar">
           <section className="product-editor-panel">
             <h2>Publish</h2>
+
             <label className="product-editor-field">
               <span>Status</span>
               <select
@@ -964,6 +1092,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                 <option value="private">Private</option>
               </select>
             </label>
+
             <label className="product-editor-field">
               <span>Catalog visibility</span>
               <select
@@ -981,18 +1110,22 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                 <option value="hidden">Hidden</option>
               </select>
             </label>
+
             <label className="product-editor-field">
               <span>Publish date</span>
               <input
                 type="datetime-local"
                 value={draft.publish_date || ""}
-                onChange={(event) => update("publish_date", event.target.value)}
+                onChange={(event) =>
+                  update("publish_date", event.target.value)
+                }
               />
             </label>
           </section>
 
           <section className="product-editor-panel">
             <h2>Product image</h2>
+
             {featured && (
               <img
                 className="product-featured-preview"
@@ -1000,6 +1133,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                 alt={featured.alt}
               />
             )}
+
             <button
               type="button"
               className="secondary-button"
@@ -1007,6 +1141,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
             >
               {featured ? "Replace image" : "Set product image"}
             </button>
+
             {featured && (
               <button
                 type="button"
@@ -1020,17 +1155,21 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
 
           <section className="product-editor-panel">
             <h2>Product gallery</h2>
+
             <div className="product-gallery-preview">
               {safeList(draft.gallery).map((image, index) => (
                 <div key={`${image.media_id || image.url}-${index}`}>
                   <img src={image.url} alt={image.alt || ""} />
+
                   <button
                     type="button"
                     aria-label="Remove gallery image"
                     onClick={() =>
                       update(
                         "gallery",
-                        safeList(draft.gallery).filter((_, i) => i !== index),
+                        safeList(draft.gallery).filter(
+                          (_, i) => i !== index,
+                        ),
                       )
                     }
                   >
@@ -1039,6 +1178,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                 </div>
               ))}
             </div>
+
             <button
               type="button"
               className="secondary-button"
@@ -1050,6 +1190,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
 
           <section className="product-editor-panel">
             <h2>Categories</h2>
+
             <label className="product-editor-field">
               <span>Category / subcategory</span>
               <input
@@ -1058,12 +1199,14 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                 onChange={(event) => update("category", event.target.value)}
                 placeholder="e.g. Electronics > Phones"
               />
+
               <datalist id="product-category-options">
                 {safeList(termOptions.categories).map((term) => (
                   <option key={term} value={term} />
                 ))}
               </datalist>
             </label>
+
             <label className="product-editor-field">
               <span>Tags (comma separated)</span>
               <input
@@ -1080,6 +1223,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                 }
                 placeholder="wireless, premium"
               />
+
               <datalist id="product-tag-options">
                 {safeList(termOptions.tags).map((term) => (
                   <option key={term} value={term} />
@@ -1090,6 +1234,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
 
           <section className="product-editor-panel">
             <h2>Brand</h2>
+
             <label className="product-editor-field">
               <span>Brand name</span>
               <input
@@ -1098,6 +1243,7 @@ const ProductEditor = ({ edit = false }: { edit?: boolean }) => {
                 onChange={(event) => update("brand", event.target.value)}
                 placeholder="Brand"
               />
+
               <datalist id="product-brand-options">
                 {safeList(termOptions.brands).map((term) => (
                   <option key={term} value={term} />

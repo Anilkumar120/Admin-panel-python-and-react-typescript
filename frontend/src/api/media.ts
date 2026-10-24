@@ -1,9 +1,9 @@
+
 import axios from "axios";
 import { API_URL } from "./config";
 
-// Normalize the API base URL.
-// Supports "/api", an empty value, or a full backend URL.
-const normalizeApiUrl = (value: string | undefined) => {
+// Normalize API base URL.
+const normalizeApiUrl = (value: string | undefined): string => {
   const base = (value || "/api").replace(/\/+$/, "");
 
   if (base === "/api" || base.endsWith("/api")) {
@@ -55,6 +55,7 @@ interface MediaListParams {
   fileType?: string;
 }
 
+// List media items.
 const getMediaList = async (
   endpoint: string,
   {
@@ -109,6 +110,19 @@ export const uploadMedia = async (files: File[]) => {
   return response.data;
 };
 
+// Import an image from a remote URL.
+export const importMediaFromUrl = async (url: string) => {
+  const response = await axios.post(
+    `${MEDIA_URL}/import-url`,
+    { url },
+    {
+      headers: getHeaders(),
+    },
+  );
+
+  return response.data;
+};
+
 // Update media details.
 export const updateMedia = async (
   mediaId: string,
@@ -136,7 +150,9 @@ export const updateMedia = async (
 export const deleteMedia = async (mediaId: string) => {
   const response = await axios.delete(
     `${MEDIA_URL}/${encodeURIComponent(mediaId)}`,
-    { headers: getHeaders() },
+    {
+      headers: getHeaders(),
+    },
   );
 
   return response.data;
@@ -147,7 +163,9 @@ export const bulkDeleteMedia = async (mediaIds: string[]) => {
   const response = await axios.post(
     `${MEDIA_URL}/bulk-delete`,
     mediaIds,
-    { headers: getHeaders() },
+    {
+      headers: getHeaders(),
+    },
   );
 
   return response.data;
@@ -160,7 +178,12 @@ export const getMediaTrash = (
   search = "",
   fileType = "",
 ): Promise<MediaResponse> => {
-  return getMediaList("/trash", { page, limit, search, fileType });
+  return getMediaList("/trash", {
+    page,
+    limit,
+    search,
+    fileType,
+  });
 };
 
 // Restore one media item.
@@ -168,7 +191,9 @@ export const restoreMedia = async (mediaId: string) => {
   const response = await axios.post(
     `${MEDIA_URL}/${encodeURIComponent(mediaId)}/restore`,
     {},
-    { headers: getHeaders() },
+    {
+      headers: getHeaders(),
+    },
   );
 
   return response.data;
@@ -179,7 +204,9 @@ export const bulkRestoreMedia = async (mediaIds: string[]) => {
   const response = await axios.post(
     `${MEDIA_URL}/bulk-restore`,
     mediaIds,
-    { headers: getHeaders() },
+    {
+      headers: getHeaders(),
+    },
   );
 
   return response.data;
@@ -189,7 +216,9 @@ export const bulkRestoreMedia = async (mediaIds: string[]) => {
 export const permanentDeleteMedia = async (mediaId: string) => {
   const response = await axios.delete(
     `${MEDIA_URL}/${encodeURIComponent(mediaId)}/permanent`,
-    { headers: getHeaders() },
+    {
+      headers: getHeaders(),
+    },
   );
 
   return response.data;
@@ -202,7 +231,9 @@ export const bulkPermanentDeleteMedia = async (
   const response = await axios.post(
     `${MEDIA_URL}/bulk-permanent-delete`,
     mediaIds,
-    { headers: getHeaders() },
+    {
+      headers: getHeaders(),
+    },
   );
 
   return response.data;
@@ -212,30 +243,36 @@ export const bulkPermanentDeleteMedia = async (
 export const emptyMediaTrash = async () => {
   const response = await axios.delete(
     `${MEDIA_URL}/empty-trash`,
-    { headers: getHeaders() },
+    {
+      headers: getHeaders(),
+    },
   );
 
   return response.data;
 };
 
 // Resolve media URLs without duplicating the /api prefix.
-export const getMediaUrl = (url?: string | null) => {
+export const getMediaUrl = (url?: string | null): string => {
   if (!url) return "";
 
-  if (/^(https?:)?\/\//i.test(url) || url.startsWith("data:")) {
-    return url;
+  const value = url.trim();
+
+  if (!value) return "";
+
+  // Preserve absolute HTTP/HTTPS URLs, protocol-relative URLs and data URLs.
+  if (
+    /^(https?:)?\/\//i.test(value) ||
+    value.startsWith("data:")
+  ) {
+    return value;
   }
 
-  const path = url.startsWith("/") ? url : `/${url}`;
+  // Convert relative media paths to an absolute path on the API origin.
+  const path = value.startsWith("/") ? value : `/${value}`;
+
   const apiOrigin = API_BASE.endsWith("/api")
     ? API_BASE.slice(0, -4)
     : API_BASE;
 
-  // The backend may already return /api/media/file/<id>.
-  if (path.startsWith("/api/")) {
-    return `${apiOrigin}${path}`;
-  }
-
-  // Legacy uploads are served from the backend root, outside its /api routes.
   return `${apiOrigin}${path}`;
 };

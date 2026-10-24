@@ -15,6 +15,8 @@ import { ICON_LIBRARY } from "../../components/iconLibrary";
 import { getMenusForDropdown } from "../../api/menus";
 import { API_URL } from "../../api/config";
 import { getProducts, type Product } from "../../api/products";
+import IconPickerPopup from "./IconPickerPopup";
+import RepeaterItemsEditor from "./RepeaterItemsEditor";
 import "./SliderSettings.css";
 import "./SettingsPanel.css";
 
@@ -53,11 +55,11 @@ const NumberInput = ({ value, onChange, min, max, step = 1, ...props }: any) => 
       e.preventDefault();
       const currentVal = Number(value) || 0;
       const newValue = e.key === "ArrowUp" ? currentVal + step : currentVal - step;
-      
+
       let finalValue = newValue;
       if (min !== undefined) finalValue = Math.max(min, finalValue);
       if (max !== undefined) finalValue = Math.min(max, finalValue);
-      
+
       onChange(finalValue);
     }
   };
@@ -334,13 +336,15 @@ const SettingsPanel = ({
   const [mediaPickerMultiple, setMediaPickerMultiple] = useState(false);
   const [mediaPickerTarget, setMediaPickerTarget] = useState<string>("");
   const iconListItemSequence = useRef(0);
-  const [iconListItemIndex, setIconListItemIndex] = useState<number | null>(
-    null,
-  );
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [linkInput, setLinkInput] = useState(widget.link?.url || "");
 
-  // ✅ FIX: Chain Link States for Spacing
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [iconPickerTarget, setIconPickerTarget] = useState<"main" | "item">(
+    "main",
+  );
+  const [iconPickerItemIndex, setIconPickerItemIndex] = useState<number>(-1);
+
   const [linkedPadding, setLinkedPadding] = useState(false);
   const [linkedMargin, setLinkedMargin] = useState(false);
 
@@ -370,6 +374,8 @@ const SettingsPanel = ({
     animation: false,
     mobileMenu: false,
     menuItemStyle: true,
+    scrollEffects: false,
+    entranceAnimation: false,
   });
 
   useEffect(() => {
@@ -417,7 +423,6 @@ const SettingsPanel = ({
     onChangeStyle(changes, device !== "desktop" ? device : undefined);
   };
 
-  // ✅ FIX: Spacing logic with Chain Link support
   const updateSpacing = (
     key: "padding" | "margin",
     side: "top" | "right" | "bottom" | "left",
@@ -425,7 +430,7 @@ const SettingsPanel = ({
   ) => {
     const current = rs?.[key] ||
       s[key] || { top: 0, right: 0, bottom: 0, left: 0 };
-      
+
     let newSpacing;
     if (key === "padding" && linkedPadding) {
       newSpacing = { top: value, right: value, bottom: value, left: value };
@@ -434,7 +439,7 @@ const SettingsPanel = ({
     } else {
       newSpacing = { ...current, [side]: value };
     }
-    
+
     updateStyle({ [key]: newSpacing } as any);
   };
 
@@ -492,45 +497,26 @@ const SettingsPanel = ({
   const handleMediaSelect = (media: PickedMedia | PickedMedia[]) => {
     const arr = Array.isArray(media) ? media : [media];
 
-    if (
+    if (mediaPickerTarget === "background") {
+      const picked = arr[0];
+      updateStyle({ backgroundImage: picked.url });
+    } else if (
       mediaPickerTarget === "image" ||
-      mediaPickerTarget === "background" ||
-      mediaPickerTarget === "video" ||
       mediaPickerTarget === "logo" ||
-      mediaPickerTarget === "icon-image" ||
-      mediaPickerTarget === "icon-list-item" ||
-      mediaPickerTarget === "bio-avatar"
+      mediaPickerTarget === "video" ||
+      mediaPickerTarget === "bio-avatar" ||
+      mediaPickerTarget === "icon-image"
     ) {
       const picked = arr[0];
-      if (mediaPickerTarget === "background") {
-        updateStyle({ backgroundImage: picked.url });
-      } else if (
-        mediaPickerTarget === "icon-list-item" &&
-        iconListItemIndex !== null
-      ) {
-        const items = [...(widget.items || [])];
-        const current = items[iconListItemIndex];
-        if (current) {
-          items[iconListItemIndex] = {
-            ...current,
-            image: picked.url,
-            icon: "",
-          };
-          onChangeItems(items);
-        }
-      } else if (mediaPickerTarget === "bio-avatar") {
-        onChangeUrl(picked.url);
-      } else {
-        onChangeUrl(picked.url);
-        onChangeContent(""); // ✅ Clear text icon
-        onChangeSettings({ customIcon: null }); // ✅ Clear library icon
-        onChangeSettings({
-          accessibility: {
-            ...widget.accessibility,
-            altText: picked.alt,
-          },
-        });
-      }
+      onChangeUrl(picked.url);
+      onChangeContent("");
+      onChangeSettings({ customIcon: null });
+      onChangeSettings({
+        accessibility: {
+          ...widget.accessibility,
+          altText: picked.alt,
+        },
+      });
     } else if (
       mediaPickerTarget === "slider" ||
       mediaPickerTarget === "gallery" ||
@@ -589,10 +575,60 @@ const SettingsPanel = ({
     widget.type === "related_products" ||
     widget.type === "recent_products";
 
-  // Helper to read current settings with fallback
   const st = widget.settings || {};
   const setSetting = (key: string, value: any) =>
     onChangeSettings({ [key]: value });
+
+  const handleIconSelect = (iconName: string) => {
+    if (iconPickerTarget === "main") {
+      onChangeContent(iconName);
+      onChangeUrl("");
+      onChangeSettings({ customIcon: null });
+    } else if (iconPickerTarget === "item" && iconPickerItemIndex >= 0) {
+      const items = [...(widget.items || [])];
+      items[iconPickerItemIndex] = {
+        ...items[iconPickerItemIndex],
+        icon: iconName,
+        image: "",
+      };
+      onChangeItems(items);
+    }
+    setIconPickerOpen(false);
+  };
+
+  const handleIconImageSelect = (imageUrl: string) => {
+    if (iconPickerTarget === "main") {
+      onChangeUrl(imageUrl);
+      onChangeContent("");
+      onChangeSettings({ customIcon: null });
+    } else if (iconPickerTarget === "item" && iconPickerItemIndex >= 0) {
+      const items = [...(widget.items || [])];
+      items[iconPickerItemIndex] = {
+        ...items[iconPickerItemIndex],
+        image: imageUrl,
+        icon: "",
+      };
+      onChangeItems(items);
+    }
+    setIconPickerOpen(false);
+  };
+
+  const handleIconClear = () => {
+    if (iconPickerTarget === "main") {
+      onChangeContent("");
+      onChangeUrl("");
+      onChangeSettings({ customIcon: null });
+    } else if (iconPickerTarget === "item" && iconPickerItemIndex >= 0) {
+      const items = [...(widget.items || [])];
+      items[iconPickerItemIndex] = {
+        ...items[iconPickerItemIndex],
+        icon: "",
+        image: "",
+      };
+      onChangeItems(items);
+    }
+    setIconPickerOpen(false);
+  };
 
   return (
     <div className="settings-panel">
@@ -646,21 +682,171 @@ const SettingsPanel = ({
         {/* ============================================ */}
         {activeTab === "content" && (
           <div className="settings-section">
-            {/* ============================================================ */}
-            {/* 🛒 CART WIDGET */}
-            {/* ============================================================ */}
+            {widget.type === "search" && (
+              <>
+                <div className="items-editor">
+                  <h4>Search Field</h4>
+                  <label className="setting-field">
+                    <span>Placeholder</span>
+                    <input
+                      type="text"
+                      value={st.searchPlaceholder || "Type to start searching..."}
+                      onChange={(e) => setSetting("searchPlaceholder", e.target.value)}
+                    />
+                  </label>
+                  <label className="setting-field">
+                    <span>Button Text</span>
+                    <input
+                      type="text"
+                      value={st.searchButtonText || "Search"}
+                      onChange={(e) => setSetting("searchButtonText", e.target.value)}
+                    />
+                  </label>
+                </div>
+              </>
+            )}
+
+            {["accordion", "tabs", "toggle"].includes(widget.type) && (
+              <RepeaterItemsEditor
+                items={widget.items || []}
+                onChange={onChangeItems}
+                itemLabel={widget.type === "tabs" ? "Tab" : "Item"}
+                addLabel={`Add ${widget.type === "tabs" ? "Tab" : "Item"}`}
+                allowNestedChildren={true}
+                showTitle={true}
+                showContent={widget.type !== "tabs"} 
+              />
+            )}
+
+            {widget.type === "icon_list" && (
+              <RepeaterItemsEditor
+                items={widget.items || []}
+                onChange={onChangeItems}
+                itemLabel="List Item"
+                addLabel="Add Item"
+                showTitle={true}
+                showItemIcon={true}
+                showItemLink={true}
+              />
+            )}
+
+            {widget.type === "icon_box" && (
+              <div className="items-editor">
+                <h4>Icon Box</h4>
+                <div className="setting-field" style={{ marginBottom: 16 }}>
+                  <span>Icon</span>
+                  <div
+                    onClick={() => { setIconPickerTarget("main"); setIconPickerOpen(true); }}
+                    style={{ width: "100%", height: 100, border: "1px dashed #ccc", display: "flex", alignItems: "center", justifyContent: "center", background: "repeating-conic-gradient(#f3f4f6 0% 25%, #fff 0% 50%) 50% / 20px 20px", cursor: "pointer", borderRadius: 4 }}
+                  >
+                    {widget.url ? <img src={widget.url} alt="" style={{ height: 48 }} /> : <span style={{ fontSize: 36, color: "#555" }}>{widget.content || "★"}</span>}
+                  </div>
+                </div>
+                <label className="setting-field">
+                  <span>Title</span>
+                  <input
+                    type="text"
+                    value={widget.items?.[0]?.title || ""}
+                    onChange={(e) => {
+                      const item = widget.items?.[0] || { id: `${widget.id}-feature` };
+                      onChangeItems([{ ...item, title: e.target.value }]);
+                    }}
+                  />
+                </label>
+                <label className="setting-field">
+                  <span>Description</span>
+                  <textarea
+                    rows={4}
+                    value={widget.items?.[0]?.content || ""}
+                    onChange={(e) => {
+                      const item = widget.items?.[0] || { id: `${widget.id}-feature` };
+                      onChangeItems([{ ...item, content: e.target.value }]);
+                    }}
+                  />
+                </label>
+              </div>
+            )}
+
+            {widget.type === "divider" && (
+              <div className="items-editor">
+                <h4>Divider</h4>
+                <label className="setting-field">
+                  <span>Style</span>
+                  <select value={s.borderStyle || "solid"} onChange={(e) => updateStyle({ borderStyle: e.target.value as any })}>
+                    <option value="solid">Solid</option>
+                    <option value="dashed">Dashed</option>
+                    <option value="dotted">Dotted</option>
+                    <option value="double">Double</option>
+                  </select>
+                </label>
+                <label className="setting-field">
+                  <span>Weight (px)</span>
+                  <input type="number" value={s.borderWidth || 1} onChange={(e) => updateStyle({ borderWidth: Number(e.target.value) })} />
+                </label>
+                <label className="setting-field">
+                  <span>Color</span>
+                  <input type="color" value={s.borderColor || "#000000"} onChange={(e) => updateStyle({ borderColor: e.target.value })} />
+                </label>
+              </div>
+            )}
+
+            {widget.type === "map" && (
+              <div className="items-editor">
+                <h4>Google Maps</h4>
+                <label className="setting-field">
+                  <span>Location</span>
+                  <input type="text" value={st.mapAddress || ""} onChange={(e) => setSetting("mapAddress", e.target.value)} />
+                </label>
+                <label className="setting-field">
+                  <span>Zoom (1-20)</span>
+                  <input type="number" min={1} max={20} value={st.mapZoom || 10} onChange={(e) => setSetting("mapZoom", Number(e.target.value))} />
+                </label>
+                <label className="setting-field">
+                  <span>Height (px)</span>
+                  <input type="number" value={st.mapHeight || 300} onChange={(e) => setSetting("mapHeight", Number(e.target.value))} />
+                </label>
+              </div>
+            )}
+
+            {["heading", "text", "button", "image", "video"].includes(widget.type) && (
+              <>
+                {["heading", "text"].includes(widget.type) && (
+                  <label className="setting-field">
+                    <span>Content</span>
+                    <textarea rows={4} value={widget.content || ""} onChange={(e) => onChangeContent(e.target.value)} />
+                  </label>
+                )}
+                {widget.type === "button" && (
+                  <>
+                    <label className="setting-field">
+                      <span>Text</span>
+                      <input type="text" value={widget.content || ""} onChange={(e) => onChangeContent(e.target.value)} />
+                    </label>
+                    <label className="setting-field">
+                      <span>Link</span>
+                      <LinkPicker value={widget.url || ""} onChange={onChangeUrl} />
+                    </label>
+                  </>
+                )}
+                {["image", "video"].includes(widget.type) && (
+                  <div className="setting-field" style={{ marginBottom: 16 }}>
+                    <span>Choose {widget.label}</span>
+                    {widget.url && <img src={widget.url} alt="" style={{ width: "100%", borderRadius: 4, marginBottom: 8 }} />}
+                    <button type="button" className="change-media-btn" style={{ width: "100%" }} onClick={() => openMediaPicker(widget.type === "video" ? "video" : "image")}>
+                      Select / Upload
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
             {isCartWidget && (
               <>
                 <div className="items-editor">
                   <h4>🛒 Cart Layout</h4>
                   <label className="setting-field">
                     <span>Cart Style</span>
-                    <select
-                      value={st.cartLayout || "default"}
-                      onChange={(e) =>
-                        setSetting("cartLayout", e.target.value)
-                      }
-                    >
+                    <select value={st.cartLayout || "default"} onChange={(e) => setSetting("cartLayout", e.target.value)}>
                       <option value="default">Default (Theme)</option>
                       <option value="modern">Modern Card</option>
                       <option value="minimal">Minimal List</option>
@@ -669,210 +855,99 @@ const SettingsPanel = ({
                   </label>
                   <label className="setting-field">
                     <span>Columns</span>
-                    <select
-                      value={st.cartColumns || "2"}
-                      onChange={(e) =>
-                        setSetting("cartColumns", e.target.value)
-                      }
-                    >
+                    <select value={st.cartColumns || "2"} onChange={(e) => setSetting("cartColumns", e.target.value)}>
                       <option value="1">1 Column</option>
                       <option value="2">2 Columns (items + totals)</option>
                     </select>
                   </label>
                 </div>
-
                 <div className="items-editor">
                   <h4>Cart Heading</h4>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showCartHeading !== false}
-                      onChange={(e) =>
-                        setSetting("showCartHeading", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showCartHeading !== false} onChange={(e) => setSetting("showCartHeading", e.target.checked)} />
                     <span>Show Cart Heading</span>
                   </label>
                   {st.showCartHeading !== false && (
                     <label className="setting-field">
                       <span>Heading Text</span>
-                      <input
-                        type="text"
-                        value={st.cartHeading || "Your Cart"}
-                        onChange={(e) =>
-                          setSetting("cartHeading", e.target.value)
-                        }
-                      />
+                      <input type="text" value={st.cartHeading || "Your Cart"} onChange={(e) => setSetting("cartHeading", e.target.value)} />
                     </label>
                   )}
                 </div>
-
                 <div className="items-editor">
                   <h4>Cart Elements</h4>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showCartItems !== false}
-                      onChange={(e) =>
-                        setSetting("showCartItems", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showCartItems !== false} onChange={(e) => setSetting("showCartItems", e.target.checked)} />
                     <span>Show Cart Items</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showCoupon !== false}
-                      onChange={(e) =>
-                        setSetting("showCoupon", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showCoupon !== false} onChange={(e) => setSetting("showCoupon", e.target.checked)} />
                     <span>Show Coupon Field</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showCartTotal !== false}
-                      onChange={(e) =>
-                        setSetting("showCartTotal", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showCartTotal !== false} onChange={(e) => setSetting("showCartTotal", e.target.checked)} />
                     <span>Show Cart Total</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showContinueShopping !== false}
-                      onChange={(e) =>
-                        setSetting("showContinueShopping", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showContinueShopping !== false} onChange={(e) => setSetting("showContinueShopping", e.target.checked)} />
                     <span>Show Continue Shopping Button</span>
                   </label>
                   {st.showContinueShopping !== false && (
                     <label className="setting-field">
                       <span>Continue Shopping Text</span>
-                      <input
-                        type="text"
-                        value={st.continueShoppingText || "Continue Shopping"}
-                        onChange={(e) =>
-                          setSetting("continueShoppingText", e.target.value)
-                        }
-                      />
+                      <input type="text" value={st.continueShoppingText || "Continue Shopping"} onChange={(e) => setSetting("continueShoppingText", e.target.value)} />
                     </label>
                   )}
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showUpdateCartButton !== false}
-                      onChange={(e) =>
-                        setSetting(
-                          "showUpdateCartButton",
-                          e.target.checked,
-                        )
-                      }
-                    />
+                    <input type="checkbox" checked={st.showUpdateCartButton !== false} onChange={(e) => setSetting("showUpdateCartButton", e.target.checked)} />
                     <span>Show Update Cart Button</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showCheckoutButton !== false}
-                      onChange={(e) =>
-                        setSetting("showCheckoutButton", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showCheckoutButton !== false} onChange={(e) => setSetting("showCheckoutButton", e.target.checked)} />
                     <span>Show Checkout Button</span>
                   </label>
                   {st.showCheckoutButton !== false && (
                     <label className="setting-field">
                       <span>Checkout Button Text</span>
-                      <input
-                        type="text"
-                        value={
-                          st.checkoutButtonText || "Proceed to Checkout"
-                        }
-                        onChange={(e) =>
-                          setSetting("checkoutButtonText", e.target.value)
-                        }
-                      />
+                      <input type="text" value={st.checkoutButtonText || "Proceed to Checkout"} onChange={(e) => setSetting("checkoutButtonText", e.target.value)} />
                     </label>
                   )}
                 </div>
-
                 <div className="items-editor">
                   <h4>Empty / Cross-sell</h4>
                   <label className="setting-field">
                     <span>Empty Cart Message</span>
-                    <textarea
-                      rows={3}
-                      value={
-                        st.emptyCartMessage ||
-                        "Your cart is currently empty."
-                      }
-                      onChange={(e) =>
-                        setSetting("emptyCartMessage", e.target.value)
-                      }
-                    />
+                    <textarea rows={3} value={st.emptyCartMessage || "Your cart is currently empty."} onChange={(e) => setSetting("emptyCartMessage", e.target.value)} />
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showCrossSells === true}
-                      onChange={(e) =>
-                        setSetting("showCrossSells", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showCrossSells === true} onChange={(e) => setSetting("showCrossSells", e.target.checked)} />
                     <span>Show Cross-sells</span>
                   </label>
                   {st.showCrossSells === true && (
                     <label className="setting-field">
                       <span>Cross-sells Heading</span>
-                      <input
-                        type="text"
-                        value={
-                          st.crossSellsHeading || "You may also like"
-                        }
-                        onChange={(e) =>
-                          setSetting("crossSellsHeading", e.target.value)
-                        }
-                      />
+                      <input type="text" value={st.crossSellsHeading || "You may also like"} onChange={(e) => setSetting("crossSellsHeading", e.target.value)} />
                     </label>
                   )}
                 </div>
               </>
             )}
 
-            {/* ============================================================ */}
-            {/* 💳 CHECKOUT WIDGET */}
-            {/* ============================================================ */}
             {isCheckoutWidget && (
               <>
                 <div className="items-editor">
                   <h4>💳 Checkout Layout</h4>
                   <label className="setting-field">
                     <span>Layout</span>
-                    <select
-                      value={st.checkoutLayout || "two-column"}
-                      onChange={(e) =>
-                        setSetting("checkoutLayout", e.target.value)
-                      }
-                    >
-                      <option value="two-column">
-                        Two Column (form + order summary)
-                      </option>
+                    <select value={st.checkoutLayout || "two-column"} onChange={(e) => setSetting("checkoutLayout", e.target.value)}>
+                      <option value="two-column">Two Column (form + order summary)</option>
                       <option value="one-column">One Column</option>
                       <option value="multi-step">Multi-step</option>
                     </select>
                   </label>
                   <label className="setting-field">
                     <span>Order Summary Position</span>
-                    <select
-                      value={st.orderSummaryPosition || "right"}
-                      onChange={(e) =>
-                        setSetting("orderSummaryPosition", e.target.value)
-                      }
-                    >
+                    <select value={st.orderSummaryPosition || "right"} onChange={(e) => setSetting("orderSummaryPosition", e.target.value)}>
                       <option value="right">Right</option>
                       <option value="left">Left</option>
                       <option value="top">Top</option>
@@ -880,193 +955,89 @@ const SettingsPanel = ({
                     </select>
                   </label>
                 </div>
-
                 <div className="items-editor">
                   <h4>Checkout Sections</h4>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showCoupon !== false}
-                      onChange={(e) =>
-                        setSetting("showCoupon", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showCoupon !== false} onChange={(e) => setSetting("showCoupon", e.target.checked)} />
                     <span>Show Coupon Field</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showBillingForm !== false}
-                      onChange={(e) =>
-                        setSetting("showBillingForm", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showBillingForm !== false} onChange={(e) => setSetting("showBillingForm", e.target.checked)} />
                     <span>Show Billing Details</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showShippingForm === true}
-                      onChange={(e) =>
-                        setSetting("showShippingForm", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showShippingForm === true} onChange={(e) => setSetting("showShippingForm", e.target.checked)} />
                     <span>Show Shipping Details</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showOrderNotes !== false}
-                      onChange={(e) =>
-                        setSetting("showOrderNotes", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showOrderNotes !== false} onChange={(e) => setSetting("showOrderNotes", e.target.checked)} />
                     <span>Show Order Notes</span>
                   </label>
                   {st.showOrderNotes !== false && (
                     <label className="setting-field">
                       <span>Order Notes Placeholder</span>
-                      <input
-                        type="text"
-                        value={
-                          st.orderNotesPlaceholder ||
-                          "Notes about your order, e.g. special notes for delivery."
-                        }
-                        onChange={(e) =>
-                          setSetting(
-                            "orderNotesPlaceholder",
-                            e.target.value,
-                          )
-                        }
-                      />
+                      <input type="text" value={st.orderNotesPlaceholder || "Notes about your order, e.g. special notes for delivery."} onChange={(e) => setSetting("orderNotesPlaceholder", e.target.value)} />
                     </label>
                   )}
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showTerms !== false}
-                      onChange={(e) =>
-                        setSetting("showTerms", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showTerms !== false} onChange={(e) => setSetting("showTerms", e.target.checked)} />
                     <span>Show Terms & Conditions Checkbox</span>
                   </label>
                   {st.showTerms !== false && (
                     <>
                       <label className="setting-field">
                         <span>Terms Text</span>
-                        <input
-                          type="text"
-                          value={
-                            st.termsText ||
-                            "I have read and agree to the website terms and conditions"
-                          }
-                          onChange={(e) =>
-                            setSetting("termsText", e.target.value)
-                          }
-                        />
+                        <input type="text" value={st.termsText || "I have read and agree to the website terms and conditions"} onChange={(e) => setSetting("termsText", e.target.value)} />
                       </label>
                       <label className="setting-field">
                         <span>Terms Page Link</span>
-                        <LinkPicker
-                          value={st.termsLink || ""}
-                          onChange={(url) =>
-                            setSetting("termsLink", url)
-                          }
-                          onRemove={() => setSetting("termsLink", "")}
-                        />
+                        <LinkPicker value={st.termsLink || ""} onChange={(url) => setSetting("termsLink", url)} onRemove={() => setSetting("termsLink", "")} />
                       </label>
                     </>
                   )}
                 </div>
-
                 <div className="items-editor">
                   <h4>Buttons & Navigation</h4>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showReturnToCart !== false}
-                      onChange={(e) =>
-                        setSetting("showReturnToCart", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showReturnToCart !== false} onChange={(e) => setSetting("showReturnToCart", e.target.checked)} />
                     <span>Show "Return to Cart" Link</span>
                   </label>
                   {st.showReturnToCart !== false && (
                     <label className="setting-field">
                       <span>Return to Cart Text</span>
-                      <input
-                        type="text"
-                        value={st.returnToCartText || "← Return to cart"}
-                        onChange={(e) =>
-                          setSetting("returnToCartText", e.target.value)
-                        }
-                      />
+                      <input type="text" value={st.returnToCartText || "← Return to cart"} onChange={(e) => setSetting("returnToCartText", e.target.value)} />
                     </label>
                   )}
                   <label className="setting-field">
                     <span>Place Order Button Text</span>
-                    <input
-                      type="text"
-                      value={st.placeOrderText || "Place Order"}
-                      onChange={(e) =>
-                        setSetting("placeOrderText", e.target.value)
-                      }
-                    />
+                    <input type="text" value={st.placeOrderText || "Place Order"} onChange={(e) => setSetting("placeOrderText", e.target.value)} />
                   </label>
                 </div>
-
                 <div className="items-editor">
                   <h4>Payment Methods</h4>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showCod !== false}
-                      onChange={(e) =>
-                        setSetting("showCod", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showCod !== false} onChange={(e) => setSetting("showCod", e.target.checked)} />
                     <span>Cash on Delivery</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showBankTransfer !== false}
-                      onChange={(e) =>
-                        setSetting("showBankTransfer", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showBankTransfer !== false} onChange={(e) => setSetting("showBankTransfer", e.target.checked)} />
                     <span>Bank Transfer</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showRazorpay === true}
-                      onChange={(e) =>
-                        setSetting("showRazorpay", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showRazorpay === true} onChange={(e) => setSetting("showRazorpay", e.target.checked)} />
                     <span>Razorpay (Online Payment)</span>
                   </label>
                 </div>
               </>
             )}
 
-            {/* ============================================================ */}
-            {/* 👤 MY ACCOUNT WIDGET */}
-            {/* ============================================================ */}
             {isMyAccountWidget && (
               <>
                 <div className="items-editor">
                   <h4>👤 My Account Layout</h4>
                   <label className="setting-field">
                     <span>Layout</span>
-                    <select
-                      value={st.accountLayout || "sidebar"}
-                      onChange={(e) =>
-                        setSetting("accountLayout", e.target.value)
-                      }
-                    >
+                    <select value={st.accountLayout || "sidebar"} onChange={(e) => setSetting("accountLayout", e.target.value)}>
                       <option value="sidebar">Sidebar Navigation</option>
                       <option value="tabs-top">Tabs on Top</option>
                       <option value="tabs-left">Vertical Tabs Left</option>
@@ -1075,195 +1046,90 @@ const SettingsPanel = ({
                   </label>
                   <label className="setting-field">
                     <span>Navigation Position</span>
-                    <select
-                      value={st.accountNavPosition || "left"}
-                      onChange={(e) =>
-                        setSetting("accountNavPosition", e.target.value)
-                      }
-                    >
+                    <select value={st.accountNavPosition || "left"} onChange={(e) => setSetting("accountNavPosition", e.target.value)}>
                       <option value="left">Left</option>
                       <option value="right">Right</option>
                       <option value="top">Top</option>
                     </select>
                   </label>
                 </div>
-
                 <div className="items-editor">
                   <h4>Account Navigation</h4>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showAccountNav !== false}
-                      onChange={(e) =>
-                        setSetting("showAccountNav", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showAccountNav !== false} onChange={(e) => setSetting("showAccountNav", e.target.checked)} />
                     <span>Show Account Navigation</span>
                   </label>
-
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showDashboardLink !== false}
-                      onChange={(e) =>
-                        setSetting("showDashboardLink", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showDashboardLink !== false} onChange={(e) => setSetting("showDashboardLink", e.target.checked)} />
                     <span>Dashboard Link</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showOrdersLink !== false}
-                      onChange={(e) =>
-                        setSetting("showOrdersLink", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showOrdersLink !== false} onChange={(e) => setSetting("showOrdersLink", e.target.checked)} />
                     <span>Orders Link</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showDownloadsLink !== false}
-                      onChange={(e) =>
-                        setSetting("showDownloadsLink", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showDownloadsLink !== false} onChange={(e) => setSetting("showDownloadsLink", e.target.checked)} />
                     <span>Downloads Link</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showAddressesLink !== false}
-                      onChange={(e) =>
-                        setSetting("showAddressesLink", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showAddressesLink !== false} onChange={(e) => setSetting("showAddressesLink", e.target.checked)} />
                     <span>Addresses Link</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showAccountDetailsLink !== false}
-                      onChange={(e) =>
-                        setSetting(
-                          "showAccountDetailsLink",
-                          e.target.checked,
-                        )
-                      }
-                    />
+                    <input type="checkbox" checked={st.showAccountDetailsLink !== false} onChange={(e) => setSetting("showAccountDetailsLink", e.target.checked)} />
                     <span>Account Details Link</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showLogoutLink !== false}
-                      onChange={(e) =>
-                        setSetting("showLogoutLink", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showLogoutLink !== false} onChange={(e) => setSetting("showLogoutLink", e.target.checked)} />
                     <span>Logout Link</span>
                   </label>
                   {st.showLogoutLink !== false && (
                     <label className="setting-field">
                       <span>Logout Text</span>
-                      <input
-                        type="text"
-                        value={st.logoutText || "Log out"}
-                        onChange={(e) =>
-                          setSetting("logoutText", e.target.value)
-                        }
-                      />
+                      <input type="text" value={st.logoutText || "Log out"} onChange={(e) => setSetting("logoutText", e.target.value)} />
                     </label>
                   )}
                 </div>
-
                 <div className="items-editor">
                   <h4>Welcome Message</h4>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showWelcomeMessage !== false}
-                      onChange={(e) =>
-                        setSetting(
-                          "showWelcomeMessage",
-                          e.target.checked,
-                        )
-                      }
-                    />
+                    <input type="checkbox" checked={st.showWelcomeMessage !== false} onChange={(e) => setSetting("showWelcomeMessage", e.target.checked)} />
                     <span>Show Welcome Message</span>
                   </label>
                   {st.showWelcomeMessage !== false && (
                     <label className="setting-field">
                       <span>Welcome Text (use {"{name}"} for username)</span>
-                      <input
-                        type="text"
-                        value={
-                          st.welcomeText ||
-                          "Hello {name}, welcome back!"
-                        }
-                        onChange={(e) =>
-                          setSetting("welcomeText", e.target.value)
-                        }
-                      />
+                      <input type="text" value={st.welcomeText || "Hello {name}, welcome back!"} onChange={(e) => setSetting("welcomeText", e.target.value)} />
                     </label>
                   )}
                 </div>
-
                 <div className="items-editor">
                   <h4>Default Tab</h4>
                   <label className="setting-field">
                     <span>Default Active Tab</span>
-                    <select
-                      value={st.defaultAccountTab || "dashboard"}
-                      onChange={(e) =>
-                        setSetting("defaultAccountTab", e.target.value)
-                      }
-                    >
+                    <select value={st.defaultAccountTab || "dashboard"} onChange={(e) => setSetting("defaultAccountTab", e.target.value)}>
                       <option value="dashboard">Dashboard</option>
                       <option value="orders">Orders</option>
                       <option value="downloads">Downloads</option>
                       <option value="addresses">Addresses</option>
-                      <option value="account_details">
-                        Account Details
-                      </option>
+                      <option value="account_details">Account Details</option>
                     </select>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showOrderLookupForm !== false}
-                      onChange={(e) =>
-                        setSetting(
-                          "showOrderLookupForm",
-                          e.target.checked,
-                        )
-                      }
-                    />
+                    <input type="checkbox" checked={st.showOrderLookupForm !== false} onChange={(e) => setSetting("showOrderLookupForm", e.target.checked)} />
                     <span>Show Order Lookup Form</span>
                   </label>
                 </div>
               </>
             )}
 
-            {/* ============================================================ */}
-            {/* 🧾 ORDER SUMMARY WIDGET */}
-            {/* ============================================================ */}
             {isOrderSummaryWidget && (
               <>
                 <div className="items-editor">
                   <h4>🧾 Order Summary Layout</h4>
                   <label className="setting-field">
                     <span>Layout Style</span>
-                    <select
-                      value={st.orderSummaryLayout || "card"}
-                      onChange={(e) =>
-                        setSetting(
-                          "orderSummaryLayout",
-                          e.target.value,
-                        )
-                      }
-                    >
+                    <select value={st.orderSummaryLayout || "card"} onChange={(e) => setSetting("orderSummaryLayout", e.target.value)}>
                       <option value="card">Card</option>
                       <option value="plain">Plain List</option>
                       <option value="table">Table</option>
@@ -1271,220 +1137,91 @@ const SettingsPanel = ({
                   </label>
                   <label className="setting-field">
                     <span>Content Width</span>
-                    <select
-                      value={st.orderSummaryWidth || "full"}
-                      onChange={(e) =>
-                        setSetting("orderSummaryWidth", e.target.value)
-                      }
-                    >
+                    <select value={st.orderSummaryWidth || "full"} onChange={(e) => setSetting("orderSummaryWidth", e.target.value)}>
                       <option value="full">Full Width</option>
                       <option value="boxed">Boxed (600px)</option>
                     </select>
                   </label>
                 </div>
-
                 <div className="items-editor">
                   <h4>Order Details</h4>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showOrderNumber !== false}
-                      onChange={(e) =>
-                        setSetting("showOrderNumber", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showOrderNumber !== false} onChange={(e) => setSetting("showOrderNumber", e.target.checked)} />
                     <span>Show Order Number</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showOrderDate !== false}
-                      onChange={(e) =>
-                        setSetting("showOrderDate", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showOrderDate !== false} onChange={(e) => setSetting("showOrderDate", e.target.checked)} />
                     <span>Show Order Date</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showPaymentStatus !== false}
-                      onChange={(e) =>
-                        setSetting("showPaymentStatus", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showPaymentStatus !== false} onChange={(e) => setSetting("showPaymentStatus", e.target.checked)} />
                     <span>Show Payment Status</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showOrderItems !== false}
-                      onChange={(e) =>
-                        setSetting("showOrderItems", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showOrderItems !== false} onChange={(e) => setSetting("showOrderItems", e.target.checked)} />
                     <span>Show Order Items</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showOrderTotals !== false}
-                      onChange={(e) =>
-                        setSetting("showOrderTotals", e.target.checked)
-                      }
-                    />
+                    <input type="checkbox" checked={st.showOrderTotals !== false} onChange={(e) => setSetting("showOrderTotals", e.target.checked)} />
                     <span>Show Order Totals (subtotal, shipping, tax)</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showShippingDetails === true}
-                      onChange={(e) =>
-                        setSetting(
-                          "showShippingDetails",
-                          e.target.checked,
-                        )
-                      }
-                    />
+                    <input type="checkbox" checked={st.showShippingDetails === true} onChange={(e) => setSetting("showShippingDetails", e.target.checked)} />
                     <span>Show Shipping Details</span>
                   </label>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showBillingDetails === true}
-                      onChange={(e) =>
-                        setSetting(
-                          "showBillingDetails",
-                          e.target.checked,
-                        )
-                      }
-                    />
+                    <input type="checkbox" checked={st.showBillingDetails === true} onChange={(e) => setSetting("showBillingDetails", e.target.checked)} />
                     <span>Show Billing Details</span>
                   </label>
                 </div>
-
                 <div className="items-editor">
                   <h4>Thank-you Message</h4>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showThankYouMessage !== false}
-                      onChange={(e) =>
-                        setSetting(
-                          "showThankYouMessage",
-                          e.target.checked,
-                        )
-                      }
-                    />
+                    <input type="checkbox" checked={st.showThankYouMessage !== false} onChange={(e) => setSetting("showThankYouMessage", e.target.checked)} />
                     <span>Show Thank-you Message</span>
                   </label>
                   {st.showThankYouMessage !== false && (
                     <>
                       <label className="setting-field">
                         <span>Thank-you Heading</span>
-                        <input
-                          type="text"
-                          value={
-                            st.thankYouHeading ||
-                            "Thank you. Your order has been received."
-                          }
-                          onChange={(e) =>
-                            setSetting(
-                              "thankYouHeading",
-                              e.target.value,
-                            )
-                          }
-                        />
+                        <input type="text" value={st.thankYouHeading || "Thank you. Your order has been received."} onChange={(e) => setSetting("thankYouHeading", e.target.value)} />
                       </label>
                       <label className="setting-field">
                         <span>Thank-you Description</span>
-                        <textarea
-                          rows={3}
-                          value={
-                            st.thankYouDescription ||
-                            "We'll notify you once your order is on its way."
-                          }
-                          onChange={(e) =>
-                            setSetting(
-                              "thankYouDescription",
-                              e.target.value,
-                            )
-                          }
-                        />
+                        <textarea rows={3} value={st.thankYouDescription || "We'll notify you once your order is on its way."} onChange={(e) => setSetting("thankYouDescription", e.target.value)} />
                       </label>
                     </>
                   )}
                 </div>
-
                 <div className="items-editor">
                   <h4>Continue Shopping Button</h4>
                   <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={st.showContinueShoppingButton !== false}
-                      onChange={(e) =>
-                        setSetting(
-                          "showContinueShoppingButton",
-                          e.target.checked,
-                        )
-                      }
-                    />
+                    <input type="checkbox" checked={st.showContinueShoppingButton !== false} onChange={(e) => setSetting("showContinueShoppingButton", e.target.checked)} />
                     <span>Show Continue Shopping Button</span>
                   </label>
                   {st.showContinueShoppingButton !== false && (
                     <>
                       <label className="setting-field">
                         <span>Button Text</span>
-                        <input
-                          type="text"
-                          value={
-                            st.continueShoppingButtonText ||
-                            "Continue Shopping"
-                          }
-                          onChange={(e) =>
-                            setSetting(
-                              "continueShoppingButtonText",
-                              e.target.value,
-                            )
-                          }
-                        />
+                        <input type="text" value={st.continueShoppingButtonText || "Continue Shopping"} onChange={(e) => setSetting("continueShoppingButtonText", e.target.value)} />
                       </label>
                       <label className="setting-field">
                         <span>Button Link</span>
-                        <LinkPicker
-                          value={st.continueShoppingLink || "/shop"}
-                          onChange={(url) =>
-                            setSetting("continueShoppingLink", url)
-                          }
-                          onRemove={() =>
-                            setSetting("continueShoppingLink", "")
-                          }
-                        />
+                        <LinkPicker value={st.continueShoppingLink || "/shop"} onChange={(url) => setSetting("continueShoppingLink", url)} onRemove={() => setSetting("continueShoppingLink", "")} />
                       </label>
                     </>
                   )}
                 </div>
-
                 <div className="items-editor">
                   <h4>Empty Order Fallback</h4>
                   <label className="setting-field">
                     <span>When no order is found</span>
-                    <input
-                      type="text"
-                      value={
-                        st.emptyOrderText ||
-                        "We couldn't find an order matching those details."
-                      }
-                      onChange={(e) =>
-                        setSetting("emptyOrderText", e.target.value)
-                      }
-                    />
+                    <input type="text" value={st.emptyOrderText || "We couldn't find an order matching those details."} onChange={(e) => setSetting("emptyOrderText", e.target.value)} />
                   </label>
                 </div>
               </>
             )}
 
-            {/* ====== PRODUCT PREVIEW ====== */}
             {isProductWidget &&
               !["products", "product_grid"].includes(widget.type) && (
                 <div className="items-editor">
@@ -1557,7 +1294,6 @@ const SettingsPanel = ({
                 </div>
               )}
 
-            {/* ====== CONTAINER ====== */}
             {isContainer && (
               <>
                 {device !== "desktop" && (
@@ -1871,125 +1607,76 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== ICON ====== */}
             {widget.type === "icon" && (
               <div className="items-editor">
-                <h4>Choose Icon</h4>
-                
-                {/* 1. Custom Icon Library */}
+                <h4>Icon</h4>
                 <div className="setting-field" style={{ marginBottom: 20 }}>
-                  <span>Icon Library</span>
+                  <span>Current Icon</span>
                   <div
-                    className="icon-library-grid"
-                    role="group"
-                    style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", marginTop: 8 }}
-                  >
-                    {ICON_LIBRARY.map(({ name, label, Icon }) => (
-                      <button
-                        type="button"
-                        key={name}
-                        title={label}
-                        onClick={() => {
-                          onChangeContent("");
-                          onChangeUrl("");
-                          onChangeSettings({ customIcon: name }); 
-                        }}
-                        style={{
-                          padding: 10,
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 4,
-                          border: widget.settings?.customIcon === name ? "2px solid #2563eb" : "1px solid #d1d5db",
-                          borderRadius: 6,
-                          background: "#fff",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <Icon size={20} />
-                        <span style={{ fontSize: 10 }}>{label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 2. Custom Character (Text/Emoji) */}
-                <label className="setting-field">
-                  <span>Custom icon character</span>
-                  <input
-                    value={widget.content || ""}
-                    onChange={(event) => {
-                      onChangeContent(event.target.value);
-                      onChangeUrl("");
-                      onChangeSettings({ customIcon: null });
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: 12,
+                      background: "#f8f9fc",
+                      border: "1px solid #e3e6eb",
+                      borderRadius: 6,
                     }}
-                    placeholder="Paste a symbol or emoji"
-                  />
-                </label>
-                <div
-                  className="setting-field"
-                  role="group"
-                  aria-label="Icon choices"
-                  style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}
-                >
-                  {[
-                    ["Star", "★"], ["Heart", "♥"], ["Check", "✓"], ["Arrow", "→"],
-                    ["Phone", "☎"], ["Email", "✉"], ["Settings", "⚙"], ["Lightning", "⚡"],
-                    ["Home", "⌂"], ["Plus", "+"], ["Globe", "◎"], ["Music", "♫"],
-                  ].map(([label, symbol]) => (
-                    <button
-                      key={label}
-                      type="button"
-                      title={label}
-                      onClick={() => {
-                        onChangeContent(symbol);
-                        onChangeUrl("");
-                        onChangeSettings({ customIcon: null });
-                      }}
+                  >
+                    <div
                       style={{
-                        width: 42, height: 42, fontSize: 22,
-                        border: (widget.content || "★") === symbol ? "2px solid #2563eb" : "1px solid #d1d5db",
-                        borderRadius: 6, background: "#fff", cursor: "pointer",
+                        width: 56,
+                        height: 56,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: "#fff",
+                        border: "1px solid #e3e6eb",
+                        borderRadius: 6,
+                        fontSize: 28,
                       }}
                     >
-                      {symbol}
-                    </button>
-                  ))}
-                </div>
-
-                {/* 3. Image Upload */}
-                <div className="setting-field">
-                  <span>Image icon (optional)</span>
-                  {widget.url && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                      <img
-                        src={widget.url}
-                        alt="Selected icon"
-                        className="icon-list-image-preview"
-                        style={{ width: 50, height: 50, objectFit: "contain" }}
-                      />
-                      <button
-                        type="button"
-                        className="remove-media-btn"
-                        onClick={() => onChangeUrl("")}
-                      >
-                        Remove Image
-                      </button>
+                      {widget.url ? (
+                        <img
+                          src={widget.url}
+                          alt=""
+                          style={{
+                            width: 40,
+                            height: 40,
+                            objectFit: "contain",
+                          }}
+                        />
+                      ) : widget.settings?.customIcon ? (
+                        (() => {
+                          const found = ICON_LIBRARY.find(
+                            (i) => i.name === widget.settings?.customIcon,
+                          );
+                          if (found) {
+                            const IconComp = found.Icon;
+                            return <IconComp size={32} />;
+                          }
+                          return widget.content || "★";
+                        })()
+                      ) : (
+                        widget.content || "★"
+                      )}
                     </div>
-                  )}
-                  <button
-                    type="button"
-                    className="change-media-btn"
-                    onClick={() => openMediaPicker("icon-image")}
-                  >
-                    Choose or Upload Icon Image
-                  </button>
+                    <button
+                      type="button"
+                      className="change-media-btn"
+                      style={{ flex: 1 }}
+                      onClick={() => {
+                        setIconPickerTarget("main");
+                        setIconPickerOpen(true);
+                      }}
+                    >
+                      Choose Icon (Library / Upload / Character)
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* ====== PRODUCTS GRID ====== */}
             {["products", "product_grid"].includes(widget.type) && (
               <div className="items-editor">
                 <h4>Product Query</h4>
@@ -2030,7 +1717,6 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== LINK BIO ====== */}
             {isLinkBio && (
               <div className="items-editor">
                 <h4>Link in Bio Profile</h4>
@@ -2150,7 +1836,6 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== IMAGE BOX ====== */}
             {widget.type === "image_box" && (
               <>
                 <label className="setting-field">
@@ -2173,21 +1858,6 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== MAP ====== */}
-            {widget.type === "map" && (
-              <label className="setting-field">
-                <span>Map Location</span>
-                <input
-                  value={widget.settings?.mapAddress || widget.content || ""}
-                  onChange={(event) =>
-                    onChangeSettings({ mapAddress: event.target.value })
-                  }
-                  placeholder="Enter an address or place"
-                />
-              </label>
-            )}
-
-            {/* ====== SOUNDCLOUD ====== */}
             {widget.type === "soundcloud" && (
               <label className="setting-field">
                 <span>SoundCloud Track URL</span>
@@ -2200,7 +1870,6 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== FORM ====== */}
             {widget.type === "form" && (
               <>
                 <label className="setting-field">
@@ -2229,7 +1898,6 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== SHORTCODE ====== */}
             {widget.type === "shortcode" && (
               <label className="setting-field">
                 <span>Shortcode</span>
@@ -2246,7 +1914,6 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== MENU ANCHOR ====== */}
             {widget.type === "menu_anchor" && (
               <label className="setting-field">
                 <span>Anchor ID</span>
@@ -2258,7 +1925,6 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== READ MORE / SIDEBAR ====== */}
             {(widget.type === "read_more" || widget.type === "sidebar") && (
               <>
                 <label className="setting-field">
@@ -2283,73 +1949,17 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== SIDEBAR LINKS ====== */}
             {widget.type === "sidebar" && (
-              <div className="items-editor">
-                <div className="items-header">
-                  <span>Sidebar Links</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onChangeItems([
-                        ...(widget.items || []),
-                        {
-                          id: `sidebar-${widget.id}-${iconListItemSequence.current++}`,
-                          title: "New Link",
-                          link: { url: "" },
-                        },
-                      ])
-                    }
-                  >
-                    + Add Link
-                  </button>
-                </div>
-                {(widget.items || []).map((item, index) => (
-                  <div className="item-editor" key={item.id}>
-                    <input
-                      aria-label="Sidebar link title"
-                      value={item.title || ""}
-                      onChange={(event) => {
-                        const items = [...(widget.items || [])];
-                        items[index] = { ...item, title: event.target.value };
-                        onChangeItems(items);
-                      }}
-                    />
-                    <LinkPicker
-                      value={item.link?.url || ""}
-                      onChange={(url) => {
-                        const items = [...(widget.items || [])];
-                        items[index] = { ...item, link: { ...item.link, url } };
-                        onChangeItems(items);
-                      }}
-                      onRemove={() => {
-                        const items = [...(widget.items || [])];
-                        items[index] = {
-                          ...item,
-                          link: { ...item.link, url: "" },
-                        };
-                        onChangeItems(items);
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="remove-item"
-                      onClick={() =>
-                        onChangeItems(
-                          (widget.items || []).filter(
-                            (_, itemIndex) => itemIndex !== index,
-                          ),
-                        )
-                      }
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <RepeaterItemsEditor
+                items={widget.items || []}
+                onChange={onChangeItems}
+                itemLabel="Link"
+                addLabel="Add Link"
+                showItemLink
+                showContent={false}
+              />
             )}
 
-            {/* ====== RATING ====== */}
             {widget.type === "rating" && (
               <label className="setting-field">
                 <span>Rating (0–5)</span>
@@ -2371,7 +1981,6 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== TEXT PATH ====== */}
             {widget.type === "text_path" && (
               <label className="setting-field">
                 <span>Text on Path</span>
@@ -2383,79 +1992,37 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== TABLEPRESS ====== */}
             {widget.type === "tablepress" && (
-              <>
+              <div className="items-editor">
+                <h4>Table</h4>
                 <label className="setting-field">
-                  <span>Column Headings (two columns)</span>
+                  <span>Headers (comma separated)</span>
                   <input
-                    value={(
-                      widget.settings?.tableHeaders || ["Name", "Role"]
-                    ).join(", ")}
+                    value={(widget.settings?.tableHeaders || [
+                      "Name",
+                      "Role",
+                    ]).join(", ")}
                     onChange={(event) =>
                       onChangeSettings({
                         tableHeaders: event.target.value
                           .split(",")
-                          .map((heading) => heading.trim())
+                          .map((h) => h.trim())
                           .slice(0, 2),
                       })
                     }
                   />
                 </label>
-                <div className="items-header">
-                  <span>Table Rows</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onChangeItems([
-                        ...(widget.items || []),
-                        {
-                          id: `table-row-${widget.id}-${iconListItemSequence.current++}`,
-                          title: "Cell 1",
-                          content: "Cell 2",
-                        },
-                      ])
-                    }
-                  >
-                    + Add Row
-                  </button>
-                </div>
-                {(widget.items || []).map((item, index) => (
-                  <div key={item.id} className="field-row">
-                    <input
-                      aria-label={`Row ${index + 1}, first cell`}
-                      value={item.title || ""}
-                      onChange={(event) => {
-                        const items = [...(widget.items || [])];
-                        items[index] = { ...item, title: event.target.value };
-                        onChangeItems(items);
-                      }}
-                    />
-                    <input
-                      aria-label={`Row ${index + 1}, second cell`}
-                      value={item.content || ""}
-                      onChange={(event) => {
-                        const items = [...(widget.items || [])];
-                        items[index] = { ...item, content: event.target.value };
-                        onChangeItems(items);
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onChangeItems(
-                          (widget.items || []).filter((_, row) => row !== index),
-                        )
-                      }
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </>
+                <RepeaterItemsEditor
+                  items={widget.items || []}
+                  onChange={onChangeItems}
+                  itemLabel="Row"
+                  addLabel="Add Row"
+                  showTitle
+                  showContent
+                />
+              </div>
             )}
 
-            {/* ====== HEADING ====== */}
             {isHeading && (
               <div className="content-section-elementor">
                 <div className="elementor-section-header">
@@ -2467,56 +2034,29 @@ const SettingsPanel = ({
                   </span>
                   <span className="elementor-section-title">Heading</span>
                 </div>
-
                 {openSections.heading && (
                   <div className="elementor-section-body">
                     <label className="elementor-field">
-                      <div className="elementor-label-row">
-                        <span>Title</span>
-                        <button type="button" className="ai-edit-btn">
-                          ✨ Edit with AI
-                        </button>
-                      </div>
-                      <div className="elementor-textarea-wrapper">
-                        <textarea
-                          value={widget.content || ""}
-                          placeholder="Enter your title"
-                          rows={3}
-                          onChange={(e) => onChangeContent(e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          className="textarea-expand-btn"
-                          onClick={() => {
-                            const val = window.prompt(
-                              "Edit title:",
-                              widget.content || "",
-                            );
-                            if (val !== null) onChangeContent(val);
-                          }}
-                        >
-                          ⛶
-                        </button>
-                      </div>
+                      <span className="elementor-label">Title</span>
+                      <textarea
+                        value={widget.content || ""}
+                        placeholder="Enter title"
+                        rows={3}
+                        onChange={(e) => onChangeContent(e.target.value)}
+                      />
                     </label>
-
                     <label className="elementor-field">
                       <span className="elementor-label">Link</span>
                       <LinkPicker
                         value={widget.link?.url || ""}
                         onChange={(url) =>
-                          onChangeSettings({
-                            link: { ...widget.link, url },
-                          })
+                          onChangeSettings({ link: { ...widget.link, url } })
                         }
                         onRemove={() =>
-                          onChangeSettings({
-                            link: { ...widget.link, url: "" },
-                          })
+                          onChangeSettings({ link: { ...widget.link, url: "" } })
                         }
                       />
                     </label>
-
                     <label className="elementor-field elementor-field-inline">
                       <span className="elementor-label">HTML Tag</span>
                       <select
@@ -2541,7 +2081,6 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== TEXT ====== */}
             {widget.type === "text" && (
               <RichTextEditor
                 value={widget.content || ""}
@@ -2551,7 +2090,6 @@ const SettingsPanel = ({
               />
             )}
 
-            {/* ====== BUTTON ====== */}
             {isButton && (
               <>
                 <label className="setting-field">
@@ -2563,36 +2101,27 @@ const SettingsPanel = ({
                     onChange={(e) => onChangeContent(e.target.value)}
                   />
                 </label>
-
                 <label className="setting-field">
                   <span>Button Link</span>
                   <LinkPicker
                     value={widget.link?.url || widget.url || ""}
                     onChange={(url) => {
                       onChangeUrl(url);
-                      onChangeSettings({
-                        link: { ...widget.link, url },
-                      });
+                      onChangeSettings({ link: { ...widget.link, url } });
                     }}
                     onRemove={() => {
                       onChangeUrl("");
-                      onChangeSettings({
-                        link: { ...widget.link, url: "" },
-                      });
+                      onChangeSettings({ link: { ...widget.link, url: "" } });
                     }}
                   />
                 </label>
-
                 <label className="setting-field">
                   <span>Open in</span>
                   <select
                     value={widget.link?.target || "_self"}
                     onChange={(e) =>
                       onChangeSettings({
-                        link: {
-                          ...widget.link,
-                          target: e.target.value as "_self" | "_blank",
-                        },
+                        link: { ...widget.link, target: e.target.value },
                       })
                     }
                   >
@@ -2603,7 +2132,6 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== IMAGE / SITE LOGO ====== */}
             {isImageWidget && (
               <>
                 <label className="setting-field">
@@ -2611,7 +2139,6 @@ const SettingsPanel = ({
                     {widget.type === "site_logo" ? "Site Logo" : "Image"}
                   </span>
                 </label>
-
                 {widget.url ? (
                   <div className="image-preview-box">
                     <img src={widget.url} alt={widget.label} />
@@ -2649,45 +2176,10 @@ const SettingsPanel = ({
                       )
                     }
                   >
-                    🖼 Select {widget.type === "site_logo" ? "Logo" : "Image"}
+                    🖼 Select / Upload{" "}
+                    {widget.type === "site_logo" ? "Logo" : "Image"}
                   </button>
                 )}
-
-                {widget.type === "site_logo" && (
-                  <label className="setting-field">
-                    <span>Image Resolution</span>
-                    <select
-                      value={s.objectFit || "contain"}
-                      onChange={(e) =>
-                        updateStyle({ objectFit: e.target.value as any })
-                      }
-                    >
-                      <option value="contain">Full</option>
-                      <option value="cover">Cover</option>
-                      <option value="fill">Fill</option>
-                      <option value="none">None</option>
-                      <option value="scale-down">Scale Down (Custom)</option>
-                    </select>
-                  </label>
-                )}
-
-                <label className="setting-field">
-                  <span>Link</span>
-                  <LinkPicker
-                    value={widget.link?.url || ""}
-                    onChange={(url) =>
-                      onChangeSettings({
-                        link: { ...widget.link, url },
-                      })
-                    }
-                    onRemove={() =>
-                      onChangeSettings({
-                        link: { ...widget.link, url: "" },
-                      })
-                    }
-                  />
-                </label>
-
                 <label className="setting-field">
                   <span>Alt Text</span>
                   <input
@@ -2704,10 +2196,50 @@ const SettingsPanel = ({
                     }
                   />
                 </label>
+                <label className="setting-field">
+                  <span>Link</span>
+                  <LinkPicker
+                    value={widget.link?.url || ""}
+                    onChange={(url) =>
+                      onChangeSettings({ link: { ...widget.link, url } })
+                    }
+                    onRemove={() =>
+                      onChangeSettings({ link: { ...widget.link, url: "" } })
+                    }
+                  />
+                </label>
               </>
             )}
 
-            {/* ====== NAV MENU ====== */}
+            {widget.type === "video" && (
+              <>
+                <div className="setting-field">
+                  <span>Video File</span>
+                  <button
+                    type="button"
+                    className={
+                      widget.url ? "change-media-btn" : "select-media-btn"
+                    }
+                    style={{ width: "100%" }}
+                    onClick={() => openMediaPicker("video")}
+                  >
+                    {widget.url
+                      ? "🔄 Change Video File"
+                      : "🎬 Upload / Choose Video File"}
+                  </button>
+                </div>
+                <label className="setting-field">
+                  <span>Or Video URL (YouTube / Vimeo / MP4)</span>
+                  <input
+                    type="text"
+                    value={widget.url || ""}
+                    placeholder="https://..."
+                    onChange={(e) => onChangeUrl(e.target.value)}
+                  />
+                </label>
+              </>
+            )}
+
             {isMenuWidget && (
               <>
                 <div className="setting-field">
@@ -2719,7 +2251,6 @@ const SettingsPanel = ({
                       const selectedMenu = availableMenus.find(
                         (m) => m.id === selectedId,
                       );
-
                       let treeItems: any[] = [];
                       if (selectedMenu && Array.isArray(selectedMenu.items)) {
                         const buildTree = (
@@ -2757,10 +2288,8 @@ const SettingsPanel = ({
                               ),
                             }));
                         };
-
                         treeItems = buildTree(null);
                       }
-
                       onChangeSettings({
                         selectedMenuId: selectedId,
                         menuName: selectedMenu?.name || "",
@@ -2775,20 +2304,12 @@ const SettingsPanel = ({
                       </option>
                     ))}
                   </select>
-
                   {menuLoadError && (
                     <small style={{ color: "#b91c1c", fontSize: 11 }}>
                       ⚠ Failed to load menus
                     </small>
                   )}
-
-                  {availableMenus.length === 0 && !menuLoadError && (
-                    <small style={{ color: "#888", fontSize: 11 }}>
-                      No menus found. Create one in Appearance → Menus.
-                    </small>
-                  )}
                 </div>
-
                 <label className="setting-field">
                   <span>Horizontal Menu Position</span>
                   <select
@@ -2801,11 +2322,8 @@ const SettingsPanel = ({
                     <option value="center">Center</option>
                     <option value="flex-end">Right</option>
                     <option value="space-between">Justified</option>
-                    <option value="space-around">Space Around</option>
-                    <option value="space-evenly">Space Evenly</option>
                   </select>
                 </label>
-
                 <label className="setting-field">
                   <span>Responsive Breakpoint</span>
                   <select
@@ -2818,70 +2336,9 @@ const SettingsPanel = ({
                     <option value="tablet">Tablet (≤ 1024px)</option>
                   </select>
                 </label>
-
-                {(widget.items || []).length > 0 && (
-                  <div
-                    style={{
-                      marginTop: 16,
-                      padding: 12,
-                      background: "#f7f9fc",
-                      borderRadius: 6,
-                      border: "1px solid #e0e6ed",
-                      fontSize: 12,
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        marginBottom: 8,
-                        color: "#0c2f55",
-                        fontSize: 12,
-                      }}
-                    >
-                      📋 Loaded Menu ({(widget.items || []).length} items)
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 4,
-                      }}
-                    >
-                      {(widget.items || []).map((item, i) => (
-                        <div
-                          key={item.id || i}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                            padding: "4px 0",
-                            color: "#333",
-                          }}
-                        >
-                          <span style={{ color: "#0c2f55" }}>•</span>
-                          <span style={{ flex: 1 }}>{item.title}</span>
-                          {item.children && item.children.length > 0 && (
-                            <span
-                              style={{
-                                fontSize: 10,
-                                background: "#0c2f55",
-                                color: "#fff",
-                                padding: "1px 6px",
-                                borderRadius: 8,
-                              }}
-                            >
-                              {item.children.length} sub
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </>
             )}
 
-            {/* ====== SLIDER ====== */}
             {isSlider && (
               <SliderSettings
                 widget={widget}
@@ -2890,7 +2347,6 @@ const SettingsPanel = ({
               />
             )}
 
-            {/* ====== GALLERY ====== */}
             {isGallery && (
               <div className="items-editor">
                 <div className="items-header">
@@ -2902,7 +2358,6 @@ const SettingsPanel = ({
                     + Add Images
                   </button>
                 </div>
-
                 <label className="setting-field">
                   <span>Columns</span>
                   <select
@@ -2918,7 +2373,6 @@ const SettingsPanel = ({
                     <option value={6}>6 Columns</option>
                   </select>
                 </label>
-
                 {(widget.settings?.images || []).map((img, i) => (
                   <div key={img.id || i} className="image-item-editor">
                     <img
@@ -2951,7 +2405,6 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== HTML ====== */}
             {widget.type === "html" && (
               <label className="setting-field">
                 <span>HTML Code</span>
@@ -2965,20 +2418,6 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== VIDEO ====== */}
-            {widget.type === "video" && (
-              <label className="setting-field">
-                <span>Video URL</span>
-                <input
-                  type="text"
-                  value={widget.url || ""}
-                  placeholder="YouTube / Vimeo / MP4"
-                  onChange={(e) => onChangeUrl(e.target.value)}
-                />
-              </label>
-            )}
-
-            {/* ====== COPYRIGHT ====== */}
             {widget.type === "copyright" && (
               <label className="setting-field">
                 <span>Copyright Text</span>
@@ -2991,7 +2430,6 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== SITE TITLE / TAGLINE ====== */}
             {(widget.type === "site_title" ||
               widget.type === "site_tagline") && (
               <label className="setting-field">
@@ -3004,7 +2442,6 @@ const SettingsPanel = ({
               </label>
             )}
 
-            {/* ====== ICON LIST ====== */}
             {isIconList && (
               <div className="items-editor">
                 <div className="items-header">
@@ -3048,73 +2485,58 @@ const SettingsPanel = ({
                       />
                     </label>
                     <div className="setting-field">
-                      <span>Choose Icon</span>
+                      <span>Icon</span>
                       <div
-                        className="icon-library-grid"
-                        role="group"
-                        aria-label={`Choose icon for ${
-                          item.title || "list item"
-                        }`}
-                      >
-                        {ICON_LIBRARY.map(({ name, label, Icon }) => (
-                          <button
-                            type="button"
-                            key={name}
-                            title={label}
-                            aria-label={label}
-                            aria-pressed={item.icon === name}
-                            className={
-                              item.icon === name
-                                ? "icon-library-option selected"
-                                : "icon-library-option"
-                            }
-                            onClick={() => {
-                              const items = [...(widget.items || [])];
-                              items[index] = { ...item, icon: name, image: "" };
-                              onChangeItems(items);
-                            }}
-                          >
-                            <Icon aria-hidden="true" />
-                          </button>
-                        ))}
-                      </div>
-                      <div className="icon-list-selection-preview">
-                        <BuilderIcon name={item.icon} />
-                        <span>{item.icon || "Choose an icon"}</span>
-                      </div>
-                    </div>
-                    <div className="setting-field">
-                      <span>Icon Image (SVG or PNG)</span>
-                      {item.image && (
-                        <img
-                          src={item.image}
-                          alt=""
-                          className="icon-list-image-preview"
-                        />
-                      )}
-                      <button
-                        type="button"
-                        className="change-media-btn"
-                        onClick={() => {
-                          setIconListItemIndex(index);
-                          openMediaPicker("icon-list-item");
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: 10,
+                          background: "#f8f9fc",
+                          border: "1px solid #e3e6eb",
+                          borderRadius: 6,
                         }}
                       >
-                        Choose from Media Library or Upload
-                      </button>
-                      {item.image && (
-                        <button
-                          type="button"
-                          className="remove-media-btn"
-                          onClick={() => {
-                            const items = [...(widget.items || [])];
-                            items[index] = { ...item, image: "" };
-                            onChangeItems(items);
+                        <div
+                          style={{
+                            width: 36,
+                            height: 36,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            background: "#fff",
+                            border: "1px solid #e3e6eb",
+                            borderRadius: 4,
+                            fontSize: 18,
                           }}
                         >
-                          Remove Icon Image
+                          {item.image ? (
+                            <img
+                              src={item.image}
+                              alt=""
+                              style={{
+                                width: 24,
+                                height: 24,
+                                objectFit: "contain",
+                              }}
+                            />
+                          ) : (
+                            <BuilderIcon name={item.icon} />
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="change-media-btn"
+                          style={{ flex: 1, fontSize: 11 }}
+                          onClick={() => {
+                            setIconPickerItemIndex(index);
+                            setIconPickerTarget("item");
+                            setIconPickerOpen(true);
+                          }}
+                        >
+                          Choose Icon (Library / Upload)
                         </button>
-                      )}
+                      </div>
                     </div>
                     <label className="setting-field">
                       <span>Link</span>
@@ -3156,16 +2578,72 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== ICON BOX ====== */}
             {widget.type === "icon_box" && (
               <>
-                <label className="setting-field">
+                <div className="setting-field">
                   <span>Icon</span>
-                  <input
-                    value={widget.content || ""}
-                    onChange={(event) => onChangeContent(event.target.value)}
-                  />
-                </label>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: 12,
+                      background: "#f8f9fc",
+                      border: "1px solid #e3e6eb",
+                      borderRadius: 6,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 56,
+                        height: 56,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: "#fff",
+                        border: "1px solid #e3e6eb",
+                        borderRadius: 6,
+                        fontSize: 28,
+                      }}
+                    >
+                      {widget.url ? (
+                        <img
+                          src={widget.url}
+                          alt=""
+                          style={{
+                            width: 40,
+                            height: 40,
+                            objectFit: "contain",
+                          }}
+                        />
+                      ) : widget.settings?.customIcon ? (
+                        (() => {
+                          const found = ICON_LIBRARY.find(
+                            (i) => i.name === widget.settings?.customIcon,
+                          );
+                          if (found) {
+                            const IconComp = found.Icon;
+                            return <IconComp size={32} />;
+                          }
+                          return widget.content || "★";
+                        })()
+                      ) : (
+                        widget.content || "★"
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="change-media-btn"
+                      style={{ flex: 1 }}
+                      onClick={() => {
+                        setIconPickerTarget("main");
+                        setIconPickerOpen(true);
+                      }}
+                    >
+                      Choose Icon
+                    </button>
+                  </div>
+                </div>
                 <label className="setting-field">
                   <span>Title</span>
                   <input
@@ -3206,7 +2684,6 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== COUNTER ====== */}
             {widget.type === "counter" && (
               <>
                 <label className="setting-field">
@@ -3249,7 +2726,6 @@ const SettingsPanel = ({
               </>
             )}
 
-            {/* ====== TESTIMONIAL / PROGRESS BAR ====== */}
             {(widget.type === "testimonial" ||
               widget.type === "progress_bar") && (
               <div className="items-editor">
@@ -3289,9 +2765,7 @@ const SettingsPanel = ({
                         const item = widget.items?.[0] || {
                           id: `${widget.id}-item`,
                         };
-                        onChangeItems([
-                          { ...item, title: event.target.value },
-                        ]);
+                        onChangeItems([{ ...item, title: event.target.value }]);
                       }}
                     />
                   </label>
@@ -3321,7 +2795,6 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== SOCIAL ICONS ====== */}
             {widget.type === "social_icons" && (
               <div className="items-editor">
                 <div className="items-header">
@@ -3356,17 +2829,56 @@ const SettingsPanel = ({
                         }}
                       />
                     </label>
-                    <label className="setting-field">
-                      <span>Icon / Initials</span>
-                      <input
-                        value={item.icon || ""}
-                        onChange={(event) => {
-                          const items = [...(widget.items || [])];
-                          items[index] = { ...item, icon: event.target.value };
-                          onChangeItems(items);
+                    <div className="setting-field">
+                      <span>Icon</span>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
                         }}
-                      />
-                    </label>
+                      >
+                        <div
+                          style={{
+                            width: 32,
+                            height: 32,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            background: "#f8f9fc",
+                            border: "1px solid #e3e6eb",
+                            borderRadius: 4,
+                            fontSize: 14,
+                          }}
+                        >
+                          {item.image ? (
+                            <img
+                              src={item.image}
+                              alt=""
+                              style={{
+                                width: 22,
+                                height: 22,
+                                objectFit: "contain",
+                              }}
+                            />
+                          ) : (
+                            (item.icon || item.title || "•").slice(0, 2)
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="change-media-btn"
+                          style={{ flex: 1, fontSize: 11 }}
+                          onClick={() => {
+                            setIconPickerItemIndex(index);
+                            setIconPickerTarget("item");
+                            setIconPickerOpen(true);
+                          }}
+                        >
+                          Choose Icon
+                        </button>
+                      </div>
+                    </div>
                     <label className="setting-field">
                       <span>Profile URL</span>
                       <LinkPicker
@@ -3407,69 +2919,34 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ====== ACCORDION / TABS / TOGGLE ====== */}
             {["accordion", "tabs", "toggle"].includes(widget.type) && (
-              <div className="items-editor">
-                <div className="items-header">
-                  <span>Items</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onChangeItems([
-                        ...(widget.items || []),
-                        {
-                          id: `item-${Date.now()}`,
-                          title: "New Item",
-                          content: "Content",
-                        },
-                      ])
-                    }
-                  >
-                    + Add
-                  </button>
-                </div>
-                {(widget.items || []).map((item, i) => (
-                  <div key={item.id} className="item-editor">
-                    <input
-                      type="text"
-                      value={item.title}
-                      onChange={(e) => {
-                        const newItems = [...(widget.items || [])];
-                        newItems[i] = { ...item, title: e.target.value };
-                        onChangeItems(newItems);
-                      }}
-                      placeholder="Title"
-                    />
-                    <textarea
-                      value={item.content || ""}
-                      onChange={(e) => {
-                        const newItems = [...(widget.items || [])];
-                        newItems[i] = { ...item, content: e.target.value };
-                        onChangeItems(newItems);
-                      }}
-                      placeholder="Content"
-                      rows={2}
-                    />
-                    <button
-                      type="button"
-                      className="remove-item"
-                      onClick={() =>
-                        onChangeItems(
-                          (widget.items || []).filter((_, idx) => idx !== i),
-                        )
-                      }
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <RepeaterItemsEditor
+                items={widget.items || []}
+                onChange={onChangeItems}
+                itemLabel={
+                  widget.type === "accordion"
+                    ? "Accordion Item"
+                    : widget.type === "tabs"
+                      ? "Tab"
+                      : "Toggle Item"
+                }
+                addLabel={
+                  widget.type === "accordion"
+                    ? "Add Accordion Item"
+                    : widget.type === "tabs"
+                      ? "Add Tab"
+                      : "Add Toggle Item"
+                }
+                allowNestedChildren
+                showTitle
+                showContent={false}
+              />
             )}
           </div>
         )}
 
         {/* ============================================ */}
-        {/* ====== STYLE TAB =============== */}
+        {/* ====== STYLE TAB ========================== */}
         {/* ============================================ */}
         {activeTab === "style" && (
           <>
@@ -3512,7 +2989,6 @@ const SettingsPanel = ({
                         Active
                       </button>
                     </div>
-
                     {menuItemStyleTab === "normal" && (
                       <>
                         <label className="setting-field">
@@ -3534,7 +3010,6 @@ const SettingsPanel = ({
                             />
                           </div>
                         </label>
-
                         <div className="field-row">
                           <label className="setting-field">
                             <span>Font Size (px)</span>
@@ -3568,7 +3043,6 @@ const SettingsPanel = ({
                         </div>
                       </>
                     )}
-
                     {menuItemStyleTab === "hover" && (
                       <>
                         <label className="setting-field">
@@ -3590,7 +3064,6 @@ const SettingsPanel = ({
                             />
                           </div>
                         </label>
-
                         <label className="setting-field">
                           <span>Hover Underline</span>
                           <select
@@ -3613,7 +3086,6 @@ const SettingsPanel = ({
                         </label>
                       </>
                     )}
-
                     {menuItemStyleTab === "active" && (
                       <label className="setting-field">
                         <span>Active Item Color</span>
@@ -3676,7 +3148,6 @@ const SettingsPanel = ({
                         ))}
                       </select>
                     </label>
-
                     <div className="field-row">
                       <label className="setting-field">
                         <span>Font Size (px)</span>
@@ -3688,7 +3159,6 @@ const SettingsPanel = ({
                           }
                         />
                       </label>
-
                       <label className="setting-field">
                         <span>Font Weight</span>
                         <select
@@ -3707,7 +3177,6 @@ const SettingsPanel = ({
                         </select>
                       </label>
                     </div>
-
                     <label className="setting-field">
                       <span>Text Align</span>
                       <div className="button-group">
@@ -3738,7 +3207,6 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ============ SIZE & DIMENSIONS ============ */}
             <div className="settings-section">
               <div
                 className="collapsible-header"
@@ -3762,7 +3230,6 @@ const SettingsPanel = ({
                       onChange={(val) => updateStyle({ height: val })}
                     />
                   </div>
-
                   <div className="field-row">
                     <UnitInput
                       label="Min Width"
@@ -3775,7 +3242,6 @@ const SettingsPanel = ({
                       onChange={(val) => updateStyle({ maxWidth: val })}
                     />
                   </div>
-
                   <div className="field-row">
                     <UnitInput
                       label="Min Height"
@@ -3788,66 +3254,35 @@ const SettingsPanel = ({
                       onChange={(val) => updateStyle({ maxHeight: val })}
                     />
                   </div>
-
                   {(isImageWidget || widget.type === "site_logo") && (
-                    <>
-                      <label className="setting-field">
-                        <span>Object Fit</span>
-                        <select
-                          value={s.objectFit || "contain"}
-                          onChange={(e) =>
-                            updateStyle({ objectFit: e.target.value as any })
-                          }
-                        >
-                          <option value="cover">Cover</option>
-                          <option value="contain">Contain</option>
-                          <option value="fill">Fill</option>
-                          <option value="none">None</option>
-                          <option value="scale-down">Scale Down</option>
-                        </select>
-                      </label>
-
-                      <label className="setting-field">
-                        <span>Object Position</span>
-                        <input
-                          type="text"
-                          value={s.objectPosition || "center"}
-                          onChange={(e) =>
-                            updateStyle({ objectPosition: e.target.value })
-                          }
-                          placeholder="center, top, bottom"
-                        />
-                      </label>
-                    </>
+                    <label className="setting-field">
+                      <span>Object Fit</span>
+                      <select
+                        value={s.objectFit || "contain"}
+                        onChange={(e) =>
+                          updateStyle({ objectFit: e.target.value as any })
+                        }
+                      >
+                        <option value="cover">Cover</option>
+                        <option value="contain">Contain</option>
+                        <option value="fill">Fill</option>
+                        <option value="none">None</option>
+                        <option value="scale-down">Scale Down</option>
+                      </select>
+                    </label>
                   )}
-
                   <label className="setting-field">
                     <span>Quick Presets</span>
                     <div className="button-group button-group-wrap">
-                      <button
-                        type="button"
-                        onClick={() => updateStyle({ width: "25%" })}
-                      >
-                        25%
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => updateStyle({ width: "50%" })}
-                      >
-                        50%
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => updateStyle({ width: "75%" })}
-                      >
-                        75%
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => updateStyle({ width: "100%" })}
-                      >
-                        100%
-                      </button>
+                      {["25%", "50%", "75%", "100%"].map((w) => (
+                        <button
+                          key={w}
+                          type="button"
+                          onClick={() => updateStyle({ width: w })}
+                        >
+                          {w}
+                        </button>
+                      ))}
                       <button
                         type="button"
                         onClick={() =>
@@ -3862,7 +3297,6 @@ const SettingsPanel = ({
               )}
             </div>
 
-            {/* ============ COLORS ============ */}
             <div className="settings-section">
               <div
                 className="collapsible-header"
@@ -3893,7 +3327,6 @@ const SettingsPanel = ({
                       </div>
                     </label>
                   )}
-
                   <label className="setting-field">
                     <span>Background Color</span>
                     <div className="color-input-group">
@@ -3913,7 +3346,6 @@ const SettingsPanel = ({
                       />
                     </div>
                   </label>
-
                   {isIconList && (
                     <div className="field-row">
                       <label className="setting-field">
@@ -3942,7 +3374,6 @@ const SettingsPanel = ({
                       </label>
                     </div>
                   )}
-
                   <div className="setting-field">
                     <span>Background Image</span>
                     {s.backgroundImage && (
@@ -3964,44 +3395,7 @@ const SettingsPanel = ({
                     >
                       Choose from Media Library or Upload
                     </button>
-                    {s.backgroundImage && (
-                      <div className="field-row">
-                        <label className="setting-field">
-                          <span>Size</span>
-                          <select
-                            value={s.backgroundSize || "cover"}
-                            onChange={(event) =>
-                              updateStyle({
-                                backgroundSize: event.target.value,
-                              })
-                            }
-                          >
-                            <option value="cover">Cover</option>
-                            <option value="contain">Contain</option>
-                            <option value="auto">Auto</option>
-                          </select>
-                        </label>
-                        <label className="setting-field">
-                          <span>Position</span>
-                          <select
-                            value={s.backgroundPosition || "center"}
-                            onChange={(event) =>
-                              updateStyle({
-                                backgroundPosition: event.target.value,
-                              })
-                            }
-                          >
-                            <option value="center">Center</option>
-                            <option value="top">Top</option>
-                            <option value="bottom">Bottom</option>
-                            <option value="left">Left</option>
-                            <option value="right">Right</option>
-                          </select>
-                        </label>
-                      </div>
-                    )}
                   </div>
-
                   {globals.colors && globals.colors.length > 0 && (
                     <div className="global-colors-row">
                       <span className="global-label">Global:</span>
@@ -4025,7 +3419,6 @@ const SettingsPanel = ({
               )}
             </div>
 
-            {/* ============ HOVER EFFECTS ============ */}
             <div className="settings-section">
               <div
                 className="collapsible-header"
@@ -4053,11 +3446,9 @@ const SettingsPanel = ({
                         onChange={(e) =>
                           updateStyle({ hoverBackgroundColor: e.target.value })
                         }
-                        placeholder="transparent"
                       />
                     </div>
                   </label>
-
                   <label className="setting-field">
                     <span>Hover Text Color</span>
                     <div className="color-input-group">
@@ -4077,7 +3468,6 @@ const SettingsPanel = ({
                       />
                     </div>
                   </label>
-
                   <label className="setting-field">
                     <span>Hover Box Shadow</span>
                     <input
@@ -4089,7 +3479,6 @@ const SettingsPanel = ({
                       placeholder="0 8px 24px rgba(0,0,0,0.15)"
                     />
                   </label>
-
                   <div className="field-row">
                     <label className="setting-field">
                       <span>Scale</span>
@@ -4118,7 +3507,6 @@ const SettingsPanel = ({
                       />
                     </label>
                   </div>
-
                   <label className="setting-field">
                     <span>Move Y on Hover (px)</span>
                     <input
@@ -4131,53 +3519,10 @@ const SettingsPanel = ({
                       }
                     />
                   </label>
-
-                  <label className="setting-field">
-                    <span>Quick Presets</span>
-                    <div className="button-group button-group-wrap">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateStyle({
-                            hoverScale: 1.05,
-                            hoverBoxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-                            transitionDuration: 300,
-                          })
-                        }
-                      >
-                        🔍 Zoom
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateStyle({
-                            hoverTranslateY: -5,
-                            hoverBoxShadow: "0 12px 28px rgba(0,0,0,0.18)",
-                            transitionDuration: 300,
-                          })
-                        }
-                      >
-                        ⬆ Lift
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateStyle({
-                            hoverBackgroundColor: "#0c2f55",
-                            hoverColor: "#ffffff",
-                            transitionDuration: 250,
-                          })
-                        }
-                      >
-                        🎨 Fill
-                      </button>
-                    </div>
-                  </label>
                 </div>
               )}
             </div>
 
-            {/* ============ ANIMATION ============ */}
             <div className="settings-section">
               <div
                 className="collapsible-header"
@@ -4206,7 +3551,6 @@ const SettingsPanel = ({
                       <option value="pulse">Pulse</option>
                     </select>
                   </label>
-
                   <div className="field-row">
                     <label className="setting-field">
                       <span>Duration (ms)</span>
@@ -4237,7 +3581,131 @@ const SettingsPanel = ({
               )}
             </div>
 
-            {/* ============ MOBILE MENU ============ */}
+            <div className="settings-section">
+              <div
+                className="collapsible-header"
+                onClick={() => toggleSection("scrollEffects")}
+              >
+                <span>
+                  {openSections.scrollEffects ? "▾" : "▸"} 📜 Scroll Effects
+                </span>
+              </div>
+              {openSections.scrollEffects && (
+                <div className="collapsible-content">
+                  <label className="setting-field">
+                    <span>Sticky Position</span>
+                    <select
+                      value={(s as any).sticky || "none"}
+                      onChange={(e) =>
+                        updateStyle({ sticky: e.target.value } as any)
+                      }
+                    >
+                      <option value="none">None</option>
+                      <option value="top">Sticky Top</option>
+                      <option value="bottom">Sticky Bottom</option>
+                    </select>
+                  </label>
+                  {(s as any).sticky && (s as any).sticky !== "none" && (
+                    <label className="setting-field">
+                      <span>Sticky Offset (px)</span>
+                      <input
+                        type="number"
+                        value={(s as any).stickyOffset || 0}
+                        onChange={(e) =>
+                          updateStyle({
+                            stickyOffset: Number(e.target.value),
+                          } as any)
+                        }
+                      />
+                    </label>
+                  )}
+                  <label className="setting-field">
+                    <span>Scroll Animation</span>
+                    <select
+                      value={(s as any).scrollAnimation || "none"}
+                      onChange={(e) =>
+                        updateStyle({
+                          scrollAnimation: e.target.value,
+                        } as any)
+                      }
+                    >
+                      <option value="none">None</option>
+                      <option value="fadeInUp">Fade In Up</option>
+                      <option value="fadeInDown">Fade In Down</option>
+                      <option value="zoomIn">Zoom In</option>
+                      <option value="slideInLeft">Slide In Left</option>
+                      <option value="slideInRight">Slide In Right</option>
+                    </select>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="settings-section">
+              <div
+                className="collapsible-header"
+                onClick={() => toggleSection("entranceAnimation")}
+              >
+                <span>
+                  {openSections.entranceAnimation ? "▾" : "▸"} 🎬 Entrance
+                  Animation
+                </span>
+              </div>
+              {openSections.entranceAnimation && (
+                <div className="collapsible-content">
+                  <label className="setting-field">
+                    <span>Animation</span>
+                    <select
+                      value={(s as any).entranceAnimation || "none"}
+                      onChange={(e) =>
+                        updateStyle({
+                          entranceAnimation: e.target.value,
+                        } as any)
+                      }
+                    >
+                      <option value="none">None</option>
+                      <option value="fadeIn">Fade In</option>
+                      <option value="fadeInUp">Fade In Up</option>
+                      <option value="fadeInDown">Fade In Down</option>
+                      <option value="fadeInLeft">Fade In Left</option>
+                      <option value="fadeInRight">Fade In Right</option>
+                      <option value="zoomIn">Zoom In</option>
+                      <option value="slideInUp">Slide In Up</option>
+                      <option value="slideInDown">Slide In Down</option>
+                      <option value="bounce">Bounce</option>
+                      <option value="pulse">Pulse</option>
+                    </select>
+                  </label>
+                  <div className="field-row">
+                    <label className="setting-field">
+                      <span>Duration (ms)</span>
+                      <input
+                        type="number"
+                        value={(s as any).entranceAnimationDuration || 600}
+                        onChange={(e) =>
+                          updateStyle({
+                            entranceAnimationDuration: Number(e.target.value),
+                          } as any)
+                        }
+                      />
+                    </label>
+                    <label className="setting-field">
+                      <span>Delay (ms)</span>
+                      <input
+                        type="number"
+                        value={(s as any).entranceAnimationDelay || 0}
+                        onChange={(e) =>
+                          updateStyle({
+                            entranceAnimationDelay: Number(e.target.value),
+                          } as any)
+                        }
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {isMenuWidget && (
               <div className="settings-section">
                 <div
@@ -4269,7 +3737,6 @@ const SettingsPanel = ({
                         />
                       </div>
                     </label>
-
                     <label className="setting-field">
                       <span>Mobile Menu Background</span>
                       <div className="color-input-group">
@@ -4298,7 +3765,6 @@ const SettingsPanel = ({
               </div>
             )}
 
-            {/* ============ SPACING WITH CHAIN LINK ============ */}
             <div className="settings-section">
               <div
                 className="collapsible-header"
@@ -4308,15 +3774,28 @@ const SettingsPanel = ({
               </div>
               {openSections.spacing && (
                 <div className="collapsible-content">
-                  
-                  {/* Padding */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <label className="setting-field" style={{ margin: 0 }}>Padding (px)</label>
-                    <button 
-                      type="button" 
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <label className="setting-field" style={{ margin: 0 }}>
+                      Padding (px)
+                    </label>
+                    <button
+                      type="button"
                       onClick={() => setLinkedPadding(!linkedPadding)}
-                      style={{ background: linkedPadding ? '#e0e7ff' : 'transparent', border: '1px solid #ccc', padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
-                      title="Link values"
+                      style={{
+                        background: linkedPadding ? "#e0e7ff" : "transparent",
+                        border: "1px solid #ccc",
+                        padding: "2px 8px",
+                        borderRadius: 4,
+                        cursor: "pointer",
+                        fontSize: 12,
+                      }}
                     >
                       🔗 {linkedPadding ? "Linked" : "Unlinked"}
                     </button>
@@ -4325,33 +3804,55 @@ const SettingsPanel = ({
                     <NumberInput
                       placeholder="Top"
                       value={(rs?.padding || s.padding)?.top || 0}
-                      onChange={(val: number) => updateSpacing("padding", "top", val)}
+                      onChange={(val: number) =>
+                        updateSpacing("padding", "top", val)
+                      }
                     />
                     <NumberInput
                       placeholder="Right"
                       value={(rs?.padding || s.padding)?.right || 0}
-                      onChange={(val: number) => updateSpacing("padding", "right", val)}
+                      onChange={(val: number) =>
+                        updateSpacing("padding", "right", val)
+                      }
                     />
                     <NumberInput
                       placeholder="Bottom"
                       value={(rs?.padding || s.padding)?.bottom || 0}
-                      onChange={(val: number) => updateSpacing("padding", "bottom", val)}
+                      onChange={(val: number) =>
+                        updateSpacing("padding", "bottom", val)
+                      }
                     />
                     <NumberInput
                       placeholder="Left"
                       value={(rs?.padding || s.padding)?.left || 0}
-                      onChange={(val: number) => updateSpacing("padding", "left", val)}
+                      onChange={(val: number) =>
+                        updateSpacing("padding", "left", val)
+                      }
                     />
                   </div>
-
-                  {/* Margin */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 8 }}>
-                    <label className="setting-field" style={{ margin: 0 }}>Margin (px)</label>
-                    <button 
-                      type="button" 
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginTop: 16,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <label className="setting-field" style={{ margin: 0 }}>
+                      Margin (px)
+                    </label>
+                    <button
+                      type="button"
                       onClick={() => setLinkedMargin(!linkedMargin)}
-                      style={{ background: linkedMargin ? '#e0e7ff' : 'transparent', border: '1px solid #ccc', padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
-                      title="Link values"
+                      style={{
+                        background: linkedMargin ? "#e0e7ff" : "transparent",
+                        border: "1px solid #ccc",
+                        padding: "2px 8px",
+                        borderRadius: 4,
+                        cursor: "pointer",
+                        fontSize: 12,
+                      }}
                     >
                       🔗 {linkedMargin ? "Linked" : "Unlinked"}
                     </button>
@@ -4360,29 +3861,36 @@ const SettingsPanel = ({
                     <NumberInput
                       placeholder="Top"
                       value={(rs?.margin || s.margin)?.top || 0}
-                      onChange={(val: number) => updateSpacing("margin", "top", val)}
+                      onChange={(val: number) =>
+                        updateSpacing("margin", "top", val)
+                      }
                     />
                     <NumberInput
                       placeholder="Right"
                       value={(rs?.margin || s.margin)?.right || 0}
-                      onChange={(val: number) => updateSpacing("margin", "right", val)}
+                      onChange={(val: number) =>
+                        updateSpacing("margin", "right", val)
+                      }
                     />
                     <NumberInput
                       placeholder="Bottom"
                       value={(rs?.margin || s.margin)?.bottom || 0}
-                      onChange={(val: number) => updateSpacing("margin", "bottom", val)}
+                      onChange={(val: number) =>
+                        updateSpacing("margin", "bottom", val)
+                      }
                     />
                     <NumberInput
                       placeholder="Left"
                       value={(rs?.margin || s.margin)?.left || 0}
-                      onChange={(val: number) => updateSpacing("margin", "left", val)}
+                      onChange={(val: number) =>
+                        updateSpacing("margin", "left", val)
+                      }
                     />
                   </div>
                 </div>
               )}
             </div>
 
-            {/* ============ BORDER ============ */}
             <div className="settings-section">
               <div
                 className="collapsible-header"
@@ -4406,7 +3914,6 @@ const SettingsPanel = ({
                       <option value="dotted">Dotted</option>
                     </select>
                   </label>
-
                   {s.borderStyle && s.borderStyle !== "none" && (
                     <div className="field-row">
                       <label className="setting-field">
@@ -4421,7 +3928,6 @@ const SettingsPanel = ({
                           }
                         />
                       </label>
-
                       <label className="setting-field">
                         <span>Color</span>
                         <input
@@ -4434,7 +3940,6 @@ const SettingsPanel = ({
                       </label>
                     </div>
                   )}
-
                   <label className="setting-field">
                     <span>Border Radius (px)</span>
                     <input
@@ -4453,13 +3958,12 @@ const SettingsPanel = ({
         )}
 
         {/* ============================================ */}
-        {/* ====== ADVANCED TAB =========== */}
+        {/* ====== ADVANCED TAB ====================== */}
         {/* ============================================ */}
         {activeTab === "advanced" && (
           <>
             <div className="settings-section">
               <h4 className="section-title">Responsive Visibility</h4>
-
               <label className="checkbox-label">
                 <input
                   type="checkbox"
@@ -4468,7 +3972,6 @@ const SettingsPanel = ({
                 />
                 <span>Hide on Desktop</span>
               </label>
-
               <label className="checkbox-label">
                 <input
                   type="checkbox"
@@ -4477,7 +3980,6 @@ const SettingsPanel = ({
                 />
                 <span>Hide on Tablet</span>
               </label>
-
               <label className="checkbox-label">
                 <input
                   type="checkbox"
@@ -4486,22 +3988,27 @@ const SettingsPanel = ({
                 />
                 <span>Hide on Mobile</span>
               </label>
-
-              <p
-                style={{
-                  fontSize: 11,
-                  color: "#888",
-                  marginTop: 8,
-                  fontStyle: "italic",
-                }}
-              >
-                💡 Hidden widgets don't appear on the selected device (public
-                page).
-              </p>
             </div>
-
             <div className="settings-section">
               <h4 className="section-title">Custom CSS</h4>
+              <label className="setting-field">
+                <span>Custom CSS (this element only)</span>
+                <textarea
+                  rows={8}
+                  className="code-textarea"
+                  value={(s as any).customCSS || ""}
+                  placeholder={`selector {\n  color: red;\n}\n\nselector:hover {\n  transform: scale(1.05);\n}`}
+                  onChange={(e) =>
+                    updateStyle({ customCSS: e.target.value } as any)
+                  }
+                />
+              </label>
+              <small style={{ color: "#888", fontSize: 11 }}>
+                Use <code>selector</code> to target this widget only.
+              </small>
+            </div>
+            <div className="settings-section">
+              <h4 className="section-title">CSS Classes</h4>
               <label className="setting-field">
                 <span>CSS Classes</span>
                 <input
@@ -4553,6 +4060,24 @@ const SettingsPanel = ({
         onSelect={handleMediaSelect}
         multiple={mediaPickerMultiple}
         fileType={mediaPickerTarget === "video" ? "video" : "image"}
+      />
+
+      <IconPickerPopup
+        isOpen={iconPickerOpen}
+        currentIcon={
+          iconPickerTarget === "item" && iconPickerItemIndex >= 0
+            ? (widget.items || [])[iconPickerItemIndex]?.icon
+            : widget.content
+        }
+        currentImage={
+          iconPickerTarget === "item" && iconPickerItemIndex >= 0
+            ? (widget.items || [])[iconPickerItemIndex]?.image
+            : widget.url
+        }
+        onClose={() => setIconPickerOpen(false)}
+        onSelectIcon={handleIconSelect}
+        onSelectImage={handleIconImageSelect}
+        onClear={handleIconClear}
       />
     </div>
   );

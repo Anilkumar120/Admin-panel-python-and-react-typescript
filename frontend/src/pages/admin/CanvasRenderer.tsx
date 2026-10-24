@@ -16,7 +16,7 @@ import ResizeHandles from "./ResizeHandles";
 import MediaPicker, { type PickedMedia } from "./MediaPicker";
 import { getImageUrl } from "../../api/products";
 import BuilderIcon from "../../components/BuilderIcon";
-import { ICON_LIBRARY } from "../../components/iconLibrary"; // ✅ Added Import
+import { ICON_LIBRARY } from "../../components/iconLibrary";
 import { lazy, Suspense } from "react";
 
 const StorefrontWidget = lazy(
@@ -31,68 +31,6 @@ const StyleInjector = ({ css }: { css: string }) => {
       dangerouslySetInnerHTML={{ __html: css }}
       data-builder-style="true"
     />
-  );
-};
-
-const InteractiveTabs = ({
-  items,
-  widgetId,
-  color,
-}: {
-  items: NonNullable<PageWidget["items"]>;
-  widgetId: string;
-  color: string;
-}) => {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const activeItem = items[activeIndex] || items[0];
-  if (!activeItem) return null;
-
-  return (
-    <div>
-      <div
-        role="tablist"
-        aria-label="Content tabs"
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          borderBottom: "1px solid #e0e0e0",
-        }}
-      >
-        {items.map((item, index) => (
-          <button
-            key={item.id}
-            id={`${widgetId}-tab-${index}`}
-            type="button"
-            role="tab"
-            aria-selected={index === activeIndex}
-            aria-controls={`${widgetId}-panel`}
-            onClick={() => setActiveIndex(index)}
-            style={{
-              padding: "10px 20px",
-              border: 0,
-              borderBottom:
-                index === activeIndex
-                  ? `2px solid ${color}`
-                  : "2px solid transparent",
-              background: "transparent",
-              color: index === activeIndex ? color : "#666",
-              fontWeight: index === activeIndex ? 700 : 500,
-              cursor: "pointer",
-            }}
-          >
-            {item.title}
-          </button>
-        ))}
-      </div>
-      <div
-        id={`${widgetId}-panel`}
-        role="tabpanel"
-        aria-labelledby={`${widgetId}-tab-${activeIndex}`}
-        style={{ padding: 12, color: "#666" }}
-      >
-        {activeItem.content}
-      </div>
-    </div>
   );
 };
 
@@ -120,10 +58,8 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
   if (hasHover) {
     const hoverClass = `${uid}-hover`;
     classes.push(hoverClass);
-
     const duration = style.transitionDuration || 300;
     const hoverRules: string[] = [];
-
     if (style.hoverBackgroundColor)
       hoverRules.push(
         `background-color: ${style.hoverBackgroundColor} !important;`,
@@ -134,7 +70,6 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
       hoverRules.push(`border-color: ${style.hoverBorderColor} !important;`);
     if (style.hoverBoxShadow)
       hoverRules.push(`box-shadow: ${style.hoverBoxShadow} !important;`);
-
     const transforms: string[] = [];
     if (style.hoverScale && style.hoverScale !== 1)
       transforms.push(`scale(${style.hoverScale})`);
@@ -142,10 +77,8 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
       transforms.push(`translateY(${style.hoverTranslateY}px)`);
     if (transforms.length)
       hoverRules.push(`transform: ${transforms.join(" ")} !important;`);
-
     if (style.hoverOpacity !== undefined && style.hoverOpacity !== 1)
       hoverRules.push(`opacity: ${style.hoverOpacity} !important;`);
-
     cssParts.push(`
       .${hoverClass} {
         transition: all ${duration}ms ease-in-out;
@@ -159,11 +92,9 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
   if (hasAnimation) {
     const animClass = `${uid}-anim`;
     classes.push(animClass);
-
     const duration = style.animationDuration || 600;
     const delay = style.animationDelay || 0;
     const easing = style.animationEasing || "ease";
-
     const keyframesMap: Record<string, string> = {
       fadeIn: `from { opacity: 0; } to { opacity: 1; }`,
       slideUp: `from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); }`,
@@ -174,10 +105,8 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
       bounce: `0%,20%,50%,80%,100% { transform: translateY(0); } 40% { transform: translateY(-15px); } 60% { transform: translateY(-8px); }`,
       pulse: `0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); }`,
     };
-
     const kfName = `${uid}-kf`;
     const kfBody = keyframesMap[style.animation] || keyframesMap.fadeIn;
-
     cssParts.push(`
       @keyframes ${kfName} { ${kfBody} }
       .${animClass} {
@@ -287,7 +216,7 @@ export const renderWidgetStyles = (
     width: style.width || undefined,
     height: style.height || undefined,
     minWidth: style.minWidth || undefined,
-    maxWidth: "100%", // ✅ FIX: Box break nahi hoga
+    maxWidth: "100%",
     minHeight: style.minHeight || undefined,
     maxHeight: style.maxHeight || undefined,
     padding: getPadding(),
@@ -304,7 +233,7 @@ export const renderWidgetStyles = (
     bottom: style.bottom || undefined,
     left: style.left || undefined,
     zIndex: style.zIndex || undefined,
-    overflow: "hidden", // ✅ FIX: Bahar nahi jayega
+    overflow: "hidden",
     cursor: style.cursor || undefined,
     ...responsiveStyle,
   };
@@ -577,7 +506,7 @@ const CanvasMenuWidget = ({
   );
 };
 
-// ============ INLINE DROP ZONE (for inserting between items) ============
+// ============ INLINE DROP ZONE ============
 const InlineDropZone = ({
   parentId,
   index,
@@ -724,17 +653,156 @@ const MaybeLink = ({
   );
 };
 
+// ============ NESTED CHILDREN RENDERER ============
+const RenderNestedChildren = ({
+  children,
+}: {
+  children: any[];
+}) => {
+  if (!children || children.length === 0) return null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {children.map((child) => {
+        if (child.type === "heading") {
+          return (
+            <h3 key={child.id} style={{ margin: 0, fontSize: 20 }}>
+              {child.content || "Heading"}
+            </h3>
+          );
+        }
+        if (child.type === "text") {
+          return (
+            <p key={child.id} style={{ margin: 0 }}>
+              {child.content || "Text content"}
+            </p>
+          );
+        }
+        if (child.type === "image" && child.url) {
+          return (
+            <img
+              key={child.id}
+              src={child.url}
+              alt=""
+              style={{
+                width: "100%",
+                maxHeight: 300,
+                objectFit: "cover",
+                borderRadius: 4,
+              }}
+            />
+          );
+        }
+        if (child.type === "video" && child.url) {
+          return (
+            <div
+              key={child.id}
+              style={{
+                position: "relative",
+                paddingBottom: "56.25%",
+                height: 0,
+                borderRadius: 4,
+                overflow: "hidden",
+              }}
+            >
+              {child.url.match(/\.(mp4|webm|ogg)$/i) ? (
+                <video
+                  src={child.url}
+                  controls
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
+              ) : (
+                <iframe
+                  src={child.url}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    border: "none",
+                  }}
+                  allowFullScreen
+                />
+              )}
+            </div>
+          );
+        }
+        if (child.type === "iframe" && child.url) {
+          return (
+            <iframe
+              key={child.id}
+              src={child.url}
+              style={{
+                width: "100%",
+                minHeight: 300,
+                border: "none",
+                borderRadius: 4,
+              }}
+              allowFullScreen
+            />
+          );
+        }
+        if (child.type === "icon") {
+          return (
+            <div
+              key={child.id}
+              style={{ fontSize: 32, display: "inline-block" }}
+            >
+              {child.url ? (
+                <img
+                  src={child.url}
+                  alt=""
+                  style={{ width: 32, height: 32, objectFit: "contain" }}
+                />
+              ) : (
+                child.icon || child.content || "★"
+              )}
+            </div>
+          );
+        }
+        if (child.type === "button") {
+          return (
+            <a
+              key={child.id}
+              href={child.link?.url || "#"}
+              style={{
+                display: "inline-block",
+                padding: "8px 16px",
+                background: "#0c2f55",
+                color: "#fff",
+                borderRadius: 4,
+                textDecoration: "none",
+              }}
+            >
+              {child.content || "Click Here"}
+            </a>
+          );
+        }
+        return null;
+      })}
+    </div>
+  );
+};
+
 // ============ WIDGET CONTENT ============
 const WidgetContent = ({
   widget,
   device,
   isEditMode,
   onOpenMedia,
+  onChangeContent,
 }: {
   widget: PageWidget;
   device: ResponsiveDevice;
   isEditMode: boolean;
   onOpenMedia: (multiple: boolean, target?: string) => void;
+  onChangeContent?: (content: string) => void;
 }) => {
   const s = widget.style;
   const rs = s.responsive?.[device] || {};
@@ -763,15 +831,7 @@ const WidgetContent = ({
     case "heading": {
       const tag = (s.htmlTag || "h2").toLowerCase();
       const validTags = [
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "h6",
-        "p",
-        "div",
-        "span",
+        "h1", "h2", "h3", "h4", "h5", "h6", "p", "div", "span",
       ];
       const HeadingTag = (validTags.includes(tag) ? tag : "h2") as any;
       const headingAlign = (rs.textAlign ?? s.textAlign ?? "left") as any;
@@ -800,6 +860,19 @@ const WidgetContent = ({
                   display: "block",
                   width: s.width || undefined,
                   maxWidth: s.maxWidth || undefined,
+                }}
+                contentEditable={isEditMode}
+                suppressContentEditableWarning
+                onBlur={(e: React.FocusEvent<HTMLElement>) => {
+                  if (isEditMode && onChangeContent) {
+                    onChangeContent(e.currentTarget.innerHTML);
+                  }
+                }}
+                onKeyDown={(e: React.KeyboardEvent<HTMLElement>) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    (e.currentTarget as HTMLElement).blur();
+                  }
                 }}
                 dangerouslySetInnerHTML={{
                   __html: widget.content || "Heading",
@@ -830,6 +903,13 @@ const WidgetContent = ({
                 display: "block",
                 alignSelf: "stretch",
                 flexBasis: "100%",
+              }}
+              contentEditable={isEditMode}
+              suppressContentEditableWarning
+              onBlur={(e) => {
+                if (isEditMode && onChangeContent) {
+                  onChangeContent(e.currentTarget.innerHTML);
+                }
               }}
               dangerouslySetInnerHTML={{
                 __html: widget.content || "<p>Text content goes here...</p>",
@@ -1214,9 +1294,10 @@ const WidgetContent = ({
       );
 
     case "icon": {
-      // ✅ Custom Icon Library support
-      const CustomIconComponent = widget.settings?.customIcon 
-        ? ICON_LIBRARY.find((i: any) => i.name === widget.settings?.customIcon)?.Icon 
+      const CustomIconComponent = widget.settings?.customIcon
+        ? ICON_LIBRARY.find(
+            (i: any) => i.name === widget.settings?.customIcon,
+          )?.Icon
         : null;
 
       return (
@@ -1234,9 +1315,12 @@ const WidgetContent = ({
             }}
           >
             {widget.url ? (
-              // ✅ Image Icon support
               <img
-                src={widget.url.startsWith("http") ? widget.url : `${getImageUrl(widget.url)}`}
+                src={
+                  widget.url.startsWith("http")
+                    ? widget.url
+                    : `${getImageUrl(widget.url)}`
+                }
                 alt="Icon"
                 style={{
                   width: `${fontSize || 48}px`,
@@ -1245,10 +1329,8 @@ const WidgetContent = ({
                 }}
               />
             ) : CustomIconComponent ? (
-              // ✅ Library Icon support
               <CustomIconComponent size={fontSize || 48} />
             ) : (
-              // ✅ Text Icon support
               widget.content || "★"
             )}
           </div>
@@ -1826,7 +1908,12 @@ const WidgetContent = ({
               <div
                 style={{ padding: "12px 16px", color: "#666", fontSize: 14 }}
               >
-                {item.content}
+                {/* ✅ Render nested children here */}
+                {item.children && item.children.length > 0 ? (
+                  <RenderNestedChildren children={item.children} />
+                ) : (
+                  item.content
+                )}
               </div>
             </details>
           ))}
@@ -1841,11 +1928,37 @@ const WidgetContent = ({
 
     case "tabs":
       return (widget.items || []).length > 0 ? (
-        <InteractiveTabs
-          items={widget.items || []}
-          widgetId={widget.id}
-          color={color || "#0c2f55"}
-        />
+        <div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              borderBottom: "1px solid #e0e0e0",
+            }}
+          >
+            {widget.items?.map((item, i) => (
+              <div
+                key={item.id}
+                style={{
+                  padding: "10px 20px",
+                  fontWeight: i === 0 ? 700 : 500,
+                  color: i === 0 ? color || "#0c2f55" : "#666",
+                  borderBottom: i === 0 ? `2px solid ${color || "#0c2f55"}` : "none",
+                }}
+              >
+                {item.title}
+              </div>
+            ))}
+          </div>
+          <div style={{ padding: 12, color: "#666" }}>
+            {widget.items?.[0]?.children &&
+            widget.items[0].children.length > 0 ? (
+              <RenderNestedChildren children={widget.items[0].children} />
+            ) : (
+              widget.items?.[0]?.content
+            )}
+          </div>
+        </div>
       ) : (
         <WidgetEmptyState
           icon="▭"
@@ -2086,9 +2199,22 @@ const WidgetContent = ({
                 fontSize: 14,
                 fontWeight: 700,
                 textDecoration: "none",
+                overflow: "hidden",
               }}
             >
-              {(item.icon || item.title || "•").slice(0, 2)}
+              {item.image ? (
+                <img
+                  src={item.image}
+                  alt=""
+                  style={{
+                    width: 24,
+                    height: 24,
+                    objectFit: "contain",
+                  }}
+                />
+              ) : (
+                (item.icon || item.title || "•").slice(0, 2)
+              )}
             </a>
           ))}
         </div>
@@ -2180,7 +2306,6 @@ const WidgetContent = ({
         </div>
       );
 
-    // ============ STORE WIDGETS (Live Preview) ============
     case "cart":
     case "checkout":
     case "my_account":
@@ -2248,7 +2373,6 @@ const WidgetContent = ({
         </div>
       );
 
-    // ============ PRODUCT WIDGETS (canvas preview) ============
     case "product_title":
       return (
         <div style={{ ...baseStyle, fontWeight: 600 }}>
@@ -2791,6 +2915,7 @@ interface CanvasRendererProps {
   activeDragType?: string | null;
   parentId?: string | null;
   index?: number;
+  onContextMenu?: (e: React.MouseEvent, widgetId: string) => void;
 }
 
 const CanvasRenderer = ({
@@ -2806,6 +2931,7 @@ const CanvasRenderer = ({
   activeDragType = null,
   parentId = null,
   index = 0,
+  onContextMenu,
 }: CanvasRendererProps) => {
   const {
     attributes,
@@ -2859,13 +2985,14 @@ const CanvasRenderer = ({
       if (!el) return;
 
       const rect = el.getBoundingClientRect();
-      let currentWidth = parseInt(widget.style.width || `${rect.width}px`, 10) || rect.width;
-      let currentHeight = parseInt(widget.style.height || `${rect.height}px`, 10) || rect.height;
+      let currentWidth =
+        parseInt(widget.style.width || `${rect.width}px`, 10) || rect.width;
+      let currentHeight =
+        parseInt(widget.style.height || `${rect.height}px`, 10) || rect.height;
 
       let newWidth = currentWidth;
       let newHeight = currentHeight;
 
-      // ✅ FIX: Independent Width / Height Resizing
       if (direction.includes("e")) newWidth = currentWidth + deltaX;
       if (direction.includes("w")) newWidth = currentWidth - deltaX;
       if (direction.includes("s")) newHeight = currentHeight + deltaY;
@@ -2902,15 +3029,15 @@ const CanvasRenderer = ({
       widget.type === "image" ||
       widget.type === "video" ||
       widget.type === "site_logo" ||
-      widget.type === "icon" // ✅ FIX: Icon image upload support
+      widget.type === "icon"
     ) {
       const picked = pickedArray[0];
       onUpdateWidget(widget.id, {
         url: picked.url,
-        content: "", // Clear text icon
+        content: "",
         settings: {
           ...widget.settings,
-          customIcon: null, // Clear library icon
+          customIcon: null,
         },
         accessibility: { ...widget.accessibility, altText: picked.alt },
       });
@@ -2956,6 +3083,13 @@ const CanvasRenderer = ({
     onSelect(widget.id);
   };
 
+  const handleRightClick = (e: React.MouseEvent) => {
+    if (isPreview) return;
+    e.stopPropagation();
+    onSelect(widget.id);
+    onContextMenu?.(e, widget.id);
+  };
+
   return (
     <>
       <div
@@ -2968,8 +3102,8 @@ const CanvasRenderer = ({
           isContainer ? "is-container" : ""
         } ${widget.children?.length ? "has-children" : "no-children"}`}
         onClick={handleClick}
+        onContextMenu={handleRightClick}
       >
-        {/* ✅ Inline drop zone — above each element while dragging */}
         {!isPreview && activeDragType && (
           <InlineDropZone
             parentId={parentId}
@@ -3050,6 +3184,7 @@ const CanvasRenderer = ({
                     device={device}
                     isPreview={isPreview}
                     activeDragType={activeDragType}
+                    onContextMenu={onContextMenu}
                   />
                 ))}
               </SortableContext>
@@ -3068,6 +3203,11 @@ const CanvasRenderer = ({
               device={device}
               isEditMode={!isPreview}
               onOpenMedia={handleOpenMedia}
+              onChangeContent={(content) => {
+                if (onUpdateWidget) {
+                  onUpdateWidget(widget.id, { content });
+                }
+              }}
             />
           )}
         </div>
