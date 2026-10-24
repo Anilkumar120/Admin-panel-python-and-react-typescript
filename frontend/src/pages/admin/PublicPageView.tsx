@@ -16,9 +16,13 @@ const useDevice = (): ResponsiveDevice => {
     const update = () => {
       const width = window.innerWidth;
 
-      if (width < 768) setDevice("mobile");
-      else if (width < 1024) setDevice("tablet");
-      else setDevice("desktop");
+      if (width < 768) {
+        setDevice("mobile");
+      } else if (width < 1024) {
+        setDevice("tablet");
+      } else {
+        setDevice("desktop");
+      }
     };
 
     update();
@@ -29,6 +33,9 @@ const useDevice = (): ResponsiveDevice => {
 
   return device;
 };
+
+const hasUsableLayout = (template: any): boolean =>
+  Array.isArray(template?.layout) && template.layout.length > 0;
 
 const PublicPageView = () => {
   const params = useParams();
@@ -108,11 +115,9 @@ const PublicPageView = () => {
         } else if (data.post_type === "products") {
           let template = data.template || null;
 
-          // Fetch active Single Product template if its layout is missing.
-          if (
-            !Array.isArray(template?.layout) ||
-            template.layout.length === 0
-          ) {
+          // Try fetching the active Single Product template
+          // when the public API has not returned a usable layout.
+          if (!hasUsableLayout(template)) {
             try {
               const activeTemplate = await fetchActiveTemplate(
                 "single_product",
@@ -121,15 +126,16 @@ const PublicPageView = () => {
                 data.slug || slug,
               );
 
-              if (
-                Array.isArray(activeTemplate?.layout) &&
-                activeTemplate.layout.length > 0
-              ) {
+              if (hasUsableLayout(activeTemplate)) {
                 template = activeTemplate;
               } else {
-                console.warn(
-                  "Single Product template has no usable layout:",
-                  activeTemplate,
+                console.error(
+                  "Single Product template missing or empty:",
+                  {
+                    productSlug: data.slug || slug,
+                    apiTemplate: data.template,
+                    activeTemplate,
+                  },
                 );
               }
             } catch (templateError) {
@@ -247,7 +253,7 @@ const PublicPageView = () => {
     );
   }
 
-  // ===== BUILDER PAGE =====
+  // BUILDER PAGE
   if (page.type === "builder") {
     const showTitle = page.data.show_title !== false;
 
@@ -266,7 +272,7 @@ const PublicPageView = () => {
             page.data.id ||
               page.data.page_id ||
               page.data.slug ||
-              currentPath,
+              currentPath
           )}
           pageTitle={page.data.title || ""}
         />
@@ -274,16 +280,13 @@ const PublicPageView = () => {
     );
   }
 
-  // ===== SINGLE PRODUCT PAGE =====
+  // SINGLE PRODUCT PAGE
   if (page.type === "product") {
     const product = page.data as ProductData;
     const template = page.template;
 
-    // Render the saved Single Product Builder template.
-    if (
-      Array.isArray(template?.layout) &&
-      template.layout.length > 0
-    ) {
+    // Render the custom Single Product Builder template first.
+    if (hasUsableLayout(template)) {
       return (
         <div className="public-builder-view">
           <BuilderRenderer
@@ -297,7 +300,7 @@ const PublicPageView = () => {
       );
     }
 
-    // Support templates saved with a content layout.
+    // Support templates that use a content array.
     if (
       Array.isArray(template?.content) &&
       template.content.length > 0
@@ -305,7 +308,7 @@ const PublicPageView = () => {
       return <ContentRenderer layout={template.content} />;
     }
 
-    // Default product layout if no active Builder template is available.
+    // Fallback only when no usable custom template is available.
     return (
       <article
         className="public-product-view"
@@ -360,31 +363,27 @@ const PublicPageView = () => {
           {product.brand && <p>Brand: {product.brand}</p>}
           {product.category && <p>Category: {product.category}</p>}
 
-          {product.description && (
-            <div>{product.description}</div>
-          )}
+          {product.description && <div>{product.description}</div>}
         </div>
       </article>
     );
   }
 
-  // ===== CONTENT PAGE =====
-  if (
-    Array.isArray(page.template?.layout) &&
-    page.template.layout.length > 0
-  ) {
+  // CONTENT PAGE WITH BUILDER TEMPLATE
+  if (hasUsableLayout(page.template)) {
     return (
       <div className="public-builder-view">
         <BuilderRenderer
           layout={page.template.layout}
           device={device}
-          pageId={String(page.data.id || page.data.slug)}
+          pageId={String(page.data.id || page.data.slug || currentPath)}
           pageTitle={page.data.title || ""}
         />
       </div>
     );
   }
 
+  // REGULAR CONTENT PAGE
   return (
     <div
       className="public-content-view"
