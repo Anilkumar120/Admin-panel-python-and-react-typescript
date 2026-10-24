@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -10,17 +11,22 @@ import { fetchActiveTemplate } from "../../api/templates";
 
 const useDevice = (): ResponsiveDevice => {
   const [device, setDevice] = useState<ResponsiveDevice>("desktop");
+
   useEffect(() => {
     const update = () => {
-      const w = window.innerWidth;
-      if (w < 768) setDevice("mobile");
-      else if (w < 1024) setDevice("tablet");
+      const width = window.innerWidth;
+
+      if (width < 768) setDevice("mobile");
+      else if (width < 1024) setDevice("tablet");
       else setDevice("desktop");
     };
+
     update();
     window.addEventListener("resize", update);
+
     return () => window.removeEventListener("resize", update);
   }, []);
+
   return device;
 };
 
@@ -33,11 +39,16 @@ const PublicPageView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [currentPath, setCurrentPath] = useState(location.pathname);
+
   const device = useDevice();
 
   useEffect(() => {
-    const handlePopState = () => setCurrentPath(window.location.pathname);
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+
     window.addEventListener("popstate", handlePopState);
+
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
@@ -46,12 +57,16 @@ const PublicPageView = () => {
   }, [location.pathname]);
 
   const pathParts = currentPath.split("/").filter(Boolean);
+
   let slug = params.slug;
   let postType = params.postType;
-  const postId = new URLSearchParams(location.search).get("p") || undefined;
+
+  const postId =
+    new URLSearchParams(location.search).get("p") || undefined;
 
   if (!slug && pathParts.length > 0) {
     slug = pathParts[pathParts.length - 1];
+
     if (pathParts.length > 1) {
       postType = pathParts[0];
     }
@@ -61,6 +76,7 @@ const PublicPageView = () => {
     if (!slug && !postId) {
       setError("Invalid URL");
       setLoading(false);
+      setPage(null);
       return;
     }
 
@@ -72,7 +88,12 @@ const PublicPageView = () => {
 
       try {
         const res = await axios.get(`${API_URL}/api/public/resolve`, {
-          params: { slug, post_type: postType, url_path: currentPath, post_id: postId },
+          params: {
+            slug,
+            post_type: postType,
+            url_path: currentPath,
+            post_id: postId,
+          },
         });
 
         if (!active) return;
@@ -80,41 +101,83 @@ const PublicPageView = () => {
         const data = res.data;
 
         if (data.type === "builder") {
-          setPage({ type: "builder", data });
+          setPage({
+            type: "builder",
+            data,
+          });
         } else if (data.post_type === "products") {
-          // Backend attached template if matched
           let template = data.template || null;
 
-          // Client fallback
-          if (!template) {
+          // Fetch active Single Product template if its layout is missing.
+          if (
+            !Array.isArray(template?.layout) ||
+            template.layout.length === 0
+          ) {
             try {
-              template = await fetchActiveTemplate(
+              const activeTemplate = await fetchActiveTemplate(
                 "single_product",
                 currentPath,
                 "products",
                 data.slug || slug,
               );
+
+              if (
+                Array.isArray(activeTemplate?.layout) &&
+                activeTemplate.layout.length > 0
+              ) {
+                template = activeTemplate;
+              } else {
+                console.warn(
+                  "Single Product template has no usable layout:",
+                  activeTemplate,
+                );
+              }
             } catch (templateError) {
-              console.error("PUBLIC PRODUCT TEMPLATE LOAD ERROR:", templateError);
+              console.error(
+                "PUBLIC PRODUCT TEMPLATE LOAD ERROR:",
+                templateError,
+              );
             }
           }
+
           if (!active) return;
-          setPage({ type: "product", data, template });
+
+          console.log("Product template:", template);
+          console.log("Product data:", data);
+
+          setPage({
+            type: "product",
+            data,
+            template,
+          });
         } else if (data.template) {
-          setPage({ type: "content", data, template: data.template });
+          setPage({
+            type: "content",
+            data,
+            template: data.template,
+          });
         } else {
-          setPage({ type: "content", data });
+          setPage({
+            type: "content",
+            data,
+          });
         }
       } catch (err: any) {
         if (!active) return;
+
         console.error("PublicPageView error:", err);
+
         if (err?.response?.status === 404) {
           setError("Content not found");
         } else {
           setError("Failed to load content");
         }
+
+        setPage(null);
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
@@ -126,7 +189,10 @@ const PublicPageView = () => {
   }, [slug, postType, currentPath, postId]);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   }, [currentPath]);
 
   if (loading) {
@@ -147,10 +213,20 @@ const PublicPageView = () => {
           margin: "0 auto",
         }}
       >
-        <h1 style={{ fontSize: 48, color: "#0c2f55", marginBottom: 8 }}>404</h1>
+        <h1
+          style={{
+            fontSize: 48,
+            color: "#0c2f55",
+            marginBottom: 8,
+          }}
+        >
+          404
+        </h1>
+
         <p style={{ color: "#b42318", fontSize: 18 }}>
           {error || "Page not found"}
         </p>
+
         <button
           type="button"
           onClick={() => navigate("/")}
@@ -174,6 +250,7 @@ const PublicPageView = () => {
   // ===== BUILDER PAGE =====
   if (page.type === "builder") {
     const showTitle = page.data.show_title !== false;
+
     return (
       <div className="public-builder-view">
         {showTitle && page.data.title && (
@@ -181,11 +258,15 @@ const PublicPageView = () => {
             <h1>{page.data.title}</h1>
           </div>
         )}
+
         <BuilderRenderer
           layout={page.data.layout}
           device={device}
           pageId={String(
-            page.data.id || page.data.page_id || page.data.slug || currentPath,
+            page.data.id ||
+              page.data.page_id ||
+              page.data.slug ||
+              currentPath,
           )}
           pageTitle={page.data.title || ""}
         />
@@ -193,37 +274,45 @@ const PublicPageView = () => {
     );
   }
 
-  // ===== PRODUCT PAGE =====
+  // ===== SINGLE PRODUCT PAGE =====
   if (page.type === "product") {
     const product = page.data as ProductData;
+    const template = page.template;
 
-    // ✅ Template first
-    if (page.template?.layout?.length) {
+    // Render the saved Single Product Builder template.
+    if (
+      Array.isArray(template?.layout) &&
+      template.layout.length > 0
+    ) {
       return (
         <div className="public-builder-view">
           <BuilderRenderer
-            layout={page.template.layout}
+            layout={template.layout}
             device={device}
-            pageId={product.id}
-            pageTitle={product.title}
+            pageId={String(product.id || product.slug || currentPath)}
+            pageTitle={product.title || product.name || ""}
             product={product}
           />
         </div>
       );
     }
 
-    // Content-based template fallback
-    if (page.template?.content) {
-      return <ContentRenderer layout={page.template.content} />;
+    // Support templates saved with a content layout.
+    if (
+      Array.isArray(template?.content) &&
+      template.content.length > 0
+    ) {
+      return <ContentRenderer layout={template.content} />;
     }
 
-    // Default product layout
+    // Default product layout if no active Builder template is available.
     return (
       <article
         className="public-product-view"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+          gridTemplateColumns:
+            "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
           gap: 32,
           maxWidth: 1100,
           margin: "0 auto",
@@ -233,30 +322,57 @@ const PublicPageView = () => {
         {product.image && (
           <img
             src={getImageUrl(product.image)}
-            alt={product.title}
-            style={{ width: "100%", borderRadius: 10, objectFit: "contain" }}
+            alt={product.title || product.name || "Product"}
+            style={{
+              width: "100%",
+              borderRadius: 10,
+              objectFit: "contain",
+            }}
           />
         )}
+
         <div>
-          <h1>{product.title}</h1>
-          <p style={{ fontSize: 24, fontWeight: 700, color: "#0c2f55" }}>
+          <h1>{product.title || product.name}</h1>
+
+          <p
+            style={{
+              fontSize: 24,
+              fontWeight: 700,
+              color: "#0c2f55",
+            }}
+          >
             ₹{Number(product.price || 0).toFixed(2)}
           </p>
+
           <p>
-            {product.quantity > 0
-              ? `In stock (${product.quantity})`
-              : "Out of stock"}
+            {product.stock_status === "out_of_stock"
+              ? "Out of stock"
+              : product.manage_stock === false ||
+                  Number(product.quantity) > 0
+                ? `In stock${
+                    product.manage_stock
+                      ? ` (${product.quantity})`
+                      : ""
+                  }`
+                : "Stock availability unknown"}
           </p>
+
           {product.brand && <p>Brand: {product.brand}</p>}
           {product.category && <p>Category: {product.category}</p>}
-          <p>{product.description}</p>
+
+          {product.description && (
+            <div>{product.description}</div>
+          )}
         </div>
       </article>
     );
   }
 
-  // ===== CONTENT PAGE (post/page with template) =====
-  if (page.template?.layout?.length) {
+  // ===== CONTENT PAGE =====
+  if (
+    Array.isArray(page.template?.layout) &&
+    page.template.layout.length > 0
+  ) {
     return (
       <div className="public-builder-view">
         <BuilderRenderer
@@ -272,13 +388,17 @@ const PublicPageView = () => {
   return (
     <div
       className="public-content-view"
-      style={{ padding: "40px 20px", maxWidth: 900, margin: "0 auto" }}
+      style={{
+        padding: "40px 20px",
+        maxWidth: 900,
+        margin: "0 auto",
+      }}
     >
       <h1 style={{ color: "#0c2f55" }}>{page.data.title}</h1>
 
       {page.data.featured_image && (
         <img
-          src={page.data.featured_image}
+          src={getImageUrl(page.data.featured_image)}
           alt={page.data.title}
           style={{
             width: "100%",
