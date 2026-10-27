@@ -866,6 +866,7 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
     style?.hoverBackgroundGradient ||
     style?.hoverOverlayGradient ||
     style?.hoverOverlayColor ||
+    style?.hoverOverlayImage ||
     style?.hoverCssFilters ||
     style?.hoverBoxShadow ||
     (style?.hoverScale && style.hoverScale !== 1) ||
@@ -890,15 +891,19 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
 
     const duration = style.transitionDuration || 300;
     const hoverRules: string[] = [];
-
+    const hoverBackgroundLayers: string[] = [];
     if (style.hoverBackgroundColor)
       hoverRules.push(`background-color: ${style.hoverBackgroundColor} !important;`);
-    if (style.hoverBackgroundGradient)
-      hoverRules.push(`background-image: ${style.hoverBackgroundGradient} !important;`);
-    if (style.hoverOverlayGradient)
-      hoverRules.push(`background-image: ${style.hoverOverlayGradient} !important;`);
     if (style.hoverOverlayColor)
-      hoverRules.push(`background-image: linear-gradient(color-mix(in srgb, ${style.hoverOverlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${style.hoverOverlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent)) !important;`);
+      hoverBackgroundLayers.push(`linear-gradient(color-mix(in srgb, ${style.hoverOverlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${style.hoverOverlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent))`);
+    if (style.hoverOverlayGradient)
+      hoverBackgroundLayers.push(style.hoverOverlayGradient);
+    if (style.hoverOverlayImage)
+      hoverBackgroundLayers.push(`url("${getImageUrl(String(style.hoverOverlayImage))}")`);
+    if (style.hoverBackgroundGradient)
+      hoverBackgroundLayers.push(style.hoverBackgroundGradient);
+    if (hoverBackgroundLayers.length)
+      hoverRules.push(`background-image: ${hoverBackgroundLayers.join(", ")} !important;`);
     if (style.hoverColor)
       hoverRules.push(`color: ${style.hoverColor} !important;`);
     if (style.hoverBorderColor)
@@ -1421,11 +1426,13 @@ const renderStyles = (
   );
 
   const backgroundImage = value("backgroundImage");
+  const overlayImage = value("overlayImage");
   const backgroundGradient = value("backgroundGradient");
   const resolvedBackgroundImage = [
     value("overlayGradient") || (value("overlayColor")
       ? `linear-gradient(color-mix(in srgb, ${value("overlayColor")} ${(Number(value("overlayOpacity") ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${value("overlayColor")} ${(Number(value("overlayOpacity") ?? 0.35) * 100)}%, transparent))`
       : ""),
+    overlayImage ? `url("${getImageUrl(String(overlayImage))}")` : "",
     backgroundGradient || (backgroundImage ? `url("${getImageUrl(String(backgroundImage))}")` : value("backgroundType") === "slideshow" && Array.isArray(value("backgroundSlideshow")) && value("backgroundSlideshow")[0] ? `url("${value("backgroundSlideshow")[0]}")` : ""),
   ].filter(Boolean).join(", ") || undefined;
 
@@ -2702,22 +2709,75 @@ const WidgetRenderer = ({
     case "button": {
       const btnTextAlign = (rs.textAlign || s.textAlign || "left") as any;
       const hover = getHoverAndAnimation(s, widget.id);
+      const buttonPadding =
+        rs.buttonPadding || s.buttonPadding || rs.padding || s.padding;
+      const buttonPaddingUnit = buttonPadding?.unit || "px";
+      const buttonBorderRadius =
+        rs.buttonBorderRadius ??
+        s.buttonBorderRadius ??
+        rs.borderRadius ??
+        s.borderRadius;
+      const buttonBorderWidth =
+        rs.buttonBorderWidth ??
+        s.buttonBorderWidth ??
+        rs.borderWidth ??
+        s.borderWidth;
 
       return (
         <>
           <StyleInjector css={hover.cssText} />
-          <div style={{ textAlign: btnTextAlign, width: "100%" }}>
+          <div
+            style={{
+              ...baseStyle,
+              display: "block",
+              textAlign: btnTextAlign,
+              width: baseStyle.width || "100%",
+              minWidth: 0,
+            }}
+          >
             <a
               href={widget.link?.url || widget.url || "#"}
               target={widget.link?.target || "_self"}
               className={hover.className}
               style={{
-                ...baseStyle,
+                boxSizing: "border-box",
+                maxWidth: "100%",
                 textAlign: btnTextAlign,
                 backgroundColor: bgColor || "#0c2f55",
                 color: rs.color || s.color || "#ffffff",
-                padding: baseStyle.padding ?? "12px 24px",
-                borderRadius: baseStyle.borderRadius ?? "6px",
+                padding: buttonPadding
+                  ? `${buttonPadding.top ?? 12}${buttonPaddingUnit} ${buttonPadding.right ?? 24}${buttonPaddingUnit} ${buttonPadding.bottom ?? 12}${buttonPaddingUnit} ${buttonPadding.left ?? 24}${buttonPaddingUnit}`
+                  : "12px 24px",
+                borderRadius: buttonBorderRadius ? `${buttonBorderRadius}px` : "6px",
+                borderColor:
+                  rs.buttonBorderColor ||
+                  s.buttonBorderColor ||
+                  rs.borderColor ||
+                  s.borderColor ||
+                  undefined,
+                borderWidth: buttonBorderWidth ? `${buttonBorderWidth}px` : undefined,
+                borderStyle:
+                  rs.buttonBorderStyle ||
+                  s.buttonBorderStyle ||
+                  rs.borderStyle ||
+                  s.borderStyle ||
+                  undefined,
+                borderTopWidth:
+                  rs.buttonBorderTopWidth ?? s.buttonBorderTopWidth ?? rs.borderTopWidth ?? s.borderTopWidth,
+                borderRightWidth:
+                  rs.buttonBorderRightWidth ?? s.buttonBorderRightWidth ?? rs.borderRightWidth ?? s.borderRightWidth,
+                borderBottomWidth:
+                  rs.buttonBorderBottomWidth ?? s.buttonBorderBottomWidth ?? rs.borderBottomWidth ?? s.borderBottomWidth,
+                borderLeftWidth:
+                  rs.buttonBorderLeftWidth ?? s.buttonBorderLeftWidth ?? rs.borderLeftWidth ?? s.borderLeftWidth,
+                borderTopLeftRadius:
+                  rs.buttonBorderTopLeftRadius ?? s.buttonBorderTopLeftRadius ?? rs.borderTopLeftRadius ?? s.borderTopLeftRadius,
+                borderTopRightRadius:
+                  rs.buttonBorderTopRightRadius ?? s.buttonBorderTopRightRadius ?? rs.borderTopRightRadius ?? s.borderTopRightRadius,
+                borderBottomLeftRadius:
+                  rs.buttonBorderBottomLeftRadius ?? s.buttonBorderBottomLeftRadius ?? rs.borderBottomLeftRadius ?? s.borderBottomLeftRadius,
+                borderBottomRightRadius:
+                  rs.buttonBorderBottomRightRadius ?? s.buttonBorderBottomRightRadius ?? rs.borderBottomRightRadius ?? s.borderBottomRightRadius,
                 display: "inline-block",
                 fontWeight: s.fontWeight || 600,
                 textDecoration: "none",

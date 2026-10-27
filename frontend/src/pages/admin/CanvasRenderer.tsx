@@ -63,6 +63,7 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
     style?.hoverBorderColor ||
     hasHoverBorderRadius ||
     style?.hoverBackgroundGradient ||
+    style?.hoverOverlayImage ||
     style?.hoverOverlayGradient ||
     style?.hoverOverlayColor ||
     style?.hoverCssFilters ||
@@ -88,14 +89,19 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
     classes.push(hoverClass);
     const duration = style.transitionDuration || 300;
     const hoverRules: string[] = [];
+    const hoverBackgroundLayers: string[] = [];
     if (style.hoverBackgroundColor)
       hoverRules.push(`background-color: ${style.hoverBackgroundColor} !important;`);
-    if (style.hoverBackgroundGradient)
-      hoverRules.push(`background-image: ${style.hoverBackgroundGradient} !important;`);
-    if (style.hoverOverlayGradient)
-      hoverRules.push(`background-image: ${style.hoverOverlayGradient} !important;`);
     if (style.hoverOverlayColor)
-      hoverRules.push(`background-image: linear-gradient(color-mix(in srgb, ${style.hoverOverlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${style.hoverOverlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent)) !important;`);
+      hoverBackgroundLayers.push(`linear-gradient(color-mix(in srgb, ${style.hoverOverlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${style.hoverOverlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent))`);
+    if (style.hoverOverlayGradient)
+      hoverBackgroundLayers.push(style.hoverOverlayGradient);
+    if (style.hoverOverlayImage)
+      hoverBackgroundLayers.push(`url("${style.hoverOverlayImage}")`);
+    if (style.hoverBackgroundGradient)
+      hoverBackgroundLayers.push(style.hoverBackgroundGradient);
+    if (hoverBackgroundLayers.length)
+      hoverRules.push(`background-image: ${hoverBackgroundLayers.join(", ")} !important;`);
     if (style.hoverColor)
       hoverRules.push(`color: ${style.hoverColor} !important;`);
     if (style.hoverBorderColor)
@@ -271,11 +277,12 @@ export const renderWidgetStyles = (
 
   return {
     backgroundColor: rs.backgroundColor || style.backgroundColor || undefined,
-    backgroundImage: style.backgroundType === "slideshow" ? undefined : ([
-      style.overlayGradient || (style.overlayColor
-        ? `linear-gradient(color-mix(in srgb, ${style.overlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${style.overlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent))`
+    backgroundImage: (rs.backgroundType ?? style.backgroundType) === "slideshow" ? undefined : ([
+      rs.overlayGradient || style.overlayGradient || ((rs.overlayColor ?? style.overlayColor)
+        ? `linear-gradient(color-mix(in srgb, ${rs.overlayColor ?? style.overlayColor} ${(Number(rs.overlayOpacity ?? style.overlayOpacity ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${rs.overlayColor ?? style.overlayColor} ${(Number(rs.overlayOpacity ?? style.overlayOpacity ?? 0.35) * 100)}%, transparent))`
         : ""),
-      style.backgroundGradient || (style.backgroundImage ? `url(${style.backgroundImage})` : ""),
+      (rs.overlayImage ?? style.overlayImage) ? `url("${rs.overlayImage ?? style.overlayImage}")` : "",
+      rs.backgroundGradient || style.backgroundGradient || ((rs.backgroundImage ?? style.backgroundImage) ? `url(${rs.backgroundImage ?? style.backgroundImage})` : ""),
     ].filter(Boolean).join(", ") || undefined),
     backgroundSize: style.backgroundSize || "cover",
     backgroundPosition: style.backgroundPosition || "center",
@@ -990,7 +997,7 @@ const WidgetContent = ({
 
       const isJustified = btnTextAlign === "justify";
       const hover = getHoverAndAnimation(s, widget.id);
-      const buttonPadding = rs.padding || s.padding;
+      const buttonPadding = rs.buttonPadding || s.buttonPadding || rs.padding || s.padding;
       const buttonPaddingUnit = buttonPadding?.unit || "px";
 
       const buttonStyle: React.CSSProperties = {
@@ -1019,10 +1026,24 @@ const WidgetContent = ({
         textDecoration: s.textDecoration || "none",
         textShadow: s.textShadow || undefined,
         backgroundColor: bgColor || "#0c2f55",
-        borderRadius: s.borderRadius ? `${s.borderRadius}px` : "6px",
-        borderColor: s.borderColor || undefined,
-        borderWidth: s.borderWidth ? `${s.borderWidth}px` : undefined,
-        borderStyle: s.borderStyle || undefined,
+        borderRadius:
+          (rs.buttonBorderRadius ?? s.buttonBorderRadius ?? rs.borderRadius ?? s.borderRadius)
+            ? `${rs.buttonBorderRadius ?? s.buttonBorderRadius ?? rs.borderRadius ?? s.borderRadius}px`
+            : "6px",
+        borderColor: rs.buttonBorderColor || s.buttonBorderColor || rs.borderColor || s.borderColor || undefined,
+        borderWidth:
+          (rs.buttonBorderWidth ?? s.buttonBorderWidth ?? rs.borderWidth ?? s.borderWidth)
+            ? `${rs.buttonBorderWidth ?? s.buttonBorderWidth ?? rs.borderWidth ?? s.borderWidth}px`
+            : undefined,
+        borderStyle: rs.buttonBorderStyle || s.buttonBorderStyle || rs.borderStyle || s.borderStyle || undefined,
+        borderTopWidth: rs.buttonBorderTopWidth ?? s.buttonBorderTopWidth ?? rs.borderTopWidth ?? s.borderTopWidth,
+        borderRightWidth: rs.buttonBorderRightWidth ?? s.buttonBorderRightWidth ?? rs.borderRightWidth ?? s.borderRightWidth,
+        borderBottomWidth: rs.buttonBorderBottomWidth ?? s.buttonBorderBottomWidth ?? rs.borderBottomWidth ?? s.borderBottomWidth,
+        borderLeftWidth: rs.buttonBorderLeftWidth ?? s.buttonBorderLeftWidth ?? rs.borderLeftWidth ?? s.borderLeftWidth,
+        borderTopLeftRadius: rs.buttonBorderTopLeftRadius ?? s.buttonBorderTopLeftRadius ?? rs.borderTopLeftRadius ?? s.borderTopLeftRadius,
+        borderTopRightRadius: rs.buttonBorderTopRightRadius ?? s.buttonBorderTopRightRadius ?? rs.borderTopRightRadius ?? s.borderTopRightRadius,
+        borderBottomLeftRadius: rs.buttonBorderBottomLeftRadius ?? s.buttonBorderBottomLeftRadius ?? rs.borderBottomLeftRadius ?? s.borderBottomLeftRadius,
+        borderBottomRightRadius: rs.buttonBorderBottomRightRadius ?? s.buttonBorderBottomRightRadius ?? rs.borderBottomRightRadius ?? s.borderBottomRightRadius,
         boxShadow: s.boxShadow || undefined,
         opacity: s.opacity ?? 1,
         cursor: "pointer",
@@ -3523,11 +3544,6 @@ const CanvasRenderer = ({
           ...rawWidgetStyle,
           display: "block",
           width: "100%",
-          backgroundColor: "transparent",
-          padding: 0,
-          margin: 0,
-          borderRadius: 0,
-          boxShadow: undefined,
           cursor: "default",
         }
       : rawWidgetStyle;

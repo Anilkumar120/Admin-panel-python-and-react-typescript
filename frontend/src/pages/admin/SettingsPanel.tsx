@@ -71,6 +71,7 @@ const cloneWidgetWithFreshIds = (source: PageWidget): PageWidget => {
       item.children?.forEach(refreshIds);
     });
   };
+
   refreshIds(clone);
   return clone;
 };
@@ -193,7 +194,15 @@ type EdgeValueKey =
   | "borderTopLeftRadius"
   | "borderTopRightRadius"
   | "borderBottomRightRadius"
-  | "borderBottomLeftRadius";
+  | "borderBottomLeftRadius"
+  | "buttonBorderTopWidth"
+  | "buttonBorderRightWidth"
+  | "buttonBorderBottomWidth"
+  | "buttonBorderLeftWidth"
+  | "buttonBorderTopLeftRadius"
+  | "buttonBorderTopRightRadius"
+  | "buttonBorderBottomRightRadius"
+  | "buttonBorderBottomLeftRadius";
 
 const borderWidthEdges: { key: EdgeValueKey; label: string }[] = [
   { key: "borderTopWidth", label: "Top" },
@@ -207,6 +216,20 @@ const borderRadiusEdges: { key: EdgeValueKey; label: string }[] = [
   { key: "borderTopRightRadius", label: "Top right" },
   { key: "borderBottomRightRadius", label: "Bottom right" },
   { key: "borderBottomLeftRadius", label: "Bottom left" },
+];
+
+const buttonBorderWidthEdges: { key: EdgeValueKey; label: string }[] = [
+  { key: "buttonBorderTopWidth", label: "Top" },
+  { key: "buttonBorderRightWidth", label: "Right" },
+  { key: "buttonBorderBottomWidth", label: "Bottom" },
+  { key: "buttonBorderLeftWidth", label: "Left" },
+];
+
+const buttonBorderRadiusEdges: { key: EdgeValueKey; label: string }[] = [
+  { key: "buttonBorderTopLeftRadius", label: "Top left" },
+  { key: "buttonBorderTopRightRadius", label: "Top right" },
+  { key: "buttonBorderBottomRightRadius", label: "Bottom right" },
+  { key: "buttonBorderBottomLeftRadius", label: "Bottom left" },
 ];
 
 const EdgeValuesEditor = ({
@@ -676,7 +699,72 @@ const SettingsPanel = ({
   const currentStyle = { ...s, ...(rs || {}) };
 
   const updateStyle = (changes: Partial<WidgetStyle>) => {
-    onChangeStyle(changes, device !== "desktop" ? device : undefined);
+    const nextChanges = { ...changes };
+    if (widget.type === "button" && activeTab === "advanced") {
+      if ("padding" in changes && currentStyle.buttonPadding === undefined) {
+        nextChanges.buttonPadding = currentStyle.padding;
+      }
+
+      const borderKeys = [
+        "borderStyle",
+        "borderWidth",
+        "borderColor",
+        "borderRadius",
+        "borderTopWidth",
+        "borderRightWidth",
+        "borderBottomWidth",
+        "borderLeftWidth",
+        "borderTopLeftRadius",
+        "borderTopRightRadius",
+        "borderBottomRightRadius",
+        "borderBottomLeftRadius",
+      ];
+      if (
+        borderKeys.some((key) => key in changes)
+      ) {
+        nextChanges.buttonBorderStyle ??=
+          currentStyle.buttonBorderStyle ?? currentStyle.borderStyle;
+        nextChanges.buttonBorderWidth ??=
+          currentStyle.buttonBorderWidth ?? currentStyle.borderWidth;
+        nextChanges.buttonBorderColor ??=
+          currentStyle.buttonBorderColor ?? currentStyle.borderColor;
+        nextChanges.buttonBorderRadius ??=
+          currentStyle.buttonBorderRadius ?? currentStyle.borderRadius;
+        nextChanges.buttonBorderTopWidth ??=
+          currentStyle.buttonBorderTopWidth ??
+          currentStyle.borderTopWidth ??
+          currentStyle.borderWidth;
+        nextChanges.buttonBorderRightWidth ??=
+          currentStyle.buttonBorderRightWidth ??
+          currentStyle.borderRightWidth ??
+          currentStyle.borderWidth;
+        nextChanges.buttonBorderBottomWidth ??=
+          currentStyle.buttonBorderBottomWidth ??
+          currentStyle.borderBottomWidth ??
+          currentStyle.borderWidth;
+        nextChanges.buttonBorderLeftWidth ??=
+          currentStyle.buttonBorderLeftWidth ??
+          currentStyle.borderLeftWidth ??
+          currentStyle.borderWidth;
+        nextChanges.buttonBorderTopLeftRadius ??=
+          currentStyle.buttonBorderTopLeftRadius ??
+          currentStyle.borderTopLeftRadius ??
+          currentStyle.borderRadius;
+        nextChanges.buttonBorderTopRightRadius ??=
+          currentStyle.buttonBorderTopRightRadius ??
+          currentStyle.borderTopRightRadius ??
+          currentStyle.borderRadius;
+        nextChanges.buttonBorderBottomRightRadius ??=
+          currentStyle.buttonBorderBottomRightRadius ??
+          currentStyle.borderBottomRightRadius ??
+          currentStyle.borderRadius;
+        nextChanges.buttonBorderBottomLeftRadius ??=
+          currentStyle.buttonBorderBottomLeftRadius ??
+          currentStyle.borderBottomLeftRadius ??
+          currentStyle.borderRadius;
+      }
+    }
+    onChangeStyle(nextChanges, device !== "desktop" ? device : undefined);
   };
 
   const updateEdgeValue = (
@@ -727,6 +815,23 @@ const SettingsPanel = ({
   const updateSpacingUnit = (key: SpacingProperty, unit: string) => {
     const current = { ...(rs?.[key] || s[key] || {}) };
     updateStyle({ [key]: { ...current, unit } } as any);
+  };
+
+  const updateButtonPadding = (
+    side: "top" | "right" | "bottom" | "left",
+    value: number,
+  ) => {
+    const current = { ...(rs?.buttonPadding || s.buttonPadding || {}) };
+    const next = linkedPadding
+      ? { ...current, top: value, right: value, bottom: value, left: value }
+      : { ...current, [side]: value };
+    updateStyle({ buttonPadding: next });
+  };
+
+  const updateButtonPaddingUnit = (unit: string) => {
+    updateStyle({
+      buttonPadding: { ...(rs?.buttonPadding || s.buttonPadding || {}), unit },
+    });
   };
 
   const toggleHideForDevice = (targetDevice: ResponsiveDevice) => {
@@ -794,6 +899,9 @@ const SettingsPanel = ({
     if (
       mediaPickerTarget === "image" ||
       mediaPickerTarget === "background" ||
+      mediaPickerTarget === "background-image" ||
+      mediaPickerTarget === "overlay-image" ||
+      mediaPickerTarget === "hover-overlay-image" ||
       mediaPickerTarget === "video" ||
       mediaPickerTarget === "logo" ||
       mediaPickerTarget === "icon-image" ||
@@ -801,8 +909,12 @@ const SettingsPanel = ({
       mediaPickerTarget === "bio-avatar"
     ) {
       const picked = arr[0];
-      if (mediaPickerTarget === "background") {
+      if (mediaPickerTarget === "background" || mediaPickerTarget === "background-image") {
         updateStyle({ backgroundImage: picked.url });
+      } else if (mediaPickerTarget === "overlay-image") {
+        updateStyle({ overlayImage: picked.url });
+      } else if (mediaPickerTarget === "hover-overlay-image") {
+        updateStyle({ hoverOverlayImage: picked.url });
       } else if (
         mediaPickerTarget === "icon-list-item" &&
         iconListItemIndex !== null
@@ -5153,6 +5265,22 @@ const SettingsPanel = ({
                                 } as any)
                               }
                             />
+                            <button
+                              type="button"
+                              className="change-media-btn"
+                              onClick={() => openMediaPicker("background-image")}
+                            >
+                              Choose from Media Library or Upload
+                            </button>
+                            {currentStyle.backgroundImage && (
+                              <button
+                                type="button"
+                                className="remove-media-btn"
+                                onClick={() => updateStyle({ backgroundImage: "" })}
+                              >
+                                Remove Background Image
+                              </button>
+                            )}
                           </label>
                         </>
                       )}
@@ -5259,6 +5387,57 @@ const SettingsPanel = ({
                       }
                     />
                   </label>
+                  <div className="setting-field">
+                    <span>
+                      {overlayStyleTab === "hover" ? "Hover Overlay Image" : "Overlay Image"}
+                    </span>
+                    <input
+                      type="url"
+                      value={
+                        overlayStyleTab === "hover"
+                          ? (currentStyle as any).hoverOverlayImage || ""
+                          : (currentStyle as any).overlayImage || ""
+                      }
+                      placeholder="Image URL"
+                      onChange={(event) =>
+                        updateStyle(
+                          overlayStyleTab === "hover"
+                            ? ({ hoverOverlayImage: event.target.value } as any)
+                            : ({ overlayImage: event.target.value } as any),
+                        )
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="change-media-btn"
+                      onClick={() =>
+                        openMediaPicker(
+                          overlayStyleTab === "hover"
+                            ? "hover-overlay-image"
+                            : "overlay-image",
+                        )
+                      }
+                    >
+                      Choose from Media Library or Upload
+                    </button>
+                    {(overlayStyleTab === "hover"
+                      ? (currentStyle as any).hoverOverlayImage
+                      : (currentStyle as any).overlayImage) && (
+                      <button
+                        type="button"
+                        className="remove-media-btn"
+                        onClick={() =>
+                          updateStyle(
+                            overlayStyleTab === "hover"
+                              ? ({ hoverOverlayImage: "" } as any)
+                              : ({ overlayImage: "" } as any),
+                          )
+                        }
+                      >
+                        Remove Overlay Image
+                      </button>
+                    )}
+                  </div>
                   <label className="setting-field">
                     <span>Overlay Gradient CSS</span>
                     <input
@@ -6523,15 +6702,26 @@ const SettingsPanel = ({
                   {openSections.spacing && (
                     <div className="collapsible-content">
                       <SpacingEditor
-                        label="Padding"
-                        spacing={rs?.padding || s.padding}
+                        label={isButton ? "Button Padding" : "Padding"}
+                        spacing={
+                          isButton
+                            ? rs?.buttonPadding ||
+                              s.buttonPadding ||
+                              rs?.padding ||
+                              s.padding
+                            : rs?.padding || s.padding
+                        }
                         linked={linkedPadding}
                         onToggleLinked={() => setLinkedPadding((value) => !value)}
                         onChangeSide={(side, value) =>
-                          updateSpacing("padding", side, value)
+                          isButton
+                            ? updateButtonPadding(side, value)
+                            : updateSpacing("padding", side, value)
                         }
                         onChangeUnit={(unit) =>
-                          updateSpacingUnit("padding", unit)
+                          isButton
+                            ? updateButtonPaddingUnit(unit)
+                            : updateSpacingUnit("padding", unit)
                         }
                       />
                       <SpacingEditor
@@ -6562,9 +6752,16 @@ const SettingsPanel = ({
                       <label className="setting-field">
                         <span>Border Style</span>
                         <select
-                          value={s.borderStyle || "none"}
+                          value={
+                            (isButton ? currentStyle.buttonBorderStyle : s.borderStyle) ||
+                            "none"
+                          }
                           onChange={(e) =>
-                            updateStyle({ borderStyle: e.target.value as any })
+                            updateStyle(
+                              isButton
+                                ? { buttonBorderStyle: e.target.value as WidgetStyle["borderStyle"] }
+                                : { borderStyle: e.target.value as WidgetStyle["borderStyle"] },
+                            )
                           }
                         >
                           <option value="none">None</option>
@@ -6574,47 +6771,118 @@ const SettingsPanel = ({
                         </select>
                       </label>
 
-                      {s.borderStyle && s.borderStyle !== "none" && (
-                        <div className="field-row">
-                          <label className="setting-field">
-                            <span>Width (px)</span>
-                            <input
-                              type="number"
-                              value={s.borderWidth || 1}
-                              onChange={(e) =>
-                                updateStyle({
-                                  borderWidth: Number(e.target.value),
-                                })
+                      {(isButton
+                        ? currentStyle.buttonBorderStyle
+                        : s.borderStyle) &&
+                        (isButton
+                          ? currentStyle.buttonBorderStyle
+                          : s.borderStyle) !== "none" && (
+                        <>
+                          {isButton ? (
+                            <EdgeValuesEditor
+                              label="Button Border Width (px)"
+                              values={buttonBorderWidthEdges.map((edge) => ({
+                                ...edge,
+                                value:
+                                  currentStyle[edge.key] ??
+                                  currentStyle[edge.key.replace("buttonBorder", "border") as EdgeValueKey] ??
+                                  currentStyle.buttonBorderWidth ??
+                                  currentStyle.borderWidth ??
+                                  1,
+                              }))}
+                              linked={linkedBorderWidths}
+                              onToggleLinked={() =>
+                                setLinkedBorderWidths((value) => !value)
+                              }
+                              onChange={(key, value) =>
+                                updateEdgeValue(
+                                  key,
+                                  value,
+                                  buttonBorderWidthEdges.map((edge) => edge.key),
+                                  linkedBorderWidths,
+                                )
                               }
                             />
-                          </label>
-
+                          ) : null}
+                          <div className="field-row">
+                            {!isButton && (
+                              <label className="setting-field">
+                                <span>Width (px)</span>
+                                <input
+                                  type="number"
+                                  value={s.borderWidth || 1}
+                                  onChange={(e) =>
+                                    updateStyle({
+                                      borderWidth: Number(e.target.value),
+                                    })
+                                  }
+                                />
+                              </label>
+                            )}
                           <label className="setting-field">
                             <span>Color</span>
                             <input
                               type="color"
-                              value={s.borderColor || "#e0e0e0"}
+                              value={
+                                (isButton
+                                  ? currentStyle.buttonBorderColor
+                                  : s.borderColor) ||
+                                  (isButton ? s.borderColor : undefined) ||
+                                  "#e0e0e0"
+                              }
                               onChange={(e) =>
-                                updateStyle({ borderColor: e.target.value })
+                                updateStyle(
+                                  isButton
+                                    ? { buttonBorderColor: e.target.value }
+                                    : { borderColor: e.target.value },
+                                )
                               }
                             />
                           </label>
-                        </div>
+                          </div>
+                        </>
                       )}
 
-                      <label className="setting-field">
-                        <span>Border Radius (px)</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={currentStyle.borderRadius || 0}
-                          onChange={(e) =>
-                            updateStyle({
-                              borderRadius: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </label>
+                      {isButton ? (
+                          <EdgeValuesEditor
+                            label="Button Border Radius (px)"
+                            values={buttonBorderRadiusEdges.map((edge) => ({
+                              ...edge,
+                              value:
+                                currentStyle[edge.key] ??
+                                currentStyle[edge.key.replace("buttonBorder", "border") as EdgeValueKey] ??
+                                currentStyle.buttonBorderRadius ??
+                                currentStyle.borderRadius ??
+                                0,
+                            }))}
+                            linked={linkedBorderRadii}
+                            onToggleLinked={() =>
+                              setLinkedBorderRadii((value) => !value)
+                            }
+                            onChange={(key, value) =>
+                              updateEdgeValue(
+                                key,
+                                value,
+                                buttonBorderRadiusEdges.map((edge) => edge.key),
+                                linkedBorderRadii,
+                              )
+                            }
+                          />
+                      ) : (
+                        <label className="setting-field">
+                            <span>Border Radius (px)</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={currentStyle.borderRadius || 0}
+                              onChange={(e) =>
+                                updateStyle({
+                                  borderRadius: Number(e.target.value),
+                                })
+                              }
+                            />
+                        </label>
+                      )}
                     </div>
                   )}
                 </div>
@@ -6650,6 +6918,49 @@ const SettingsPanel = ({
                     updateStyle({ backgroundImage: event.target.value })
                   }
                 />
+                <button
+                  type="button"
+                  className="change-media-btn"
+                  onClick={() => openMediaPicker("background-image")}
+                >
+                  Choose from Media Library or Upload
+                </button>
+                {currentStyle.backgroundImage && (
+                  <button
+                    type="button"
+                    className="remove-media-btn"
+                    onClick={() => updateStyle({ backgroundImage: "" })}
+                  >
+                    Remove Background Image
+                  </button>
+                )}
+              </label>
+              <label className="setting-field">
+                <span>Overlay Image URL</span>
+                <input
+                  type="url"
+                  value={(currentStyle as any).overlayImage || ""}
+                  placeholder="https://example.com/overlay.png"
+                  onChange={(event) =>
+                    updateStyle({ overlayImage: event.target.value } as any)
+                  }
+                />
+                <button
+                  type="button"
+                  className="change-media-btn"
+                  onClick={() => openMediaPicker("overlay-image")}
+                >
+                  Choose from Media Library or Upload
+                </button>
+                {(currentStyle as any).overlayImage && (
+                  <button
+                    type="button"
+                    className="remove-media-btn"
+                    onClick={() => updateStyle({ overlayImage: "" } as any)}
+                  >
+                    Remove Overlay Image
+                  </button>
+                )}
               </label>
               <div className="field-row">
                 <label className="setting-field">
