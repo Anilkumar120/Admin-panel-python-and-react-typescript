@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { BuilderGlobals, GlobalColor, GlobalFont } from "../../types/pageBuilder";
+import ColorInput from "./ColorInput";
 
 interface GlobalSettingsProps {
   globals: BuilderGlobals;
@@ -115,10 +116,11 @@ const GlobalSettings = ({ globals, onChange }: GlobalSettingsProps) => {
         <div className="global-colors-list">
           {(globals.colors || []).map((color) => (
             <div key={color.id} className="global-color-item">
-              <input
-                type="color"
+              <ColorInput
                 value={color.value}
-                onChange={(e) => updateColor(color.id, e.target.value)}
+                fallbackColor="#000000"
+                label={`Choose ${color.name} color`}
+                onChange={(value) => updateColor(color.id, value)}
               />
               <span className="color-name">{color.name}</span>
               <code>{color.value}</code>
@@ -136,10 +138,11 @@ const GlobalSettings = ({ globals, onChange }: GlobalSettingsProps) => {
             value={newColorName}
             onChange={(e) => setNewColorName(e.target.value)}
           />
-          <input
-            type="color"
+          <ColorInput
             value={newColorValue}
-            onChange={(e) => setNewColorValue(e.target.value)}
+            fallbackColor="#000000"
+            label="Choose new global color"
+            onChange={setNewColorValue}
           />
           <button type="button" onClick={addColor}>
             + Add

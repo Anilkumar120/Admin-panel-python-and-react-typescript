@@ -1137,6 +1137,37 @@
   font-size: 12px;
 }
 
+.hex-color-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+}
+
+.hex-color-control input[type="color"] {
+  width: 42px;
+  height: 38px;
+  padding: 2px;
+  border: 1px solid #d9dee7;
+  border-radius: 5px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.hex-color-transparent {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #596273;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.hex-color-transparent input {
+  margin: 0;
+  accent-color: #93003c;
+}
+
 /* ============ BUTTON GROUPS ============ */
 .settings-panel .button-group {
   display: flex;

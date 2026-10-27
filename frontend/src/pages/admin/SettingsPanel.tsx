@@ -15,6 +15,7 @@ import RichTextEditor from "./RichTextEditor";
 import BuilderIcon from "../../components/BuilderIcon";
 import { ICON_LIBRARY } from "../../components/iconLibrary";
 import IconPickerPopup from "./IconPickerPopup";
+import { default as HexColorInput } from "./ColorInput";
 import { getMenusForDropdown } from "../../api/menus";
 import { API_URL } from "../../api/config";
 import { getProducts, type Product } from "../../api/products";
@@ -3159,7 +3160,11 @@ const SettingsPanel = ({
                 />
                 <label className="setting-field">
                   <span>Color</span>
-                  <input type="color" value={currentStyle.borderColor || "#e0e0e0"} onChange={(event) => updateStyle({ borderColor: event.target.value })} />
+                  <HexColorInput
+                    value={currentStyle.borderColor || "#e0e0e0"}
+                    fallbackColor="#e0e0e0"
+                    onChange={(color) => updateStyle({ borderColor: color })}
+                  />
                 </label>
               </div>
             )}
@@ -5160,15 +5165,12 @@ const SettingsPanel = ({
                           </label>
                           <label className="setting-field">
                             <span>Color</span>
-                            <input
-                              type="color"
-                              value={
-                                (currentStyle as any)
-                                  .backgroundGradientColor1 || "#0c2f55"
-                              }
-                              onChange={(e) =>
+                            <HexColorInput
+                              value={currentStyle.backgroundGradientColor1 || "#0c2f55"}
+                              fallbackColor="#0c2f55"
+                              onChange={(color) =>
                                 updateBackgroundGradient({
-                                  backgroundGradientColor1: e.target.value,
+                                  backgroundGradientColor1: color,
                                 })
                               }
                             />
@@ -5189,15 +5191,12 @@ const SettingsPanel = ({
                           </label>
                           <label className="setting-field">
                             <span>Second Color</span>
-                            <input
-                              type="color"
-                              value={
-                                (currentStyle as any)
-                                  .backgroundGradientColor2 || "#ffffff"
-                              }
-                              onChange={(e) =>
+                            <HexColorInput
+                              value={currentStyle.backgroundGradientColor2 || "#ffffff"}
+                              fallbackColor="#ffffff"
+                              onChange={(color) =>
                                 updateBackgroundGradient({
-                                  backgroundGradientColor2: e.target.value,
+                                  backgroundGradientColor2: color,
                                 })
                               }
                             />
@@ -5242,12 +5241,12 @@ const SettingsPanel = ({
                         <>
                           <label className="setting-field">
                             <span>Background Color</span>
-                            <input
-                              type="color"
+                            <HexColorInput
                               value={currentStyle.backgroundColor || "#ffffff"}
-                              onChange={(e) =>
+                              fallbackColor="#ffffff"
+                              onChange={(color) =>
                                 updateStyle({
-                                  backgroundColor: e.target.value,
+                                  backgroundColor: color,
                                   backgroundGradient: undefined as any,
                                 } as any)
                               }
@@ -5323,15 +5322,15 @@ const SettingsPanel = ({
                     <>
                       <label className="setting-field">
                         <span>Hover Background Color</span>
-                        <input
-                          type="color"
+                        <HexColorInput
                           value={
                             (currentStyle as any).hoverBackgroundColor ||
                             "#ffffff"
                           }
-                          onChange={(e) =>
+                          fallbackColor="#ffffff"
+                          onChange={(color) =>
                             updateStyle({
-                              hoverBackgroundColor: e.target.value,
+                              hoverBackgroundColor: color,
                             } as any)
                           }
                         />
@@ -5371,18 +5370,18 @@ const SettingsPanel = ({
                   </div>
                   <label className="setting-field">
                     <span>Overlay Color</span>
-                    <input
-                      type="color"
+                    <HexColorInput
                       value={
                         overlayStyleTab === "hover"
                           ? (currentStyle as any).hoverOverlayColor || "#000000"
                           : (currentStyle as any).overlayColor || "#000000"
                       }
-                      onChange={(e) =>
+                      fallbackColor="#000000"
+                      onChange={(color) =>
                         updateStyle(
                           overlayStyleTab === "hover"
-                            ? ({ hoverOverlayColor: e.target.value } as any)
-                            : ({ overlayColor: e.target.value } as any),
+                            ? ({ hoverOverlayColor: color } as any)
+                            : ({ overlayColor: color } as any),
                         )
                       }
                     />
@@ -5544,19 +5543,19 @@ const SettingsPanel = ({
                   <div className="field-row">
                     <label className="setting-field">
                       <span>Border Color</span>
-                      <input
-                        type="color"
+                      <HexColorInput
                         value={
                           borderStyleTab === "hover"
                             ? (currentStyle as any).hoverBorderColor ||
                               "#0c2f55"
                             : currentStyle.borderColor || "#e5e7eb"
                         }
-                        onChange={(e) =>
+                        fallbackColor="#e5e7eb"
+                        onChange={(color) =>
                           updateStyle(
                             borderStyleTab === "hover"
-                              ? ({ hoverBorderColor: e.target.value } as any)
-                              : { borderColor: e.target.value },
+                              ? ({ hoverBorderColor: color } as any)
+                              : { borderColor: color },
                           )
                         }
                       />
@@ -5675,15 +5674,15 @@ const SettingsPanel = ({
                         <span>
                           {side === "top" ? "Top" : "Bottom"} Shape Color
                         </span>
-                        <input
-                          type="color"
+                        <HexColorInput
                           value={
                             (currentStyle as any)[`shapeDivider${side}Color`] ||
                             "#ffffff"
                           }
-                          onChange={(e) =>
+                          fallbackColor="#ffffff"
+                          onChange={(color) =>
                             updateStyle({
-                              [`shapeDivider${side}Color`]: e.target.value,
+                              [`shapeDivider${side}Color`]: color,
                             } as any)
                           }
                         />
@@ -5745,11 +5744,11 @@ const SettingsPanel = ({
                             <label className="setting-field">
                               <span>Item Text Color</span>
                               <div className="color-input-group">
-                                <input
-                                  type="color"
+                                <HexColorInput
                                   value={s.color || "#1a1a2e"}
-                                  onChange={(e) =>
-                                    updateStyle({ color: e.target.value })
+                                  fallbackColor="#1a1a2e"
+                                  onChange={(color) =>
+                                    updateStyle({ color })
                                   }
                                 />
                                 <input
@@ -5801,11 +5800,11 @@ const SettingsPanel = ({
                             <label className="setting-field">
                               <span>Hover Text Color</span>
                               <div className="color-input-group">
-                                <input
-                                  type="color"
+                                <HexColorInput
                                   value={s.hoverColor || "#f0b429"}
-                                  onChange={(e) =>
-                                    updateStyle({ hoverColor: e.target.value })
+                                  fallbackColor="#f0b429"
+                                  onChange={(color) =>
+                                    updateStyle({ hoverColor: color })
                                   }
                                 />
                                 <input
@@ -5847,12 +5846,12 @@ const SettingsPanel = ({
                           <label className="setting-field">
                             <span>Active Item Color</span>
                             <div className="color-input-group">
-                              <input
-                                type="color"
+                              <HexColorInput
                                 value={(s as any).activeColor || "#0c2f55"}
-                                onChange={(e) =>
+                                fallbackColor="#0c2f55"
+                                onChange={(color) =>
                                   updateStyle({
-                                    activeColor: e.target.value,
+                                    activeColor: color,
                                   } as any)
                                 }
                               />
@@ -6254,12 +6253,10 @@ const SettingsPanel = ({
                         <label className="setting-field">
                           <span>Text Color</span>
                           <div className="color-input-group">
-                            <input
-                              type="color"
+                            <HexColorInput
                               value={currentStyle.color || "#1a1a2e"}
-                              onChange={(e) =>
-                                updateStyle({ color: e.target.value })
-                              }
+                              fallbackColor="#1a1a2e"
+                              onChange={(color) => updateStyle({ color })}
                             />
                             <input
                               type="text"
@@ -6275,11 +6272,11 @@ const SettingsPanel = ({
                       <label className="setting-field">
                         <span>Background Color</span>
                         <div className="color-input-group">
-                          <input
-                            type="color"
+                          <HexColorInput
                             value={s.backgroundColor || "#ffffff"}
-                            onChange={(e) =>
-                              updateStyle({ backgroundColor: e.target.value })
+                            fallbackColor="#ffffff"
+                            onChange={(color) =>
+                              updateStyle({ backgroundColor: color })
                             }
                           />
                           <input
@@ -6310,11 +6307,11 @@ const SettingsPanel = ({
                           </label>
                           <label className="setting-field">
                             <span>Icon Color</span>
-                            <input
-                              type="color"
+                            <HexColorInput
                               value={s.iconColor || "#0c2f55"}
-                              onChange={(event) =>
-                                updateStyle({ iconColor: event.target.value })
+                              fallbackColor="#0c2f55"
+                              onChange={(color) =>
+                                updateStyle({ iconColor: color })
                               }
                             />
                           </label>
@@ -6423,12 +6420,12 @@ const SettingsPanel = ({
                       <label className="setting-field">
                         <span>Hover Background Color</span>
                         <div className="color-input-group">
-                          <input
-                            type="color"
+                          <HexColorInput
                             value={s.hoverBackgroundColor || "#0c2f55"}
-                            onChange={(e) =>
+                            fallbackColor="#0c2f55"
+                            onChange={(color) =>
                               updateStyle({
-                                hoverBackgroundColor: e.target.value,
+                                hoverBackgroundColor: color,
                               })
                             }
                           />
@@ -6448,11 +6445,11 @@ const SettingsPanel = ({
                       <label className="setting-field">
                         <span>Hover Text Color</span>
                         <div className="color-input-group">
-                          <input
-                            type="color"
+                          <HexColorInput
                             value={s.hoverColor || "#0c2f55"}
-                            onChange={(e) =>
-                              updateStyle({ hoverColor: e.target.value })
+                            fallbackColor="#0c2f55"
+                            onChange={(color) =>
+                              updateStyle({ hoverColor: color })
                             }
                           />
                           <input
@@ -6646,11 +6643,11 @@ const SettingsPanel = ({
                         <label className="setting-field">
                           <span>Hamburger Icon Color</span>
                           <div className="color-input-group">
-                            <input
-                              type="color"
+                            <HexColorInput
                               value={s.hamburgerColor || "#0c2f55"}
-                              onChange={(e) =>
-                                updateStyle({ hamburgerColor: e.target.value })
+                              fallbackColor="#0c2f55"
+                              onChange={(color) =>
+                                updateStyle({ hamburgerColor: color })
                               }
                             />
                             <input
@@ -6666,12 +6663,12 @@ const SettingsPanel = ({
                         <label className="setting-field">
                           <span>Mobile Menu Background</span>
                           <div className="color-input-group">
-                            <input
-                              type="color"
+                            <HexColorInput
                               value={s.mobileMenuBgColor || "#ffffff"}
-                              onChange={(e) =>
+                              fallbackColor="#ffffff"
+                              onChange={(color) =>
                                 updateStyle({
-                                  mobileMenuBgColor: e.target.value,
+                                  mobileMenuBgColor: color,
                                 })
                               }
                             />
@@ -6821,8 +6818,7 @@ const SettingsPanel = ({
                             )}
                           <label className="setting-field">
                             <span>Color</span>
-                            <input
-                              type="color"
+                            <HexColorInput
                               value={
                                 (isButton
                                   ? currentStyle.buttonBorderColor
@@ -6830,11 +6826,12 @@ const SettingsPanel = ({
                                   (isButton ? s.borderColor : undefined) ||
                                   "#e0e0e0"
                               }
-                              onChange={(e) =>
+                              fallbackColor="#e0e0e0"
+                              onChange={(color) =>
                                 updateStyle(
                                   isButton
-                                    ? { buttonBorderColor: e.target.value }
-                                    : { borderColor: e.target.value },
+                                    ? { buttonBorderColor: color }
+                                    : { borderColor: color },
                                 )
                               }
                             />
@@ -6900,11 +6897,11 @@ const SettingsPanel = ({
               <h4 className="section-title">Background &amp; Overlay</h4>
               <label className="setting-field">
                 <span>Background Color</span>
-                <input
-                  type="color"
+                <HexColorInput
                   value={currentStyle.backgroundColor || "#ffffff"}
-                  onChange={(event) =>
-                    updateStyle({ backgroundColor: event.target.value })
+                  fallbackColor="#ffffff"
+                  onChange={(color) =>
+                    updateStyle({ backgroundColor: color })
                   }
                 />
               </label>
@@ -6965,11 +6962,11 @@ const SettingsPanel = ({
               <div className="field-row">
                 <label className="setting-field">
                   <span>Overlay Color</span>
-                  <input
-                    type="color"
+                  <HexColorInput
                     value={(currentStyle as any).overlayColor || "#000000"}
-                    onChange={(event) =>
-                      updateStyle({ overlayColor: event.target.value } as any)
+                    fallbackColor="#000000"
+                    onChange={(color) =>
+                      updateStyle({ overlayColor: color } as any)
                     }
                   />
                 </label>
@@ -7023,11 +7020,11 @@ const SettingsPanel = ({
                 </label>
                 <label className="setting-field">
                   <span>Border Color</span>
-                  <input
-                    type="color"
+                  <HexColorInput
                     value={currentStyle.borderColor || "#e5e7eb"}
-                    onChange={(event) =>
-                      updateStyle({ borderColor: event.target.value })
+                    fallbackColor="#e5e7eb"
+                    onChange={(color) =>
+                      updateStyle({ borderColor: color })
                     }
                   />
                 </label>

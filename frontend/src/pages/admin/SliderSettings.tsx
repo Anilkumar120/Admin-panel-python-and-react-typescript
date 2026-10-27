@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { PageWidget, WidgetSettings, WidgetItem } from "../../types/pageBuilder";
 import MediaPicker, { type PickedMedia } from "./MediaPicker";
 import UnitInput from "./UnitInput";
+import ColorInput from "./ColorInput";
 
 interface SliderSettingsProps {
   widget: PageWidget;
@@ -460,12 +461,13 @@ const SliderSettings = ({
                         <label className="setting-field">
                           <span>Content Color</span>
                           <div className="color-input-group">
-                            <input
-                              type="color"
+                            <ColorInput
                               value={activeSlide.contentColor || "#ffffff"}
-                              onChange={(e) =>
+                              fallbackColor="#ffffff"
+                              label="Choose slide content color"
+                              onChange={(color) =>
                                 updateSlide(activeSlideIndex, {
-                                  contentColor: e.target.value,
+                                  contentColor: color,
                                 })
                               }
                             />
