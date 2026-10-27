@@ -1,4 +1,4 @@
-﻿import axios from "axios";
+import axios from "axios";
 import { API_URL } from "./config";
 
 const PAGE_BUILDER_URL = `${API_URL}/api/page-builder`;
@@ -45,14 +45,25 @@ export type WidgetType =
   | "counter"
   | "countdown"
   | "rating"
+  | "audio"
+  | "blockquote"
+  | "breadcrumbs"
+  | "call_to_action"
+  | "flip_box"
+  | "price_list"
+  | "price_table"
+  | "share_buttons"
+  | "slides"
   | "form"
   | "search"
   | "menu"
   | "social_icons"
   | "posts"
   | "post_grid"
+  | "loop_grid"
   | "post_list"
   | "post_carousel"
+  | "loop_carousel"
   | "post_title"
   | "post_content"
   | "post_excerpt"
@@ -182,14 +193,28 @@ export interface ResponsiveStyle {
   maxWidth?: DimensionValue | string;
   minHeight?: DimensionValue | string;
   maxHeight?: DimensionValue | string;
+  top?: string;
+  right?: string;
+  bottom?: string;
+  left?: string;
   padding?: BoxSpacing;
   margin?: BoxSpacing;
   gap?: number;
   fontSize?: number;
+  fontFamily?: string;
+  fontWeight?: number;
+  fontStyle?: "normal" | "italic" | "oblique";
+  lineHeight?: number;
+  letterSpacing?: number;
   display?: CSSDisplay;
   hide?: boolean;
   flexDirection?: FlexDirection;
   flexWrap?: FlexWrap;
+  flexGrow?: number;
+  flexShrink?: number;
+  flexBasis?: string;
+  order?: number;
+  alignSelf?: string;
   justifyContent?: string;
   alignItems?: string;
   alignContent?: string;
@@ -200,13 +225,40 @@ export interface ResponsiveStyle {
   gridColumnGap?: number;
   gridRowGap?: number;
   textAlign?: TextAlignment;
+  elementAlign?: string;
   backgroundColor?: string;
   color?: string;
+  borderColor?: string;
+  borderWidth?: number;
+  borderStyle?: BorderStyle;
   borderRadius?: number;
+  borderTopWidth?: number;
+  borderRightWidth?: number;
+  borderBottomWidth?: number;
+  borderLeftWidth?: number;
+  borderTopColor?: string;
+  borderRightColor?: string;
+  borderBottomColor?: string;
+  borderLeftColor?: string;
+  borderTopLeftRadius?: number;
+  borderTopRightRadius?: number;
+  borderBottomRightRadius?: number;
+  borderBottomLeftRadius?: number;
+  objectFit?: "cover" | "contain" | "fill" | "none" | "scale-down";
+  objectPosition?: string;
+  boxShadow?: string;
+  opacity?: number;
+  cssFilters?: string;
+  position?: PositionType;
+  sticky?: "none" | "top" | "bottom";
+  stickyOffset?: number;
+  zIndex?: number;
+  overflow?: OverflowType;
 }
 
 export interface WidgetStyle {
   backgroundColor?: string;
+  backgroundType?: "classic" | "gradient" | "video" | "slideshow";
   backgroundImage?: string;
   backgroundSize?: string;
   backgroundPosition?: string;
@@ -215,9 +267,20 @@ export interface WidgetStyle {
   backgroundRepeat?: string;
   backgroundAttachment?: "scroll" | "fixed" | "local";
   backgroundGradient?: string;
+  backgroundGradientType?: "linear" | "radial";
+  backgroundGradientColor1?: string;
+  backgroundGradientColor2?: string;
+  backgroundGradientLocation1?: number;
+  backgroundGradientLocation2?: number;
+  backgroundGradientAngle?: number;
+  spacerHeight?: number;
+  spacerUnit?: CSSUnit;
+  backgroundVideo?: string;
+  backgroundSlideshow?: string[];
   backgroundClip?: string;
   overlayColor?: string;
   overlayOpacity?: number;
+  overlayGradient?: string;
   color?: string;
   fontSize?: number;
   fontFamily?: string;
@@ -227,6 +290,7 @@ export interface WidgetStyle {
   letterSpacing?: number;
   wordSpacing?: number;
   textAlign?: TextAlignment;
+  elementAlign?: string;
   textTransform?: "none" | "uppercase" | "lowercase" | "capitalize";
   textDecoration?: "none" | "underline" | "overline" | "line-through";
   textShadow?: string;
@@ -293,9 +357,17 @@ export interface WidgetStyle {
   hoverColor?: string;
   hoverBorderColor?: string;
   hoverBorderRadius?: number;
+  hoverCssFilters?: string;
   hoverBoxShadow?: string;
   hoverScale?: number;
   hoverOpacity?: number;
+  hoverRotate?: number;
+  rotate?: number;
+  scale?: number;
+  translateX?: number | string;
+  translateY?: number | string;
+  cssFilters?: string;
+  maskShape?: "none" | "circle" | "triangle" | "diamond" | "hexagon";
   transform?: TransformSettings;
   animation?: string;
   animationDuration?: number;
@@ -359,10 +431,12 @@ export interface MediaItem {
 export interface WidgetItem {
   id: string;
   title: string;
+  cssId?: string;
   content?: string;
   image?: string;
   imageAlt?: string;
   icon?: string;
+  iconType?: "icon" | "text" | "image";
   link?: LinkSettings;
   button1Text?: string;
   button1Link?: string;
@@ -372,12 +446,15 @@ export interface WidgetItem {
   contentTextAlign?: string;
   contentColor?: string;
   customStyle?: boolean;
-  children?: WidgetItem[];
+  children?: PageWidget[];
   url?: string;
   label?: string;
   target?: string;
   parent_id?: string;
   options?: string[];
+  fieldType?: "text" | "email" | "tel" | "number" | "textarea" | "select" | "checkbox";
+  required?: boolean;
+  placeholder?: string;
 }
 
 export interface QuerySettings {
@@ -421,6 +498,7 @@ export interface GlobalStyleReference {
 }
 
 export interface WidgetSettings {
+  author?: string;
   columns?: number;
   title?: string;
   description?: string;
@@ -435,7 +513,20 @@ export interface WidgetSettings {
   pauseOnInteraction?: boolean;
   imageIds?: string[];
   images?: MediaItem[];
+  imageLinkType?: "none" | "media" | "custom";
+  captionType?: "none" | "title" | "custom";
+  captionText?: string;
   queryType?: "latest" | "category" | "tag" | "manual";
+  loopSource?: "posts" | "products" | "custom";
+  loopPostType?: string;
+  includeExclude?: "include" | "exclude";
+  loopCategories?: string[];
+  loopTags?: string[];
+  loopOrderBy?: "date" | "title" | "price" | "menu_order";
+  loopOrder?: "ASC" | "DESC";
+  loopDate?: "all" | "day" | "week" | "month" | "year";
+  loopPagination?: "none" | "numbers" | "load_more";
+  loopTemplate?: string;
   categoryIds?: string[];
   tagIds?: string[];
   postIds?: string[];
@@ -472,6 +563,9 @@ export interface WidgetSettings {
   formId?: string;
   submitText?: string;
   successMessage?: string;
+  formFields?: WidgetItem[];
+  emailSubject?: string;
+  emailTemplate?: string;
   redirectUrl?: string;
   imageSize?: string;
   imageFit?: "cover" | "contain" | "fill" | "none";
@@ -488,6 +582,8 @@ export interface WidgetSettings {
     id: string;
     title: string;
     price: number;
+    regular_price?: number;
+    sale_price?: number | null;
     image?: string;
     description?: string;
     short_description?: string;
@@ -571,6 +667,10 @@ export interface WidgetSettings {
   showCod?: boolean;
   showBankTransfer?: boolean;
   showRazorpay?: boolean;
+  cashOnDeliveryLabel?: string;
+  bankTransferLabel?: string;
+  bankTransferInstructions?: string;
+  razorpayLabel?: string;
 
   // ================================================================
   // 👤 MY ACCOUNT WIDGET SETTINGS
@@ -624,6 +724,38 @@ export interface WidgetSettings {
   // Google Maps Widget Settings
   mapZoom?: number;
   mapHeight?: number;
+
+   // Pagination Widget Settings
+  paginationShowPrev?: boolean;
+  paginationShowNumbers?: boolean;
+  paginationShowNext?: boolean;
+  paginationPrevText?: string;
+  paginationNextText?: string;
+  paginationAlignment?: "left" | "center" | "right" | "space-between";
+  paginationGap?: number;
+  paginationActiveColor?: string;
+  paginationBackgroundColor?: string;
+  paginationTextColor?: string;
+  iconListLayout?: "list" | "inline";
+  iconListLinkFullWidth?: boolean;
+  counterStart?: number;
+  counterEnd?: number;
+  counterPrefix?: string;
+  counterSuffix?: string;
+  counterDuration?: number;
+  counterThousandsSeparator?: boolean;
+  counterSeparator?: string;
+  counterTitleTag?: string;
+  progressTitle?: string;
+  progressTitleTag?: string;
+  progressPercent?: number;
+  progressInnerText?: string;
+  showProgressTitle?: boolean;
+  showProgressPercent?: boolean;
+  testimonialSlidesName?: string;
+  testimonialSkin?: string;
+  testimonialLayout?: string;
+  testimonialAlignment?: TextAlignment;
 }
 
 export interface PageWidget {

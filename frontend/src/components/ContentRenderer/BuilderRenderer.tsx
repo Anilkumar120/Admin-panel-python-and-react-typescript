@@ -6,16 +6,51 @@ import {
   useState,
   useRef,
   useCallback,
+  type ElementType,
   type FormEvent,
 } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
+import * as FaIcons from "react-icons/fa";
 import { API_URL, getImageUrl } from "../../api/config";
 import type { PageWidget, ResponsiveDevice } from "../../types/pageBuilder";
 import { submitForm } from "../../api/forms";
 import { addToCart } from "../../api/cart";
 import { getPublicMenu } from "../../api/menus";
 import BuilderIcon from "../BuilderIcon";
+import { loadGoogleFont } from "../../utils/googleFonts";
+
+const SOCIAL_ICON_ALIASES: Record<string, string> = {
+  facebook: "FaFacebookF",
+  instagram: "FaInstagram",
+  twitter: "FaTwitter",
+  x: "FaTwitter",
+  youtube: "FaYoutube",
+  linkedin: "FaLinkedinIn",
+  whatsapp: "FaWhatsapp",
+  pinterest: "FaPinterestP",
+  tiktok: "FaTiktok",
+  telegram: "FaTelegramPlane",
+  github: "FaGithub",
+  discord: "FaDiscord",
+  snapchat: "FaSnapchatGhost",
+  reddit: "FaRedditAlien",
+  tumblr: "FaTumblr",
+  vimeo: "FaVimeoV",
+  dribbble: "FaDribbble",
+  behance: "FaBehance",
+  skype: "FaSkype",
+  email: "FaEnvelope",
+  phone: "FaPhone",
+  website: "FaGlobe",
+};
+
+const SocialIconGlyph = ({ name, size = 20 }: { name?: string; size?: number }) => {
+  const iconName = SOCIAL_ICON_ALIASES[(name || "").toLowerCase()] || name || "";
+  const IconComponent = (FaIcons as any)[iconName];
+  if (IconComponent) return <IconComponent size={size} aria-hidden="true" />;
+  return <span aria-hidden="true">{(name || "•").slice(0, 2)}</span>;
+};
 
 const StorefrontWidget = lazy(
   () => import("../../pages/Storefront/Storefront"),
@@ -156,9 +191,7 @@ const ProductGridWidget = ({
           )}
           <div style={{ padding: 12 }}>
             <h3 style={{ margin: "0 0 6px", fontSize: 15 }}>{product.title}</h3>
-            <strong style={{ color: "#0c2f55" }}>
-              ₹{Number(product.price || 0).toFixed(2)}
-            </strong>
+            <ProductPrice product={product} />
           </div>
         </a>
       ))}
@@ -166,14 +199,163 @@ const ProductGridWidget = ({
   );
 };
 
+const ProductPrice = ({ product }: { product: ProductData }) => {
+  const regularPrice = Number(product.regular_price || 0);
+  const currentPrice = Number(product.price || 0);
+  const onSale = regularPrice > 0 && currentPrice < regularPrice;
+  const discount = onSale
+    ? Math.round(((regularPrice - currentPrice) / regularPrice) * 100)
+    : 0;
+
+  return (
+    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+      {onSale && (
+        <del style={{ color: "#6b7280", fontSize: "0.9em", fontWeight: 400 }}>
+          ₹{regularPrice.toFixed(2)}
+        </del>
+      )}
+      <strong style={{ color: "#0c2f55" }}>
+        ₹{currentPrice.toFixed(2)}
+      </strong>
+      {onSale && (
+        <small style={{ color: "#b42318", fontWeight: 600 }}>
+          {discount}% off
+        </small>
+      )}
+    </span>
+  );
+};
+
+const PublicTestimonialCarousel = ({
+  items,
+  settings,
+  color,
+  background,
+}: {
+  items: NonNullable<PageWidget["items"]>;
+  settings: PageWidget["settings"];
+  color: string;
+  background?: string;
+}) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  if (!items.length) return null;
+  const index = activeIndex % items.length;
+  const item = items[index];
+
+  return (
+    <div
+      style={{
+        padding: 32,
+        borderRadius: settings?.testimonialSkin === "bubble" ? 24 : 12,
+        background: background || "#f8f9fc",
+        textAlign: settings?.testimonialAlignment || "center",
+      }}
+    >
+      {item.image && (
+        <img
+          src={getImageUrl(item.image)}
+          alt={item.title || "Testimonial author"}
+          loading="lazy"
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: "50%",
+            objectFit: "cover",
+            display: "block",
+            margin:
+              settings?.testimonialLayout === "image-above"
+                ? "0 auto 16px"
+                : "0 0 16px",
+          }}
+        />
+      )}
+      <div aria-label={`${settings?.rating || 5} out of 5 stars`} style={{ color: "#f0b429" }}>
+        {"★".repeat(Math.max(1, Math.min(5, Number(settings?.rating || 5))))}
+      </div>
+      <blockquote style={{ margin: "12px 0 16px", color: "#444", fontStyle: "italic" }}>
+        “{item.content || ""}”
+      </blockquote>
+      <strong style={{ color }}>{item.title}</strong>
+      {item.label && <div style={{ marginTop: 4, color: "#667085", fontSize: 13 }}>{item.label}</div>}
+      {items.length > 1 && (
+        <div
+          className="testimonial-preview-controls"
+          style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginTop: 18 }}
+        >
+          <button type="button" aria-label="Previous testimonial" onClick={() => setActiveIndex((value) => (value - 1 + items.length) % items.length)}>‹</button>
+          <span>{index + 1} / {items.length}</span>
+          <button type="button" aria-label="Next testimonial" onClick={() => setActiveIndex((value) => (value + 1) % items.length)}>›</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AnimatedCounter = ({
+  start,
+  end,
+  duration,
+  separator,
+  showSeparator,
+}: {
+  start: number;
+  end: number;
+  duration: number;
+  separator: string;
+  showSeparator: boolean;
+}) => {
+  const [value, setValue] = useState(start);
+  useEffect(() => {
+    if (duration <= 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setValue(end);
+      return;
+    }
+    let frame = 0;
+    let startTime = 0;
+    const animate = (time: number) => {
+      if (!startTime) startTime = time;
+      const progress = Math.min((time - startTime) / duration, 1);
+      setValue(Math.round(start + (end - start) * progress));
+      if (progress < 1) frame = requestAnimationFrame(animate);
+    };
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [start, end, duration]);
+
+  const formatted = showSeparator
+    ? new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 })
+        .format(value)
+        .replace(/,/g, separator)
+    : String(value);
+  return <>{formatted}</>;
+};
+
 const PublicPostsWidget = ({
   limit,
   columns,
   layout,
+  source = "posts",
+  postType = "posts",
+  categories = [],
+  tags = [],
+  exclude = false,
+  orderBy = "date",
+  order = "DESC",
+  dateRange = "all",
+  pagination = "none",
 }: {
   limit: number;
   columns: number;
-  layout: "grid" | "list";
+  layout: "grid" | "list" | "carousel";
+  source?: "posts" | "custom";
+  postType?: string;
+  categories?: string[];
+  tags?: string[];
+  exclude?: boolean;
+  orderBy?: "date" | "title";
+  order?: "ASC" | "DESC";
+  dateRange?: "all" | "day" | "week" | "month" | "year";
+  pagination?: "none" | "numbers" | "load_more";
 }) => {
   const [posts, setPosts] = useState<
     {
@@ -186,15 +368,38 @@ const PublicPostsWidget = ({
     }[]
   >([]);
   const [error, setError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     let active = true;
+    const url = source === "custom"
+      ? `${API_URL}/api/public/items/${encodeURIComponent(postType)}`
+      : `${API_URL}/api/public/posts`;
     axios
-      .get<{ posts: typeof posts }>(`${API_URL}/api/public/posts`, {
-        params: { page: 1, limit },
+      .get<{ posts?: typeof posts; items?: typeof posts; pages?: number }>(url, {
+        params: {
+          page: currentPage,
+          limit,
+          category: categories.join(",") || undefined,
+          tag: tags.join(",") || undefined,
+          exclude,
+          order_by: orderBy,
+          order,
+          date_range: dateRange,
+        },
       })
       .then(({ data }) => {
-        if (active) setPosts(Array.isArray(data.posts) ? data.posts : []);
+        if (active) {
+          const nextItems = data.posts || data.items || [];
+          setPosts((current) =>
+            pagination === "load_more" && currentPage > 1
+              ? [...current, ...nextItems]
+              : nextItems,
+          );
+          setTotalPages(data.pages || 1);
+          setError("");
+        }
       })
       .catch((loadError) => {
         console.error("PUBLIC POST WIDGET LOAD ERROR:", loadError);
@@ -203,22 +408,24 @@ const PublicPostsWidget = ({
     return () => {
       active = false;
     };
-  }, [limit]);
+  }, [limit, source, postType, categories.join(","), tags.join(","), exclude, orderBy, order, dateRange, currentPage, pagination]);
 
   if (error) return <p role="alert">{error}</p>;
-  if (!posts.length) return <p>No published posts yet.</p>;
+  if (!posts.length) return <p>No items matched this loop query.</p>;
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns:
-          layout === "grid"
+    <div>
+      <div
+        style={{
+          display: layout === "carousel" ? "flex" : "grid",
+          gridTemplateColumns: layout === "grid"
             ? `repeat(auto-fit, minmax(min(100%, ${Math.max(180, Math.floor(1200 / Math.max(1, columns)))}px), 1fr))`
             : "1fr",
-        gap: 20,
-      }}
-    >
+          gap: 20,
+          overflowX: layout === "carousel" ? "auto" : undefined,
+          scrollSnapType: layout === "carousel" ? "x mandatory" : undefined,
+        }}
+      >
       {posts.map((post) => (
         <a
           key={post.id}
@@ -226,6 +433,8 @@ const PublicPostsWidget = ({
           style={{
             display: layout === "list" ? "flex" : "block",
             gap: 16,
+            flex: layout === "carousel" ? "0 0 min(82vw, 360px)" : undefined,
+            scrollSnapAlign: layout === "carousel" ? "start" : undefined,
             border: "1px solid #e0e6ed",
             borderRadius: 8,
             overflow: "hidden",
@@ -252,9 +461,174 @@ const PublicPostsWidget = ({
           </div>
         </a>
       ))}
+      </div>
+      {pagination === "numbers" && totalPages > 1 && (
+        <nav aria-label="Loop pagination" style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 20 }}>
+          <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => page - 1)}>Previous</button>
+          <span>{currentPage} / {totalPages}</span>
+          <button type="button" disabled={currentPage >= totalPages} onClick={() => setCurrentPage((page) => page + 1)}>Next</button>
+        </nav>
+      )}
+      {pagination === "load_more" && currentPage < totalPages && (
+        <div style={{ textAlign: "center", marginTop: 20 }}>
+          <button type="button" onClick={() => setCurrentPage((page) => page + 1)}>Load more</button>
+        </div>
+      )}
     </div>
   );
 };
+
+function ProductLoopWidget({
+  widget,
+  device,
+  pageId,
+  pageTitle,
+}: {
+  widget: PageWidget;
+  device: ResponsiveDevice;
+  pageId: string;
+  pageTitle: string;
+}) {
+  const [products, setProducts] = useState<ProductData[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [error, setError] = useState("");
+  const settings = widget.settings || {};
+  const limit = settings.postsPerPage || 6;
+  const categories = settings.loopCategories || [];
+  const tags = settings.loopTags || [];
+  const order = settings.loopOrder || "DESC";
+  const pagination = settings.loopPagination || "none";
+  const columns = Math.max(1, Math.min(6, settings.columns || 3));
+  const isCarousel = widget.type === "loop_carousel";
+
+  useEffect(() => {
+    let active = true;
+    const sort = settings.loopOrderBy === "price"
+      ? order === "ASC" ? "price_low" : "price_high"
+      : settings.loopOrderBy === "title"
+        ? "title"
+        : "recent";
+    axios
+      .get<{ products?: ProductData[]; pages?: number }>(
+        `${API_URL}/api/public/products`,
+        {
+          params: {
+            page: currentPage,
+            limit,
+            category: categories.join(",") || undefined,
+            tag: tags.join(",") || undefined,
+            exclude: settings.includeExclude === "exclude",
+            sort,
+            order,
+          },
+        },
+      )
+      .then(({ data }) => {
+        if (!active) return;
+        const nextProducts = Array.isArray(data.products) ? data.products : [];
+        setProducts((current) =>
+          pagination === "load_more" && currentPage > 1
+            ? [...current, ...nextProducts]
+            : nextProducts,
+        );
+        setTotalPages(data.pages || 1);
+        setError("");
+      })
+      .catch((loadError) => {
+        console.error("PUBLIC PRODUCT LOOP LOAD ERROR:", loadError);
+        if (active) setError("Products could not be loaded.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    limit,
+    currentPage,
+    categories.join(","),
+    tags.join(","),
+    order,
+    settings.loopOrderBy,
+    settings.includeExclude,
+    pagination,
+  ]);
+
+  if (error) return <p role="alert">{error}</p>;
+  if (!products.length) return <p>No products matched this loop query.</p>;
+
+  return (
+    <div>
+      <div
+        style={{
+          display: isCarousel ? "flex" : "grid",
+          gridTemplateColumns: isCarousel
+            ? undefined
+            : `repeat(${columns}, minmax(0, 1fr))`,
+          gap: 20,
+          overflowX: isCarousel ? "auto" : undefined,
+          scrollSnapType: isCarousel ? "x mandatory" : undefined,
+        }}
+      >
+        {products.map((product) => (
+          <article
+            key={product.id}
+            style={{
+              display: "grid",
+              alignContent: "start",
+              gap: 8,
+              minWidth: isCarousel ? "min(82vw, 360px)" : 0,
+              scrollSnapAlign: isCarousel ? "start" : undefined,
+              overflow: "hidden",
+              border: "1px solid #e0e6ed",
+              borderRadius: 8,
+              background: "#fff",
+            }}
+          >
+            {widget.children?.length ? (
+              widget.children.map((child) => (
+                <WidgetRenderer
+                  key={`${product.id}-${child.id}`}
+                  widget={child}
+                  device={device}
+                  pageId={pageId}
+                  pageTitle={pageTitle}
+                  product={product}
+                />
+              ))
+            ) : (
+              <>
+                {product.image && (
+                  <img
+                    src={getImageUrl(product.image)}
+                    alt={product.title}
+                    loading="lazy"
+                    style={{ width: "100%", aspectRatio: "1", objectFit: "cover" }}
+                  />
+                )}
+                <div style={{ padding: 12 }}>
+                  <h3 style={{ margin: "0 0 8px" }}>{product.title}</h3>
+                  <ProductPrice product={product} />
+                </div>
+              </>
+            )}
+          </article>
+        ))}
+      </div>
+      {pagination === "numbers" && totalPages > 1 && (
+        <nav aria-label="Product loop pagination" style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 20 }}>
+          <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => page - 1)}>Previous</button>
+          <span>{currentPage} / {totalPages}</span>
+          <button type="button" disabled={currentPage >= totalPages} onClick={() => setCurrentPage((page) => page + 1)}>Next</button>
+        </nav>
+      )}
+      {pagination === "load_more" && currentPage < totalPages && (
+        <div style={{ textAlign: "center", marginTop: 20 }}>
+          <button type="button" onClick={() => setCurrentPage((page) => page + 1)}>Load more</button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ============ STYLE INJECTOR ============
 const StyleInjector = ({ css }: { css: string }) => {
@@ -272,10 +646,12 @@ const InteractiveTabs = ({
   items,
   widgetId,
   color,
+  renderChildren,
 }: {
   items: NonNullable<PageWidget["items"]>;
   widgetId: string;
   color: string;
+  renderChildren: (children: PageWidget[]) => React.ReactNode;
 }) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const activeItem = items[activeIndex] || items[0];
@@ -324,7 +700,9 @@ const InteractiveTabs = ({
         aria-labelledby={`${widgetId}-tab-${activeIndex}`}
         style={{ padding: 12, color: "#666" }}
       >
+        {activeItem.image && <img src={activeItem.image} alt={activeItem.title || "Tab image"} style={{ display: "block", width: "100%", maxWidth: "100%", height: "auto", objectFit: "cover", marginBottom: 12, borderRadius: 6 }} />}
         {activeItem.content}
+        {activeItem.children?.length ? renderChildren(activeItem.children) : null}
       </div>
     </div>
   );
@@ -393,6 +771,45 @@ const PublicFormWidget = ({
         borderRadius: 12,
       }}
     >
+      {(widget.settings?.formFields || [
+        { id: "name", title: "Name", fieldType: "text", required: true },
+        { id: "email", title: "Email", fieldType: "email", required: true },
+        { id: "message", title: "Message", fieldType: "textarea", required: true },
+      ]).map((field) => (
+        <label key={field.id} style={{ display: "block", marginBottom: 12 }}>
+          <span>{field.title}</span>
+          {field.fieldType === "textarea" ? (
+            <textarea
+              name={field.id}
+              placeholder={field.placeholder || ""}
+              required={field.required !== false}
+              maxLength={5000}
+              rows={4}
+              style={{ width: "100%", padding: 12, marginTop: 4, border: "1px solid #ddd", borderRadius: 6, boxSizing: "border-box" }}
+            />
+          ) : field.fieldType === "select" ? (
+            <select
+              name={field.id}
+              required={field.required !== false}
+              style={{ width: "100%", padding: 12, marginTop: 4, border: "1px solid #ddd", borderRadius: 6, boxSizing: "border-box" }}
+            >
+              <option value="">{field.placeholder || "Select an option"}</option>
+              {(field.options || []).map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          ) : field.fieldType === "checkbox" ? (
+            <input name={field.id} type="checkbox" required={field.required === true} />
+          ) : (
+            <input
+              name={field.id}
+              type={field.fieldType || "text"}
+              placeholder={field.placeholder || ""}
+              required={field.required !== false}
+              maxLength={field.fieldType === "email" ? 320 : 200}
+              style={{ width: "100%", padding: 12, marginTop: 4, border: "1px solid #ddd", borderRadius: 6, boxSizing: "border-box" }}
+            />
+          )}
+        </label>
+      ))}
       <input
         type="text"
         name="website"
@@ -407,59 +824,6 @@ const PublicFormWidget = ({
           clipPath: "inset(50%)",
         }}
       />
-      <label style={{ display: "block", marginBottom: 12 }}>
-        <span>Name</span>
-        <input
-          type="text"
-          name="name"
-          autoComplete="name"
-          required
-          maxLength={200}
-          style={{
-            width: "100%",
-            padding: 12,
-            marginTop: 4,
-            border: "1px solid #ddd",
-            borderRadius: 6,
-            boxSizing: "border-box",
-          }}
-        />
-      </label>
-      <label style={{ display: "block", marginBottom: 12 }}>
-        <span>Email</span>
-        <input
-          type="email"
-          name="email"
-          autoComplete="email"
-          required
-          maxLength={320}
-          style={{
-            width: "100%",
-            padding: 12,
-            marginTop: 4,
-            border: "1px solid #ddd",
-            borderRadius: 6,
-            boxSizing: "border-box",
-          }}
-        />
-      </label>
-      <label style={{ display: "block", marginBottom: 12 }}>
-        <span>Message</span>
-        <textarea
-          name="message"
-          rows={4}
-          required
-          maxLength={5000}
-          style={{
-            width: "100%",
-            padding: 12,
-            marginTop: 4,
-            border: "1px solid #ddd",
-            borderRadius: 6,
-            boxSizing: "border-box",
-          }}
-        />
-      </label>
       <button
         type="submit"
         disabled={submitting}
@@ -487,18 +851,32 @@ const PublicFormWidget = ({
 
 // ============ HOVER + ANIMATION ============
 const getHoverAndAnimation = (style: any, widgetId: string) => {
+  const hasHoverBorderRadius =
+    style?.hoverBorderRadius != null &&
+    Number.isFinite(Number(style.hoverBorderRadius));
+  const hasHoverOpacity =
+    style?.hoverOpacity != null &&
+    Number.isFinite(Number(style.hoverOpacity)) &&
+    Number(style.hoverOpacity) !== 1;
   const hasHover =
     style?.hoverBackgroundColor ||
     style?.hoverColor ||
     style?.hoverBorderColor ||
+    hasHoverBorderRadius ||
+    style?.hoverBackgroundGradient ||
+    style?.hoverOverlayGradient ||
+    style?.hoverOverlayColor ||
+    style?.hoverCssFilters ||
     style?.hoverBoxShadow ||
     (style?.hoverScale && style.hoverScale !== 1) ||
-    (style?.hoverOpacity !== undefined && style.hoverOpacity !== 1) ||
+    hasHoverOpacity ||
     style?.hoverTranslateY;
 
   const hasAnimation = style?.animation && style.animation !== "none";
+  const hasCustomCss = Boolean(String(style?.customCss || "").trim());
+  const hasVisualEffects = (style?.backgroundType === "video" && style?.backgroundVideo) || (style?.backgroundType === "slideshow" && Array.isArray(style?.backgroundSlideshow) && style.backgroundSlideshow.length) || ["top", "bottom"].some((side) => style?.[`shapeDivider${side}Type`] && style[`shapeDivider${side}Type`] !== "none");
 
-  if (!hasHover && !hasAnimation) {
+  if (!hasHover && !hasAnimation && !hasCustomCss && !hasVisualEffects) {
     return { className: "", cssText: "" };
   }
 
@@ -514,13 +892,21 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
     const hoverRules: string[] = [];
 
     if (style.hoverBackgroundColor)
-      hoverRules.push(
-        `background-color: ${style.hoverBackgroundColor} !important;`,
-      );
+      hoverRules.push(`background-color: ${style.hoverBackgroundColor} !important;`);
+    if (style.hoverBackgroundGradient)
+      hoverRules.push(`background-image: ${style.hoverBackgroundGradient} !important;`);
+    if (style.hoverOverlayGradient)
+      hoverRules.push(`background-image: ${style.hoverOverlayGradient} !important;`);
+    if (style.hoverOverlayColor)
+      hoverRules.push(`background-image: linear-gradient(color-mix(in srgb, ${style.hoverOverlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${style.hoverOverlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent)) !important;`);
     if (style.hoverColor)
       hoverRules.push(`color: ${style.hoverColor} !important;`);
     if (style.hoverBorderColor)
       hoverRules.push(`border-color: ${style.hoverBorderColor} !important;`);
+    if (hasHoverBorderRadius)
+      hoverRules.push(`border-radius: ${style.hoverBorderRadius}px !important;`);
+    if (style.hoverCssFilters)
+      hoverRules.push(`filter: ${style.hoverCssFilters} !important;`);
     if (style.hoverBoxShadow)
       hoverRules.push(`box-shadow: ${style.hoverBoxShadow} !important;`);
 
@@ -529,10 +915,11 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
       transforms.push(`scale(${style.hoverScale})`);
     if (style.hoverTranslateY)
       transforms.push(`translateY(${style.hoverTranslateY}px)`);
+    if (style.hoverRotate) transforms.push(`rotate(${style.hoverRotate}deg)`);
     if (transforms.length)
       hoverRules.push(`transform: ${transforms.join(" ")} !important;`);
 
-    if (style.hoverOpacity !== undefined && style.hoverOpacity !== 1)
+    if (hasHoverOpacity)
       hoverRules.push(`opacity: ${style.hoverOpacity} !important;`);
 
     cssParts.push(`
@@ -573,6 +960,41 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
         animation: ${kfName} ${duration}ms ${easing} ${delay}ms both;
       }
     `);
+  }
+
+  if (style?.backgroundType === "slideshow" && Array.isArray(style?.backgroundSlideshow) && style.backgroundSlideshow.length) {
+    const images: string[] = style.backgroundSlideshow.filter((url: unknown) => typeof url === "string" && url.trim()).map((url: string) => `url("${url}")`);
+    if (images.length) {
+      const slideClass = `${uid}-slideshow`;
+      classes.push(slideClass);
+      const frames = images.map((bg, i) => `${(i / images.length) * 100}% { background-image: ${bg}; }`).join(" ");
+      cssParts.push(`@keyframes ${uid}-slides { ${frames} 100% { background-image: ${images[0]}; } } .${slideClass} { animation: ${uid}-slides ${Math.max(3, images.length * 3)}s infinite; background-size: cover; background-position: center; }`);
+    }
+  }
+  const shapeSides = ["top", "bottom"].filter((side) => style?.[`shapeDivider${side}Type`] && style[`shapeDivider${side}Type`] !== "none");
+  if (shapeSides.length) {
+    const shapeClass = `${uid}-shape-divider`;
+    classes.push(shapeClass);
+    const shapeRules = shapeSides.map((side) => {
+      const type = style[`shapeDivider${side}Type`];
+      const height = Math.max(0, Number(style[`shapeDivider${side}Height`] ?? 50));
+      const color = style[`shapeDivider${side}Color`] || "#ffffff";
+      const clip = type === "triangle" ? (side === "top" ? "polygon(0 0, 100% 0, 50% 100%)" : "polygon(0 100%, 100% 100%, 50% 0)") : type === "tilt" ? (side === "top" ? "polygon(0 0, 100% 0, 100% 35%, 0 100%)" : "polygon(0 65%, 100% 0, 100% 100%, 0 100%)") : type === "curve" ? "ellipse(75% 100% at 50% 0%)" : type === "wave" ? (side === "top" ? "polygon(0 0, 100% 0, 100% 65%, 75% 100%, 50% 65%, 25% 100%, 0 65%)" : "polygon(0 35%, 25% 0, 50% 35%, 75% 0, 100% 35%, 100% 100%, 0 100%)") : "none";
+      return `.${shapeClass}::${side === "top" ? "before" : "after"} { content: ""; position: absolute; left: 0; right: 0; ${side}: 0; width: 100%; height: ${height}px; background: ${color}; clip-path: ${clip}; pointer-events: none; z-index: 2; }`;
+    }).join("\n");
+    cssParts.push(`.${shapeClass} { position: relative; } ${shapeRules}`);
+  }
+  if (style?.backgroundType === "video" && style?.backgroundVideo) {
+    const videoClass = `${uid}-video-bg`;
+    classes.push(videoClass);
+    cssParts.push(`.${videoClass} > *:not(video) { position: relative; z-index: 1; }`);
+  }
+  const customCss = String(style?.customCss || "").trim();
+  const customClass = `${uid}-custom`;
+  if (customCss) {
+    classes.push(customClass);
+    const scopedCss = customCss.replace(/selector/g, `.${customClass}`);
+    cssParts.push(scopedCss.includes(`.${customClass}`) ? scopedCss : `.${customClass} { ${scopedCss} }`);
   }
 
   return {
@@ -913,124 +1335,225 @@ const renderStyles = (
   style: any,
   device: ResponsiveDevice,
 ): React.CSSProperties => {
-  const rs = style?.responsive?.[device] || {};
+  const base = style ?? {};
+  const responsive = base.responsive?.[device] ?? {};
 
-  const getSpacing = (responsiveValue: any, baseValue: any) => {
-    const value = responsiveValue ?? baseValue;
+  const value = (key: string): any =>
+    responsive[key] ?? base[key];
 
-    if (!value || typeof value !== "object") {
+  const normalizeSize = (input: unknown): string | undefined => {
+    if (input === undefined || input === null || input === "") {
       return undefined;
     }
 
-    return `${value.top ?? 0}px ${value.right ?? 0}px ${
-      value.bottom ?? 0
-    }px ${value.left ?? 0}px`;
-  };
-
-  const normalizeSize = (value: unknown): string | undefined => {
-    if (value === undefined || value === null || value === "") {
-      return undefined;
+    // DimensionValue: { value: 120, unit: "px" } or { value: "auto", unit: "auto" }
+    if (typeof input === "object" && input !== null && "value" in input) {
+      const dimension = input as { value?: number | string; unit?: string };
+      if (dimension.value === undefined || dimension.value === null) {
+        return undefined;
+      }
+      if (dimension.value === "auto" || dimension.unit === "auto") {
+        return "auto";
+      }
+      const unit = dimension.unit || "px";
+      return `${dimension.value}${unit}`;
     }
 
-    if (typeof value === "number") {
-      return `${value}px`;
+    if (typeof input === "number") {
+      return `${input}px`;
     }
 
-    const text = String(value).trim();
-
+    const text = String(input).trim();
     if (!text) return undefined;
 
     return /^-?\d*\.?\d+$/.test(text) ? `${text}px` : text;
   };
 
-  const display = rs.display ?? style.display;
-  const flexDirection = rs.flexDirection ?? style.flexDirection;
+  const normalizeSpacing = (input: unknown): string | undefined => {
+    if (input === undefined || input === null || input === "") {
+      return undefined;
+    }
 
+    if (typeof input === "number" || typeof input === "string") {
+      return normalizeSize(input);
+    }
+
+    if (typeof input !== "object") {
+      return undefined;
+    }
+
+    const spacing = input as {
+      top?: number | string;
+      right?: number | string;
+      bottom?: number | string;
+      left?: number | string;
+      unit?: string;
+    };
+    const unit = spacing.unit || "px";
+    const side = (part: number | string | undefined) => {
+      if (part === undefined || part === null || part === "") return `0${unit}`;
+      if (typeof part === "string" && !/^-?\d*\.?\d+$/.test(part.trim())) {
+        return part.trim();
+      }
+      return `${part}${unit}`;
+    };
+
+    return [
+      side(spacing.top),
+      side(spacing.right),
+      side(spacing.bottom),
+      side(spacing.left),
+    ].join(" ");
+  };
+
+  const display = value("display");
+  const flexDirection = value("flexDirection");
   const isFlexOrGrid = display === "flex" || display === "grid";
+  const gap = normalizeSize(value("gap"));
+  const rowGap = normalizeSize(
+    responsive.rowGap ?? responsive.gridRowGap ?? base.rowGap ?? base.gridRowGap,
+  );
+  const columnGap = normalizeSize(
+    responsive.columnGap ??
+      responsive.gridColumnGap ??
+      base.columnGap ??
+      base.gridColumnGap,
+  );
 
-  const gap = normalizeSize(rs.gap ?? style.gap);
-  const rowGap = normalizeSize(rs.rowGap ?? style.rowGap);
-  const columnGap = normalizeSize(rs.columnGap ?? style.columnGap);
+  const backgroundImage = value("backgroundImage");
+  const backgroundGradient = value("backgroundGradient");
+  const resolvedBackgroundImage = [
+    value("overlayGradient") || (value("overlayColor")
+      ? `linear-gradient(color-mix(in srgb, ${value("overlayColor")} ${(Number(value("overlayOpacity") ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${value("overlayColor")} ${(Number(value("overlayOpacity") ?? 0.35) * 100)}%, transparent))`
+      : ""),
+    backgroundGradient || (backgroundImage ? `url("${getImageUrl(String(backgroundImage))}")` : value("backgroundType") === "slideshow" && Array.isArray(value("backgroundSlideshow")) && value("backgroundSlideshow")[0] ? `url("${value("backgroundSlideshow")[0]}")` : ""),
+  ].filter(Boolean).join(", ") || undefined;
+
+  const gridColumns = responsive.gridColumns ?? base.gridColumns;
+  const gridRows = responsive.gridRows ?? base.gridRows;
+
+  // Element alignment is separate from text alignment and is resolved per widget.
+  // Accept the names used by different versions of the builder settings panel.
+  const elementAlign = String(
+    value("elementAlign") ?? value("horizontalAlign") ?? value("align") ?? "",
+  ).toLowerCase();
+  const alignmentMargins: Pick<React.CSSProperties, "marginLeft" | "marginRight"> =
+    elementAlign === "center" || elementAlign === "middle"
+      ? { marginLeft: "auto", marginRight: "auto" }
+      : elementAlign === "right" || elementAlign === "end"
+        ? { marginLeft: "auto", marginRight: undefined }
+        : elementAlign === "left" || elementAlign === "start"
+          ? { marginLeft: undefined, marginRight: "auto" }
+          : {};
 
   return {
     boxSizing: "border-box",
 
-    backgroundColor: rs.backgroundColor ?? style.backgroundColor,
-
-    backgroundImage: style.backgroundImage
-      ? `url("${getImageUrl(style.backgroundImage)}")`
-      : style.backgroundGradient || undefined,
-
-    backgroundSize: style.backgroundSize || "cover",
-    backgroundPosition: style.backgroundPosition || "center",
-    backgroundRepeat: style.backgroundRepeat || "no-repeat",
-
-    color: rs.color ?? style.color,
-
-    fontSize: normalizeSize(rs.fontSize ?? style.fontSize),
-    fontFamily: style.fontFamily,
-    fontWeight: style.fontWeight,
-    lineHeight: style.lineHeight,
-
-    letterSpacing:
-      style.letterSpacing !== undefined
-        ? normalizeSize(style.letterSpacing)
-        : undefined,
-
-    textAlign: rs.textAlign ?? style.textAlign,
-    textTransform: style.textTransform,
-    textDecoration: style.textDecoration,
-    textShadow: style.textShadow,
-
-    width: style.width,
-    height: style.height,
-    minWidth: style.minWidth,
-    maxWidth: "100%", // ✅ FIX: Public view box break nahi hoga
-    minHeight: style.minHeight,
-    maxHeight: style.maxHeight,
-
-    padding: getSpacing(rs.padding, style.padding),
-    margin: getSpacing(rs.margin, style.margin),
-
-    borderColor: style.borderColor,
-    borderWidth: normalizeSize(style.borderWidth),
-    borderStyle: style.borderStyle,
-    borderRadius: normalizeSize(style.borderRadius),
-    boxShadow: style.boxShadow,
-
-    opacity: style.opacity,
-    position: style.position,
-    top: style.top,
-    right: style.right,
-    bottom: style.bottom,
-    left: style.left,
-    zIndex: style.zIndex,
-    overflow: "hidden", // ✅ FIX: Bahar nahi jayega
+    width: normalizeSize(value("width")),
+    height: normalizeSize(value("height")),
+    minWidth: normalizeSize(value("minWidth")),
+    maxWidth: normalizeSize(value("maxWidth")) ?? "100%",
+    minHeight: normalizeSize(value("minHeight")),
+    maxHeight: normalizeSize(value("maxHeight")),
+    aspectRatio: value("aspectRatio"),
 
     display,
     flexDirection: flexDirection as React.CSSProperties["flexDirection"],
-    flexWrap: rs.flexWrap ?? style.flexWrap,
+    flexWrap: value("flexWrap") as React.CSSProperties["flexWrap"],
+    flexGrow: value("flexGrow"),
+    flexShrink: value("flexShrink"),
+    flexBasis: normalizeSize(value("flexBasis")),
+    alignSelf: value("alignSelf") as React.CSSProperties["alignSelf"],
+    order: value("order"),
 
-    justifyContent: rs.justifyContent ?? style.justifyContent,
-    alignItems: rs.alignItems ?? style.alignItems,
-    alignContent: rs.alignContent ?? style.alignContent,
+    justifyContent: value("justifyContent") as React.CSSProperties["justifyContent"],
+    alignItems: value("alignItems") as React.CSSProperties["alignItems"],
+    alignContent: value("alignContent") as React.CSSProperties["alignContent"],
 
-    // Apply saved layout gap to the public renderer.
     gap: gap ?? (isFlexOrGrid ? "20px" : undefined),
-
     rowGap: rowGap ?? gap ?? (isFlexOrGrid ? "20px" : undefined),
-
     columnGap: columnGap ?? gap ?? (isFlexOrGrid ? "20px" : undefined),
 
     gridTemplateColumns:
-      rs.gridTemplateColumns ??
-      style.gridTemplateColumns ??
-      (style.gridColumns ? `repeat(${style.gridColumns}, 1fr)` : undefined),
-
+      value("gridTemplateColumns") ??
+      (gridColumns ? `repeat(${gridColumns}, minmax(0, 1fr))` : undefined),
     gridTemplateRows:
-      rs.gridTemplateRows ??
-      style.gridTemplateRows ??
-      (style.gridRows ? `repeat(${style.gridRows}, 1fr)` : undefined),
+      value("gridTemplateRows") ??
+      (gridRows ? `repeat(${gridRows}, minmax(0, 1fr))` : undefined),
+    gridAutoFlow: value("gridAutoFlow"),
+    gridColumn: value("gridColumn"),
+    gridRow: value("gridRow"),
+
+    backgroundColor: value("backgroundColor"),
+    backgroundImage: value("backgroundType") === "slideshow" ? undefined : resolvedBackgroundImage,
+    backgroundSize: value("backgroundSize") ?? "cover",
+    backgroundPosition: value("backgroundPosition") ?? "center",
+    backgroundRepeat: value("backgroundRepeat") ?? "no-repeat",
+    backgroundAttachment: value("backgroundAttachment") as
+      React.CSSProperties["backgroundAttachment"],
+    backgroundClip: value("backgroundClip") as React.CSSProperties["backgroundClip"],
+
+    color: value("color"),
+    fontSize: normalizeSize(value("fontSize")),
+    fontFamily: value("fontFamily"),
+    fontWeight: value("fontWeight"),
+    fontStyle: value("fontStyle"),
+    lineHeight: value("lineHeight"),
+    letterSpacing: normalizeSize(value("letterSpacing")),
+    wordSpacing: normalizeSize(value("wordSpacing")),
+    textAlign: value("textAlign") as React.CSSProperties["textAlign"],
+    textTransform: value("textTransform") as React.CSSProperties["textTransform"],
+    textDecoration: value("textDecoration"),
+    textShadow: value("textShadow"),
+    objectFit: value("objectFit") as React.CSSProperties["objectFit"],
+    objectPosition: value("objectPosition"),
+
+    padding: normalizeSpacing(value("padding")),
+    margin: normalizeSpacing(value("margin")),
+    ...alignmentMargins,
+
+    borderColor: value("borderColor"),
+    borderWidth: normalizeSize(value("borderWidth")),
+    borderStyle: value("borderStyle") as React.CSSProperties["borderStyle"],
+    borderRadius: normalizeSize(value("borderRadius")),
+    transform: [
+      value("rotate") ? `rotate(${value("rotate")}deg)` : "",
+      value("scale") !== undefined && value("scale") !== 1 ? `scale(${value("scale")})` : "",
+      value("translateX") ? `translateX(${normalizeSize(value("translateX"))})` : "",
+      value("translateY") ? `translateY(${normalizeSize(value("translateY"))})` : "",
+    ].filter(Boolean).join(" ") || undefined,
+    filter: value("cssFilters"),
+    borderTopWidth: normalizeSize(value("borderTopWidth")),
+    borderRightWidth: normalizeSize(value("borderRightWidth")),
+    borderBottomWidth: normalizeSize(value("borderBottomWidth")),
+    borderLeftWidth: normalizeSize(value("borderLeftWidth")),
+    borderTopColor: value("borderTopColor"),
+    borderRightColor: value("borderRightColor"),
+    borderBottomColor: value("borderBottomColor"),
+    borderLeftColor: value("borderLeftColor"),
+    borderTopLeftRadius: normalizeSize(value("borderTopLeftRadius")),
+    borderTopRightRadius: normalizeSize(value("borderTopRightRadius")),
+    borderBottomLeftRadius: normalizeSize(value("borderBottomLeftRadius")),
+    borderBottomRightRadius: normalizeSize(value("borderBottomRightRadius")),
+    boxShadow: value("boxShadow"),
+
+    opacity: value("opacity"),
+    position: (value("position") || (value("sticky") && value("sticky") !== "none" ? "sticky" : undefined)) as React.CSSProperties["position"],
+    top: value("sticky") === "top" ? (normalizeSize(value("stickyOffset")) || "0px") : normalizeSize(value("top")),
+    right: normalizeSize(value("right")),
+    bottom: value("sticky") === "bottom" ? (normalizeSize(value("stickyOffset")) || "0px") : normalizeSize(value("bottom")),
+    left: normalizeSize(value("left")),
+    zIndex: value("zIndex"),
+    // Do not force hidden overflow: dropdowns, popovers and hover effects may need it.
+    overflow: value("overflow") as React.CSSProperties["overflow"],
+    clipPath: value("maskShape") === "circle" ? "circle(50% at 50% 50%)" : value("maskShape") === "triangle" ? "polygon(50% 0%, 0% 100%, 100% 100%)" : value("maskShape") === "diamond" ? "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)" : value("maskShape") === "hexagon" ? "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)" : undefined,
+    cursor: value("cursor"),
+    pointerEvents: value("pointerEvents") as React.CSSProperties["pointerEvents"],
+
+    transitionDuration:
+      value("transitionDuration") !== undefined
+        ? `${value("transitionDuration")}ms`
+        : undefined,
   };
 };
 
@@ -1038,16 +1561,19 @@ const renderStyles = (
 const MaybeLink = ({
   widget,
   children,
+  linkUrl,
 }: {
   widget: PageWidget;
   children: React.ReactNode;
+  linkUrl?: string | null;
 }) => {
-  const linkUrl = widget.link?.url || widget.url;
-  if (!linkUrl || linkUrl === "#") return <>{children}</>;
+  const resolvedUrl =
+    linkUrl !== undefined ? linkUrl : widget.link?.url || widget.url;
+  if (!resolvedUrl || resolvedUrl === "#") return <>{children}</>;
 
   return (
     <a
-      href={linkUrl}
+      href={resolvedUrl}
       target={widget.link?.target || "_self"}
       rel={widget.link?.noFollow ? "nofollow noopener" : undefined}
       style={{
@@ -1436,6 +1962,7 @@ const MenuRenderer = ({
     id: string;
     items: any[];
   } | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedMenuId) return;
@@ -1539,6 +2066,9 @@ const MenuRenderer = ({
       .${uid}-toggle span::before, .${uid}-toggle span::after { content: ""; position: absolute; left: 0; }
       .${uid}-toggle span::before { top: -8px; }
       .${uid}-toggle span::after { top: 8px; }
+      .${uid}-toggle.open span { background: transparent; }
+      .${uid}-toggle.open span::before { top: 0; transform: rotate(45deg); }
+      .${uid}-toggle.open span::after { top: 0; transform: rotate(-45deg); }
       .${uid}-list {
         display: flex; position: fixed; top: 0; right: 0; width: 300px;
         max-width: 85vw; height: 100vh; flex-direction: column;
@@ -1582,6 +2112,7 @@ const MenuRenderer = ({
         return;
       }
       e.preventDefault();
+      setMenuOpen(false);
       navigate(url);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -1623,29 +2154,28 @@ const MenuRenderer = ({
       <div className={`${uid}-wrapper nav-menu-widget-wrapper`}>
         <button
           type="button"
-          className={`${uid}-toggle`}
-          aria-label="Toggle menu"
+          className={`${uid}-toggle${menuOpen ? " open" : ""}`}
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={menuOpen}
+          aria-controls={`${uid}-list`}
           onClick={(e) => {
             e.stopPropagation();
-            document.querySelector(`.${uid}-list`)?.classList.toggle("open");
-            document
-              .querySelector(`.${uid}-backdrop`)
-              ?.classList.toggle("open");
+            setMenuOpen((open) => !open);
           }}
         >
-          <span />
+          <span aria-hidden="true" />
         </button>
-        <ul className={`${uid}-list nav-menu-widget`}>
+        <ul
+          id={`${uid}-list`}
+          className={`${uid}-list nav-menu-widget${menuOpen ? " open" : ""}`}
+        >
           {items.map((item) => renderMenuItem(item, 0))}
         </ul>
         <div
-          className={`${uid}-backdrop`}
+          className={`${uid}-backdrop${menuOpen ? " open" : ""}`}
           onClick={(e) => {
             e.stopPropagation();
-            document.querySelector(`.${uid}-list`)?.classList.remove("open");
-            document
-              .querySelector(`.${uid}-backdrop`)
-              ?.classList.remove("open");
+            setMenuOpen(false);
           }}
         />
       </div>
@@ -1667,10 +2197,22 @@ const SiteLogoRenderer = ({
 }) => {
   const navigate = useNavigate();
   const hover = getHoverAndAnimation(s, widget.id);
-  const linkUrl = widget.link?.url || "/";
+  const imageLinkType = widget.settings?.imageLinkType;
+  const isMediaLink = imageLinkType === "media";
+  const linkUrl =
+    imageLinkType === "none"
+      ? ""
+      : isMediaLink
+        ? widget.url || ""
+        : widget.link?.url || "/";
 
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    if (widget.link?.target === "_blank" || !linkUrl.startsWith("/")) return;
+    if (
+      isMediaLink ||
+      widget.link?.target === "_blank" ||
+      !linkUrl.startsWith("/")
+    )
+      return;
     e.preventDefault();
     navigate(linkUrl);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1680,7 +2222,7 @@ const SiteLogoRenderer = ({
     <>
       <StyleInjector css={hover.cssText} />
       <a
-        href={linkUrl}
+        href={linkUrl || undefined}
         target={widget.link?.target || "_self"}
         rel={
           widget.link?.noFollow
@@ -1689,14 +2231,14 @@ const SiteLogoRenderer = ({
               ? "noopener noreferrer"
               : undefined
         }
-        onClick={handleClick}
+        onClick={linkUrl && !isMediaLink ? handleClick : undefined}
         className={`site-logo-widget ${hover.className}`.trim()}
         style={{
           display: "inline-flex",
           alignItems: "center",
           textDecoration: "none",
           width: "auto",
-          cursor: "pointer",
+          cursor: linkUrl ? "pointer" : "default",
         }}
       >
         {widget.url ? (
@@ -1791,12 +2333,14 @@ const WidgetRenderer = ({
   pageId,
   pageTitle,
   product,
+  isRoot = false,
 }: {
   widget: PageWidget;
   device: ResponsiveDevice;
   pageId: string;
   pageTitle: string;
   product?: ProductData;
+  isRoot?: boolean;
 }) => {
   const s = widget.style;
   const rs = s.responsive?.[device] || {};
@@ -1828,12 +2372,36 @@ const WidgetRenderer = ({
     lineHeight: s.lineHeight,
   };
 
-  const isContainer = ["container", "section", "column", "grid"].includes(
-    widget.type,
-  );
+  const isContainer = [
+    "container", "section", "column", "grid",
+    "box", "col", "flex", "flexbox", "fbox",
+  ].includes(widget.type);
 
   if (isContainer) {
     const styles = renderStyles(widget.style, device);
+    const rootWidth = styles.width;
+    const rootHasConstrainedWidth =
+      typeof rootWidth === "string" &&
+      rootWidth !== "auto" &&
+      !(rootWidth.endsWith("%") && Number.parseFloat(rootWidth) >= 100);
+    const rootAlignment = String(
+      widget.style.responsive?.[device]?.elementAlign ??
+        widget.style.elementAlign ??
+        "",
+    ).toLowerCase();
+    if (isRoot && rootHasConstrainedWidth && !rootAlignment) {
+      styles.marginLeft = "auto";
+      styles.marginRight = "auto";
+    }
+    if ((widget.style as any).backgroundType === "video") {
+      styles.position = styles.position || "relative";
+    }
+    const ContainerTag: any = (widget.style as any).htmlTag || "div";
+    let customAttributes: Record<string, any> = {};
+    try {
+      const parsed = JSON.parse(String((widget.style as any).customAttributes || "{}"));
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) customAttributes = parsed;
+    } catch { /* Ignore invalid custom attribute JSON instead of breaking page rendering. */ }
 
     const displayValue =
       widget.style.responsive?.[device]?.display ?? widget.style.display;
@@ -1849,14 +2417,27 @@ const WidgetRenderer = ({
     } else if (displayValue === "flex") {
       layoutClass = `layout-flex-${flexDirectionValue || "row"}`;
     }
+    const hasConstrainedWidth =
+      typeof styles.width === "string" &&
+      styles.width !== "auto" &&
+      !(styles.width.endsWith("%") && Number.parseFloat(styles.width) >= 100);
+    if (hasConstrainedWidth) {
+      layoutClass += " has-explicit-width";
+    }
 
+    const hover = getHoverAndAnimation({ ...widget.style, ...(widget.style.responsive?.[device] || {}) }, widget.id);
     return (
-      <div
+      <>
+      {hover.cssText ? <style data-builder-style="true" dangerouslySetInnerHTML={{ __html: hover.cssText }} /> : null}
+      <ContainerTag
+        {...customAttributes}
+        id={(widget.style as any).cssId || undefined}
         style={styles}
-        className={`public-widget public-widget-${widget.type} ${layoutClass}`}
+        className={`public-widget public-widget-${widget.type} ${layoutClass} ${hover.className} ${(widget.style as any).customClasses || ""}`.trim()}
         data-widget-type={widget.type}
         data-widget-id={widget.id}
       >
+        {(widget.style as any).backgroundType === "video" && (widget.style as any).backgroundVideo ? <video aria-hidden="true" autoPlay muted loop playsInline src={(widget.style as any).backgroundVideo} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0, pointerEvents: "none" }} /> : null}
         {widget.children?.map((child) => (
           <WidgetRenderer
             key={child.id}
@@ -1867,10 +2448,12 @@ const WidgetRenderer = ({
             product={product}
           />
         ))}
-      </div>
+      </ContainerTag>
+      </>
     );
   }
 
+  const renderWidgetContent = () => {
   switch (widget.type) {
     case "product_title":
       return <div style={baseStyle}>{product?.title || "Product Title"}</div>;
@@ -1878,9 +2461,7 @@ const WidgetRenderer = ({
     case "product_price":
       return (
         <div style={{ ...baseStyle, fontWeight: 700 }}>
-          {product
-            ? `₹${Number(product.price || 0).toFixed(2)}`
-            : "Product Price"}
+          {product ? <ProductPrice product={product} /> : "Product Price"}
         </div>
       );
 
@@ -2064,7 +2645,16 @@ const WidgetRenderer = ({
         <>
           <StyleInjector css={hover.cssText} />
           <MaybeLink widget={widget}>
-            <div style={{ width: "100%", textAlign: headingTextAlign }}>
+            <div
+              style={{
+                width: baseStyle.width || "100%",
+                maxWidth: baseStyle.maxWidth || "100%",
+                textAlign: headingTextAlign,
+                marginLeft: baseStyle.marginLeft,
+                marginRight: baseStyle.marginRight,
+                boxSizing: "border-box",
+              }}
+            >
               <HeadingTag
                 className={hover.className}
                 style={{
@@ -2073,8 +2663,8 @@ const WidgetRenderer = ({
                   margin: 0,
                   padding: 0,
                   display: "block",
-                  width: s.width || undefined,
-                  maxWidth: s.maxWidth || undefined,
+                  width: baseStyle.width || undefined,
+                  maxWidth: baseStyle.maxWidth || undefined,
                 }}
                 dangerouslySetInnerHTML={{ __html: widget.content || "" }}
               />
@@ -2097,7 +2687,7 @@ const WidgetRenderer = ({
               style={{
                 ...baseStyle,
                 textAlign: textTextAlign,
-                width: "100%",
+                width: baseStyle.width || "100%",
                 display: "block",
                 margin: 0,
                 padding: 0,
@@ -2126,8 +2716,8 @@ const WidgetRenderer = ({
                 textAlign: btnTextAlign,
                 backgroundColor: bgColor || "#0c2f55",
                 color: rs.color || s.color || "#ffffff",
-                padding: "12px 24px",
-                borderRadius: s.borderRadius ? `${s.borderRadius}px` : "6px",
+                padding: baseStyle.padding ?? "12px 24px",
+                borderRadius: baseStyle.borderRadius ?? "6px",
                 display: "inline-block",
                 fontWeight: s.fontWeight || 600,
                 textDecoration: "none",
@@ -2143,30 +2733,57 @@ const WidgetRenderer = ({
     case "image": {
       if (!widget.url) return null;
       const hover = getHoverAndAnimation(s, widget.id);
+      const imageStyle = renderStyles(s, device);
 
       return (
         <>
           <StyleInjector css={hover.cssText} />
-          <MaybeLink widget={widget}>
+          <div style={{ display: "flex", justifyContent: (rs.elementAlign || s.elementAlign) === "center" ? "center" : (rs.elementAlign || s.elementAlign) === "right" ? "flex-end" : "flex-start", width: "100%" }}>
+          <MaybeLink
+            widget={widget}
+            linkUrl={
+              widget.settings?.imageLinkType === "none"
+                ? null
+                : widget.settings?.imageLinkType === "media"
+                  ? widget.url
+                  : widget.link?.url || null
+            }
+          >
             <img
               src={getImageUrl(widget.url)}
-              alt={widget.accessibility?.altText || widget.label}
+              alt={widget.accessibility?.altText || widget.label || "Image"}
               className={hover.className}
               style={{
-                width: s.width || "100%",
-                height: s.height || "auto",
-                minWidth: s.minWidth,
-                maxWidth: s.maxWidth || "100%",
-                minHeight: s.minHeight,
-                maxHeight: s.maxHeight,
+                ...imageStyle,
+                boxSizing: "border-box",
+                width: imageStyle.width || "100%",
+                height: imageStyle.height || "auto",
+                maxWidth: imageStyle.maxWidth || "100%",
                 display: "block",
-                borderRadius: s.borderRadius ? `${s.borderRadius}px` : "8px",
-                objectFit: (s.objectFit as any) || "cover",
-                objectPosition: s.objectPosition || "center",
+                borderRadius: imageStyle.borderRadius || "8px",
+                objectFit: imageStyle.objectFit || "cover",
+                objectPosition: imageStyle.objectPosition || "center",
                 boxShadow: s.boxShadow,
               }}
             />
           </MaybeLink>
+          </div>
+          {widget.settings?.captionType &&
+            widget.settings.captionType !== "none" && (
+              <div
+                className="widget-image-caption"
+                style={{
+                  marginTop: 6,
+                  textAlign: (imageStyle.textAlign as React.CSSProperties["textAlign"]) || "left",
+                  color: s.color || "inherit",
+                  fontSize: 13,
+                }}
+              >
+                {widget.settings.captionType === "custom"
+                  ? widget.settings.captionText || ""
+                  : widget.label}
+              </div>
+            )}
         </>
       );
     }
@@ -2297,7 +2914,10 @@ const WidgetRenderer = ({
             ...renderStyles(widget.style, device),
             listStyle: "none",
             display: "flex",
-            flexDirection: (s.flexDirection as "row" | "column") || "column",
+            flexDirection: widget.settings?.iconListLayout === "inline"
+              ? "row"
+              : (s.flexDirection as "row" | "column") || "column",
+            flexWrap: "wrap",
             gap: `${s.gap ?? 12}px`,
             padding: 0,
             margin: 0,
@@ -2306,7 +2926,7 @@ const WidgetRenderer = ({
           {(widget.items || []).map((item) => {
             const itemContent = (
               <>
-                {item.image ? (
+                {item.iconType === "text" ? null : item.iconType === "image" || item.image ? (
                   <img
                     src={getImageUrl(item.image)}
                     alt=""
@@ -2319,21 +2939,33 @@ const WidgetRenderer = ({
                     }}
                   />
                 ) : (
-                  <BuilderIcon
-                    name={item.icon}
-                    style={{
-                      color: s.iconColor || color || "#0c2f55",
-                      fontSize: `${s.iconSize || 20}px`,
-                      lineHeight: 1,
-                    }}
-                  />
+                  (FaIcons as any)[item.icon || ""] ? (
+                    <SocialIconGlyph name={item.icon} size={s.iconSize || 20} />
+                  ) : (
+                    <BuilderIcon
+                      name={item.icon}
+                      style={{
+                        color: s.iconColor || color || "#0c2f55",
+                        fontSize: `${s.iconSize || 20}px`,
+                        lineHeight: 1,
+                      }}
+                    />
+                  )
                 )}
                 <span>{item.title || item.content}</span>
               </>
             );
 
             return (
-              <li key={item.id}>
+              <li
+                key={item.id}
+                style={{
+                  width:
+                    widget.settings?.iconListLinkFullWidth && item.link?.url
+                      ? "100%"
+                      : undefined,
+                }}
+              >
                 {item.link?.url ? (
                   <a
                     href={item.link.url}
@@ -2347,6 +2979,7 @@ const WidgetRenderer = ({
                     }
                     style={{
                       display: "inline-flex",
+                      width: widget.settings?.iconListLinkFullWidth ? "100%" : undefined,
                       alignItems: "center",
                       gap: 10,
                       color: s.color || color || "inherit",
@@ -2359,6 +2992,7 @@ const WidgetRenderer = ({
                   <span
                     style={{
                       display: "inline-flex",
+                      width: widget.settings?.iconListLinkFullWidth ? "100%" : undefined,
                       alignItems: "center",
                       gap: 10,
                       color: s.color || color || "inherit",
@@ -2373,7 +3007,10 @@ const WidgetRenderer = ({
         </ul>
       );
 
-    case "icon":
+    case "icon": {
+      const CustomFaIcon = widget.settings?.customIcon
+        ? (FaIcons as any)[widget.settings.customIcon]
+        : null;
       return (
         <MaybeLink widget={widget}>
           <div
@@ -2395,19 +3032,32 @@ const WidgetRenderer = ({
                   verticalAlign: "middle",
                 }}
               />
+            ) : CustomFaIcon ? (
+              <CustomFaIcon size={fontSize || 48} />
+            ) : widget.settings?.customIcon ? (
+              <BuilderIcon
+                name={widget.settings.customIcon}
+                style={{ fontSize: `${fontSize || 48}px`, color: color || "#0c2f55" }}
+              />
             ) : (
               widget.content || "★"
             )}
           </div>
         </MaybeLink>
       );
+    }
 
-    case "icon_box":
+    case "icon_box": {
+      const iconPosition = widget.settings?.iconPosition || "top";
       return (
         <MaybeLink widget={widget}>
           <div
             style={{
-              textAlign: "center",
+              display: "flex",
+              flexDirection: iconPosition === "left" || iconPosition === "right" ? "row" : "column",
+              alignItems: "center",
+              textAlign: iconPosition === "left" ? "left" : "center",
+              gap: 16,
               padding: 24,
               color,
               backgroundColor: bgColor,
@@ -2417,25 +3067,34 @@ const WidgetRenderer = ({
             <div
               style={{
                 fontSize: 48,
-                marginBottom: 16,
+                marginBottom: iconPosition === "top" ? 16 : 0,
+                order: iconPosition === "right" ? 1 : 0,
+                flex: "0 0 auto",
                 color: color || "#0c2f55",
               }}
             >
-              {widget.content || "★"}
+              {widget.url ? (
+                <img src={getImageUrl(widget.url)} alt="" style={{ width: 48, height: 48, objectFit: "contain" }} />
+              ) : (
+                <BuilderIcon name={widget.content || "FaStar"} style={{ fontSize: 48, color: s.iconColor || color || "#0c2f55" }} />
+              )}
             </div>
-            <h3 style={{ margin: "0 0 8px", fontSize: 20, color }}>
-              {widget.items?.[0]?.title ||
-                widget.settings?.items?.[0]?.title ||
-                "Feature Title"}
-            </h3>
-            <p style={{ margin: 0, color, fontSize: 14, opacity: 0.75 }}>
-              {widget.items?.[0]?.content ||
-                widget.settings?.items?.[0]?.content ||
-                "Add feature description here."}
-            </p>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ margin: "0 0 8px", fontSize: 20, color }}>
+                {widget.items?.[0]?.title ||
+                  widget.settings?.items?.[0]?.title ||
+                  "Feature Title"}
+              </h3>
+              <p style={{ margin: 0, color, fontSize: 14, opacity: 0.75 }}>
+                {widget.items?.[0]?.content ||
+                  widget.settings?.items?.[0]?.content ||
+                  "Add feature description here."}
+              </p>
+            </div>
           </div>
         </MaybeLink>
       );
+    }
 
     case "image_box":
       return (
@@ -2591,16 +3250,25 @@ const WidgetRenderer = ({
       return <SliderRenderer widget={widget} />;
 
     case "spacer":
-      return <div style={{ minHeight: `${s.padding?.top || 40}px` }} />;
+      return (
+        <div
+          aria-hidden="true"
+          style={{
+            height: `${s.spacerHeight ?? s.padding?.top ?? 50}${s.spacerUnit || "px"}`,
+          }}
+        />
+      );
 
     case "divider":
       return (
         <hr
           style={{
-            borderColor: s.borderColor || "#e0e0e0",
-            borderWidth: `${s.borderWidth || 1}px`,
-            borderStyle: s.borderStyle || "solid",
+            border: 0,
+            borderTop: `${s.borderWidth || 1}px ${s.borderStyle || "solid"} ${s.borderColor || "#e0e0e0"}`,
             margin: "16px 0",
+            width: renderStyles(widget.style, device).width || "100%",
+            marginLeft: (rs.elementAlign || s.elementAlign) === "center" || (rs.elementAlign || s.elementAlign) === "right" ? "auto" : undefined,
+            marginRight: (rs.elementAlign || s.elementAlign) === "center" ? "auto" : undefined,
           }}
         />
       );
@@ -2723,7 +3391,9 @@ const WidgetRenderer = ({
       );
 
     case "tablepress": {
-      const headers = widget.settings?.tableHeaders || ["Name", "Role"];
+      const headers: string[] = Array.isArray(widget.settings?.tableHeaders)
+        ? widget.settings.tableHeaders.map((header: unknown) => String(header ?? ""))
+        : ["Name", "Role"];
       return (
         <div style={{ width: "100%", overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -2815,10 +3485,19 @@ const WidgetRenderer = ({
               >
                 {item.title}
               </summary>
-              <div
-                style={{ padding: "12px 16px", color: "#666", fontSize: 14 }}
-              >
+              <div style={{ padding: "12px 16px", color: "#666", fontSize: 14 }}>
+                {item.image && <img src={item.image} alt={item.title || "Accordion image"} style={{ display: "block", width: "100%", maxWidth: "100%", height: "auto", objectFit: "cover", marginBottom: 12, borderRadius: 6 }} />}
                 {item.content}
+                {item.children?.map((child) => (
+                  <WidgetRenderer
+                    key={child.id}
+                    widget={child}
+                    device={device}
+                    pageId={pageId}
+                    pageTitle={pageTitle}
+                    product={product}
+                  />
+                ))}
               </div>
             </details>
           ))}
@@ -2831,37 +3510,37 @@ const WidgetRenderer = ({
           items={widget.items || []}
           widgetId={widget.id}
           color={color || "#0c2f55"}
+          renderChildren={(children) => children.map((child) => (
+            <WidgetRenderer
+              key={child.id}
+              widget={child}
+              device={device}
+              pageId={pageId}
+              pageTitle={pageTitle}
+              product={product}
+            />
+          ))}
         />
       );
 
     case "testimonial":
       return (
-        <div
-          style={{
-            background: bgColor || "#f8f9fc",
-            padding: 32,
-            borderRadius: 12,
-            textAlign: "center",
-          }}
-        >
-          <div style={{ fontSize: 32, color: "#f0b429", marginBottom: 12 }}>
-            ★★★★★
-          </div>
-          <p
-            style={{
-              fontStyle: "italic",
-              color: "#444",
-              marginBottom: 16,
-              fontSize: 15,
-            }}
-          >
-            "{widget.items?.[0]?.content}"
-          </p>
-          <div style={{ fontWeight: 700 }}>{widget.items?.[0]?.title}</div>
-        </div>
+        <PublicTestimonialCarousel
+          items={widget.items || []}
+          settings={widget.settings}
+          color={color || "#0c2f55"}
+          background={bgColor}
+        />
       );
 
     case "counter":
+      {
+      const end =
+        widget.settings?.counterEnd ??
+        Number(widget.items?.[0]?.content || widget.settings?.items?.[0]?.content || widget.content || 1000);
+      const CounterTitle = (["div", "p", "span", "h1", "h2", "h3", "h4", "h5", "h6"].includes(
+        widget.settings?.counterTitleTag || "div",
+      ) ? widget.settings?.counterTitleTag || "div" : "div") as ElementType;
       return (
         <div style={{ textAlign: "center", padding: 20 }}>
           <div
@@ -2872,19 +3551,37 @@ const WidgetRenderer = ({
               lineHeight: 1,
             }}
           >
-            {widget.items?.[0]?.content ||
-              widget.settings?.items?.[0]?.content ||
-              "1000"}
+            {widget.settings?.counterPrefix || ""}
+            <AnimatedCounter
+              start={widget.settings?.counterStart ?? 0}
+              end={end}
+              duration={widget.settings?.counterDuration ?? 2000}
+              separator={widget.settings?.counterSeparator || ","}
+              showSeparator={widget.settings?.counterThousandsSeparator !== false}
+            />
+            {widget.settings?.counterSuffix || ""}
           </div>
-          <div style={{ color, marginTop: 12, fontSize: 15, opacity: 0.75 }}>
+          <CounterTitle style={{ color, marginTop: 12, fontSize: 15, opacity: 0.75 }}>
             {widget.items?.[0]?.title ||
               widget.settings?.items?.[0]?.title ||
               "Happy Clients"}
-          </div>
+          </CounterTitle>
         </div>
       );
+      }
 
     case "progress_bar":
+      {
+      const percentage = Math.max(
+        0,
+        Math.min(
+          100,
+          Number(widget.settings?.progressPercent ?? widget.items?.[0]?.content ?? 50),
+        ),
+      );
+      const ProgressTitle = (["span", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6"].includes(
+        widget.settings?.progressTitleTag || "span",
+      ) ? widget.settings?.progressTitleTag || "span" : "span") as ElementType;
       return (
         <div style={{ padding: "8px 0" }}>
           <div
@@ -2895,10 +3592,14 @@ const WidgetRenderer = ({
               color,
             }}
           >
-            <span style={{ fontWeight: 600 }}>
-              {widget.items?.[0]?.title || "Progress"}
-            </span>
-            <span>{widget.items?.[0]?.content || "80"}%</span>
+            {widget.settings?.showProgressTitle !== false && (
+              <ProgressTitle style={{ fontWeight: 600, margin: 0 }}>
+                {widget.settings?.progressTitle || widget.items?.[0]?.title || "My Skill"}
+              </ProgressTitle>
+            )}
+            {widget.settings?.showProgressPercent !== false && (
+              <span>{percentage}%</span>
+            )}
           </div>
           <div
             style={{
@@ -2910,15 +3611,30 @@ const WidgetRenderer = ({
           >
             <div
               style={{
-                width: `${widget.items?.[0]?.content || 80}%`,
+                width: `${percentage}%`,
                 height: "100%",
                 background: color || "#0c2f55",
                 borderRadius: 6,
               }}
-            />
+            >
+              {widget.settings?.progressInnerText && (
+                <span style={{
+                  display: "block",
+                  overflow: "hidden",
+                  padding: "0 10px",
+                  color: "#fff",
+                  fontSize: 12,
+                  lineHeight: "12px",
+                  whiteSpace: "nowrap",
+                }}>
+                  {widget.settings.progressInnerText}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       );
+      }
 
     case "form":
       return (
@@ -2961,13 +3677,26 @@ const WidgetRenderer = ({
         </div>
       );
 
+    case "pagination": {
+      const pagination = widget.settings || {};
+      const buttons: { label: string; active?: boolean }[] = [];
+      if (pagination.paginationShowPrev !== false) buttons.push({ label: pagination.paginationPrevText || "Previous" });
+      if (pagination.paginationShowNumbers !== false) { buttons.push({ label: "1", active: true }, { label: "2" }, { label: "3" }); }
+      if (pagination.paginationShowNext !== false) buttons.push({ label: pagination.paginationNextText || "Next" });
+      const align = pagination.paginationAlignment || "center";
+      return <nav aria-label="Pagination" style={{ display: "flex", flexWrap: "wrap", justifyContent: align === "left" ? "flex-start" : align === "right" ? "flex-end" : align === "space-between" ? "space-between" : "center", gap: `${pagination.paginationGap ?? 8}px`, width: "100%" }}>{buttons.map((button, index) => <button type="button" key={`${button.label}-${index}`} aria-current={button.active ? "page" : undefined} style={{ padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: 4, cursor: "pointer", background: button.active ? (pagination.paginationActiveColor || "#0c2f55") : (pagination.paginationBackgroundColor || "#fff"), color: button.active ? "#fff" : (pagination.paginationTextColor || "#333"), fontWeight: button.active ? 700 : 400 }}>{button.label}</button>)}</nav>;
+    }
+
     case "social_icons":
       return (
         <div
           style={{
             display: "flex",
-            gap: 12,
-            justifyContent: "center",
+            flexDirection: (s.flexDirection as "row" | "column") || "row",
+            flexWrap: "wrap",
+            gap: s.gap ?? 12,
+            justifyContent: s.justifyContent || "center",
+            alignItems: s.alignItems || "center",
             padding: 16,
           }}
         >
@@ -2982,48 +3711,266 @@ const WidgetRenderer = ({
                   : undefined
               }
               aria-label={item.title || "Social profile"}
+              title={item.title || "Social profile"}
               style={{
-                width: 44,
-                height: 44,
-                borderRadius: "50%",
+                width: s.iconSize ? Math.max(32, s.iconSize + 20) : 44,
+                height: s.iconSize ? Math.max(32, s.iconSize + 20) : 44,
+                borderRadius: s.borderRadius !== undefined ? `${s.borderRadius}px` : "50%",
                 background: bgColor || "#0c2f55",
-                color: color || "#fff",
+                color: s.iconColor || color || "#fff",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 14,
-                fontWeight: 700,
+                fontSize: s.iconSize || 20,
                 textDecoration: "none",
+                flexShrink: 0,
               }}
             >
-              {(item.icon || item.title || "•").slice(0, 2)}
+              {item.image || item.iconType === "image" ? (
+                <img
+                  src={getImageUrl(item.image || "")}
+                  alt=""
+                  aria-hidden="true"
+                  style={{
+                    width: s.iconSize || 20,
+                    height: s.iconSize || 20,
+                    objectFit: "contain",
+                  }}
+                />
+              ) : (
+                <SocialIconGlyph name={item.icon} size={s.iconSize || 20} />
+              )}
             </a>
+          ))}
+        </div>
+      );
+
+    case "audio":
+      return widget.url ? (
+        <audio
+          src={getImageUrl(widget.url)}
+          controls={widget.settings?.controls !== false}
+          style={{ ...renderStyles(widget.style, device), width: "100%" }}
+        />
+      ) : null;
+
+    case "blockquote":
+      return (
+        <blockquote
+          style={{
+            ...renderStyles(widget.style, device),
+            borderLeft: `${Math.max(2, s.borderWidth || 3)}px solid ${s.borderColor || "#2563eb"}`,
+            paddingLeft: 20,
+            marginLeft: 0,
+          }}
+        >
+          <p style={{ margin: 0 }}>{widget.content}</p>
+          {widget.settings?.author && (
+            <footer style={{ marginTop: 12, fontWeight: 600 }}>
+              — {widget.settings.author}
+            </footer>
+          )}
+        </blockquote>
+      );
+
+    case "breadcrumbs":
+      return (
+        <nav aria-label="Breadcrumb" style={{ ...baseStyle, width: "100%" }}>
+          <ol style={{ display: "flex", flexWrap: "wrap", gap: 8, listStyle: "none", padding: 0, margin: 0 }}>
+            {(widget.items || []).map((item, index) => (
+              <li key={item.id} style={{ display: "flex", gap: 8 }}>
+                {index > 0 && <span aria-hidden="true">/</span>}
+                {item.link?.url ? <a href={item.link.url}>{item.title}</a> : <span aria-current="page">{item.title}</span>}
+              </li>
+            ))}
+          </ol>
+        </nav>
+      );
+
+    case "call_to_action":
+      return (
+        <section style={{ ...renderStyles(widget.style, device), textAlign: "center" }}>
+          <h2 style={{ marginTop: 0 }}>{widget.settings?.title || "Take the next step"}</h2>
+          {widget.settings?.description && <p>{widget.settings.description}</p>}
+          <a
+            href={widget.url || "#"}
+            style={{ display: "inline-block", padding: "12px 24px", borderRadius: 6, background: bgColor || "#0c2f55", color: color || "#fff", textDecoration: "none" }}
+          >
+            {widget.content || "Get Started"}
+          </a>
+        </section>
+      );
+
+    case "flip_box": {
+      const front = widget.items?.[0];
+      const back = widget.items?.[1];
+      return (
+        <details style={{ ...renderStyles(widget.style, device), cursor: "pointer" }}>
+          <summary style={{ listStyle: "none", minHeight: 140 }}>
+            <strong>{front?.title || "Front"}</strong>
+            <p>{front?.content}</p>
+            <span>Click to reveal</span>
+          </summary>
+          <div style={{ paddingTop: 16, borderTop: "1px solid #e5e7eb" }}>
+            <strong>{back?.title || "Back"}</strong>
+            <p>{back?.content}</p>
+          </div>
+        </details>
+      );
+    }
+
+    case "price_list":
+      return (
+        <div style={{ ...renderStyles(widget.style, device), display: "grid", gap: 16 }}>
+          {(widget.items || []).map((item) => (
+            <div key={item.id} style={{ display: "flex", justifyContent: "space-between", gap: 16, borderBottom: "1px dotted #cbd5e1", paddingBottom: 10 }}>
+              <div><strong>{item.title}</strong>{item.content && <p style={{ margin: "4px 0 0", color: "#64748b" }}>{item.content}</p>}</div>
+              <strong>{item.label}</strong>
+            </div>
+          ))}
+        </div>
+      );
+
+    case "price_table":
+      return (
+        <section style={{ ...renderStyles(widget.style, device), textAlign: "center", border: "1px solid #e5e7eb" }}>
+          <h2 style={{ marginTop: 0 }}>{widget.settings?.title || "Plan"}</h2>
+          {widget.settings?.author && <p style={{ fontSize: 24, fontWeight: 700 }}>{widget.settings.author}</p>}
+          <p>{widget.content}</p>
+          <ul style={{ listStyle: "none", padding: 0, lineHeight: 2 }}>
+            {(widget.items || []).map((item) => <li key={item.id}>✓ {item.title}</li>)}
+          </ul>
+          <a href={widget.url || "#"} style={{ display: "inline-block", padding: "10px 20px", background: bgColor || "#0c2f55", color: color || "#fff", borderRadius: 6, textDecoration: "none" }}>Choose Plan</a>
+        </section>
+      );
+
+    case "share_buttons": {
+      const pageUrl = typeof window === "undefined" ? "" : encodeURIComponent(window.location.href);
+      const shareTargets: Record<string, string> = {
+        facebook: `https://www.facebook.com/sharer/sharer.php?u=${pageUrl}`,
+        x: `https://twitter.com/intent/tweet?url=${pageUrl}`,
+        twitter: `https://twitter.com/intent/tweet?url=${pageUrl}`,
+        linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${pageUrl}`,
+        whatsapp: `https://wa.me/?text=${pageUrl}`,
+      };
+      return (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, ...renderStyles(widget.style, device) }}>
+          {(widget.items || []).map((item) => (
+            <a key={item.id} href={shareTargets[(item.title || "").toLowerCase()] || item.link?.url || "#"} target="_blank" rel="noopener noreferrer" style={{ padding: "10px 14px", borderRadius: 6, background: bgColor || "#0c2f55", color: color || "#fff", textDecoration: "none" }}>
+              {item.title || "Share"}
+            </a>
+          ))}
+        </div>
+      );
+    }
+
+    case "slides":
+      return (
+        <div aria-label="Slides" style={{ display: "flex", gap: 16, overflowX: "auto", scrollSnapType: "x mandatory", ...renderStyles(widget.style, device) }}>
+          {(widget.items || []).map((item) => (
+            <article key={item.id} style={{ flex: "0 0 100%", minHeight: 220, padding: 24, boxSizing: "border-box", scrollSnapAlign: "start", background: item.image ? `linear-gradient(#0005,#0005),url("${getImageUrl(item.image)}") center/cover` : "#f1f5f9", color: item.image ? "#fff" : color }}>
+              <h2>{item.title}</h2>
+              <p>{item.content}</p>
+            </article>
           ))}
         </div>
       );
 
     case "posts":
     case "post_grid":
+    case "loop_grid":
+      if (widget.settings?.loopSource === "products") {
+        return (
+          <ProductLoopWidget
+            widget={widget}
+            device={device}
+            pageId={pageId}
+            pageTitle={pageTitle}
+          />
+        );
+      }
       return (
         <PublicPostsWidget
           limit={widget.settings?.postsPerPage || 6}
           columns={widget.settings?.columns || 3}
           layout="grid"
+          source={widget.settings?.loopSource === "custom" ? "custom" : "posts"}
+          postType={widget.settings?.loopPostType || "posts"}
+          categories={widget.settings?.loopCategories}
+          tags={widget.settings?.loopTags}
+          exclude={widget.settings?.includeExclude === "exclude"}
+          orderBy={widget.settings?.loopOrderBy === "title" ? "title" : "date"}
+          order={widget.settings?.loopOrder || "DESC"}
+          dateRange={widget.settings?.loopDate || "all"}
+          pagination={widget.settings?.loopPagination}
         />
       );
     case "post_list":
     case "post_carousel":
+      if (widget.settings?.loopSource === "products") {
+        return (
+          <ProductLoopWidget
+            widget={widget}
+            device={device}
+            pageId={pageId}
+            pageTitle={pageTitle}
+          />
+        );
+      }
       return (
         <PublicPostsWidget
           limit={widget.settings?.postsPerPage || 6}
           columns={1}
-          layout="list"
+          layout={widget.type === "post_carousel" ? "carousel" : "list"}
+          source={widget.settings?.loopSource === "custom" ? "custom" : "posts"}
+          postType={widget.settings?.loopPostType || "posts"}
+          categories={widget.settings?.loopCategories}
+          tags={widget.settings?.loopTags}
+          exclude={widget.settings?.includeExclude === "exclude"}
+          orderBy={widget.settings?.loopOrderBy === "title" ? "title" : "date"}
+          order={widget.settings?.loopOrder || "DESC"}
+          dateRange={widget.settings?.loopDate || "all"}
+          pagination={widget.settings?.loopPagination}
+        />
+      );
+    case "loop_carousel":
+      if (widget.settings?.loopSource === "products") {
+        return (
+          <ProductLoopWidget
+            widget={widget}
+            device={device}
+            pageId={pageId}
+            pageTitle={pageTitle}
+          />
+        );
+      }
+      return (
+        <PublicPostsWidget
+          limit={widget.settings?.postsPerPage || 6}
+          columns={widget.settings?.columns || 3}
+          layout="carousel"
+          source={widget.settings?.loopSource === "custom" ? "custom" : "posts"}
+          postType={widget.settings?.loopPostType || "posts"}
+          categories={widget.settings?.loopCategories}
+          tags={widget.settings?.loopTags}
+          exclude={widget.settings?.includeExclude === "exclude"}
+          orderBy={widget.settings?.loopOrderBy === "title" ? "title" : "date"}
+          order={widget.settings?.loopOrder || "DESC"}
+          dateRange={widget.settings?.loopDate || "all"}
+          pagination={widget.settings?.loopPagination}
         />
       );
 
     default:
       return null;
   }
+  };
+
+  const renderedContent = renderWidgetContent();
+  const cssId = String((widget.style as any).cssId || "").trim();
+  return cssId ? (
+    <div id={cssId} style={{ display: "contents" }}>{renderedContent}</div>
+  ) : renderedContent;
 };
 
 // ============ MAIN RENDERER ============
@@ -3045,6 +3992,19 @@ const BuilderRenderer = ({
     return [];
   }, [layout]);
 
+  useEffect(() => {
+    const collectFonts = (widgets: PageWidget[]) => {
+      widgets.forEach((widget) => {
+        loadGoogleFont(widget.style?.fontFamily);
+        Object.values(widget.style?.responsive || {}).forEach((style) =>
+          loadGoogleFont(style?.fontFamily),
+        );
+        if (Array.isArray(widget.children)) collectFonts(widget.children);
+      });
+    };
+    collectFonts(safeLayout);
+  }, [safeLayout]);
+
   if (!safeLayout.length) {
     return (
       <div style={{ padding: 40, textAlign: "center", color: "#999" }}>
@@ -3063,6 +4023,7 @@ const BuilderRenderer = ({
           pageId={pageId}
           pageTitle={pageTitle}
           product={product}
+          isRoot
         />
       ))}
     </div>

@@ -49,7 +49,9 @@ import CreateMenu from "./pages/Appearance/Menus/CreateMenu";
 import EditMenu from "./pages/Appearance/Menus/EditMenu";
 import MediaLibrary from "./pages/Media/MediaLibrary";
 import MediaTrash from "./pages/Media/MediaTrash";
-import PageBuilder from "./pages/admin/PageBuilder";
+import PageBuilder, {
+  PageBuilderErrorBoundary,
+} from "./pages/admin/PageBuilder";
 import HeaderFooterList from "./pages/admin/HeaderFooterList";
 import HeaderFooterBuilder from "./pages/admin/HeaderFooterBuilder";
 
@@ -215,7 +217,14 @@ const App = () => {
 
             <Route path="media" element={<MediaLibrary />} />
             <Route path="media/trash" element={<MediaTrash />} />
-            <Route path="appearance/page-builder" element={<PageBuilder />} />
+            <Route
+              path="appearance/page-builder"
+              element={
+                <PageBuilderErrorBoundary>
+                  <PageBuilder />
+                </PageBuilderErrorBoundary>
+              }
+            />
             <Route
               path="appearance/header-footer"
               element={<HeaderFooterList />}

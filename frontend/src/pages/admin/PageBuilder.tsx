@@ -1,4 +1,12 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import {
+  Component,
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   DndContext,
@@ -19,6 +27,10 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import axios from "axios";
+import {
+  createContent,
+  getPostTypeBySlug,
+} from "../../api/content";
 import {
   createPage,
   getPage,
@@ -45,6 +57,52 @@ import GlobalSettings from "./GlobalSettings";
 import "./PageBuilder.css";
 import "./MediaPicker.css";
 
+export class PageBuilderErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; errorMessage: string }
+> {
+  state = { hasError: false, errorMessage: "" };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Page Builder render error:", error, errorInfo);
+    this.setState({ errorMessage: error.message });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <main
+          role="alert"
+          style={{
+            minHeight: "60vh",
+            display: "grid",
+            alignContent: "center",
+            justifyItems: "center",
+            gap: 12,
+            padding: 24,
+            textAlign: "center",
+          }}
+        >
+          <h1>Page Builder hit an error</h1>
+          <p>Reload the builder or return to the admin page and try again.</p>
+          {this.state.errorMessage && (
+            <p role="status">{this.state.errorMessage}</p>
+          )}
+          <button type="button" onClick={() => window.location.reload()}>
+            Reload Builder
+          </button>
+        </main>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 // ============ PROPS INTERFACE ============
 interface PageBuilderProps {
   mode?: "page" | "template";
@@ -63,6 +121,42 @@ interface PageBuilderProps {
 const createId = () =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+const normalizeWidgetLayout = (value: unknown): PageWidget[] => {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter(
+      (widget): widget is Record<string, unknown> =>
+        Boolean(widget) && typeof widget === "object" && !Array.isArray(widget),
+    )
+    .map((widget) => ({
+      ...widget,
+      id: typeof widget.id === "string" ? widget.id : createId(),
+      type: typeof widget.type === "string" ? widget.type : "text",
+      label: typeof widget.label === "string" ? widget.label : "Widget",
+      content: typeof widget.content === "string" ? widget.content : "",
+      style:
+        widget.style && typeof widget.style === "object" && !Array.isArray(widget.style)
+          ? widget.style
+          : {},
+      children: normalizeWidgetLayout(widget.children),
+      items: Array.isArray(widget.items)
+        ? widget.items.map((item) => {
+            if (!item || typeof item !== "object" || Array.isArray(item)) {
+              return { id: createId(), title: "Item", content: "" };
+            }
+            const normalizedItem = item as Record<string, unknown>;
+            return {
+              ...normalizedItem,
+              id: typeof normalizedItem.id === "string" ? normalizedItem.id : createId(),
+              title: typeof normalizedItem.title === "string" ? normalizedItem.title : "",
+              children: normalizeWidgetLayout(normalizedItem.children),
+            };
+          })
+        : [],
+    })) as PageWidget[];
+};
+
 const getLayerIcon = (type: WidgetType): string => {
   const icons: Record<string, string> = {
     container: "▦", section: "▭", column: "▯", grid: "⊞",
@@ -72,7 +166,11 @@ const getLayerIcon = (type: WidgetType): string => {
     video: "▶", gallery: "▦", carousel: "◫", slider: "▤",
     accordion: "☰", tabs: "▭", toggle: "☰", testimonial: "❝",
     counter: "#", progress_bar: "▰", alert: "!", form: "▤",
-    posts: "▤", post_grid: "⊞", post_list: "☰", products: "▦",
+    audio: "♫", blockquote: "❝", breadcrumbs: "›",
+    call_to_action: "▣", flip_box: "▰", price_list: "☷",
+    price_table: "▦", share_buttons: "↗", slides: "▤",
+    posts: "▤", post_grid: "⊞", loop_grid: "▦", post_list: "☰", products: "▦",
+    loop_carousel: "↻",
     product_grid: "⊞", product_title: "T", product_price: "$",
     product_image: "▧", product_gallery: "▦",
     product_description: "¶", product_short_description: "≡",
@@ -111,9 +209,14 @@ const getWidgetLabel = (type: WidgetType): string => {
     link_bio_business_card: "Business Card",
     video: "Video", gallery: "Gallery", carousel: "Image Carousel",
     slider: "Banner Slider", accordion: "Accordion", tabs: "Tabs",
-    toggle: "Toggle", testimonial: "Testimonial", counter: "Counter",
-    progress_bar: "Progress Bar", alert: "Alert", form: "WPForms", posts: "Posts",
-    post_grid: "Post Grid", post_list: "Post List", post_carousel: "Post Carousel",
+    toggle: "Toggle", testimonial: "Testimonial Carousel", counter: "Counter",
+    progress_bar: "Progress Bar", alert: "Alert", form: "Form", posts: "Posts",
+    audio: "Audio", blockquote: "Blockquote", breadcrumbs: "Breadcrumbs",
+    call_to_action: "Call to Action", flip_box: "Flip Box",
+    price_list: "Price List", price_table: "Price Table",
+    share_buttons: "Share Buttons", slides: "Slides",
+    post_grid: "Post Grid", loop_grid: "Loop Grid", post_list: "Post List",
+    post_carousel: "Post Carousel", loop_carousel: "Loop Carousel",
     products: "Products", product_grid: "Product Grid", html: "HTML",
     product_title: "Product Title", product_price: "Product Price",
     product_image: "Product Image", product_gallery: "Product Gallery",
@@ -289,9 +392,35 @@ const DEFAULT_STYLES: Record<string, WidgetStyle> = {
     backgroundColor: "#e8f4ff",
     color: "#0c2f55",
   },
+  blockquote: {
+    padding: { top: 24, right: 24, bottom: 24, left: 24 },
+    margin: { top: 8, right: 0, bottom: 8, left: 0 },
+    borderColor: "#2563eb",
+    borderWidth: 3,
+    borderStyle: "solid",
+  },
+  call_to_action: {
+    padding: { top: 32, right: 32, bottom: 32, left: 32 },
+    margin: { top: 8, right: 0, bottom: 8, left: 0 },
+    borderRadius: 8,
+    backgroundColor: "#f3f6fb",
+  },
+  price_table: {
+    padding: { top: 24, right: 24, bottom: 24, left: 24 },
+    margin: { top: 8, right: 0, bottom: 8, left: 0 },
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
+  },
   form: { margin: { top: 8, right: 0, bottom: 8, left: 0 } },
   posts: { margin: { top: 8, right: 0, bottom: 8, left: 0 } },
   post_grid: {
+    display: "grid",
+    gridColumns: 3,
+    gridColumnGap: 20,
+    gridRowGap: 20,
+    margin: { top: 8, right: 0, bottom: 8, left: 0 },
+  },
+  loop_grid: {
     display: "grid",
     gridColumns: 3,
     gridColumnGap: 20,
@@ -305,6 +434,7 @@ const DEFAULT_STYLES: Record<string, WidgetStyle> = {
     margin: { top: 8, right: 0, bottom: 8, left: 0 },
   },
   post_carousel: { width: "100%", margin: { top: 8, right: 0, bottom: 8, left: 0 } },
+  loop_carousel: { width: "100%", margin: { top: 8, right: 0, bottom: 8, left: 0 } },
   products: { margin: { top: 8, right: 0, bottom: 8, left: 0 } },
   product_grid: {
     display: "grid",
@@ -436,14 +566,83 @@ const createWidget = (type: WidgetType): PageWidget => {
       ],
     },
     testimonial: {
-      items: [{ id: createId(), title: "John Doe", content: "This is an amazing product!", image: "" }],
+      settings: { testimonialSlidesName: "Slides" },
+      items: [
+        { id: createId(), title: "John Doe", content: "This is an amazing product!", image: "" },
+        { id: createId(), title: "Jane Smith", content: "Excellent service and a wonderful experience.", image: "" },
+        { id: createId(), title: "Alex Johnson", content: "I would highly recommend this to everyone.", image: "" },
+      ],
     },
     counter: {
       content: "1000",
       items: [{ id: createId(), title: "Happy Clients", content: "1000" }],
     },
-    progress_bar: { items: [{ id: createId(), title: "Design", content: "80" }] },
+    progress_bar: {
+      settings: {
+        progressTitle: "My Skill",
+        progressTitleTag: "span",
+        progressPercent: 50,
+        progressInnerText: "Web Designer",
+        showProgressTitle: true,
+        showProgressPercent: true,
+      },
+      items: [{ id: createId(), title: "My Skill", content: "50" }],
+    },
     alert: { content: "This is an important alert message." },
+    audio: { url: "", content: "Audio", settings: { controls: true } },
+    blockquote: {
+      content: "The best way to predict the future is to create it.",
+      settings: { author: "Peter Drucker" },
+    },
+    breadcrumbs: {
+      items: [
+        { id: createId(), title: "Home", link: { url: "/" } },
+        { id: createId(), title: "Current page" },
+      ],
+    },
+    call_to_action: {
+      content: "Get Started",
+      url: "#",
+      settings: {
+        title: "Take the next step",
+        description: "Tell visitors why they should take action today.",
+      },
+    },
+    flip_box: {
+      items: [
+        { id: createId(), title: "Front Title", content: "Front side content" },
+        { id: createId(), title: "Back Title", content: "Back side content" },
+      ],
+    },
+    price_list: {
+      items: [
+        { id: createId(), title: "Product One", content: "Short description", label: "$19" },
+        { id: createId(), title: "Product Two", content: "Short description", label: "$29" },
+      ],
+    },
+    price_table: {
+      content: "Choose the plan that fits your needs.",
+      settings: { title: "Starter", description: "Perfect for getting started" },
+      items: [
+        { id: createId(), title: "Feature one" },
+        { id: createId(), title: "Feature two" },
+        { id: createId(), title: "Feature three" },
+      ],
+    },
+    share_buttons: {
+      items: [
+        { id: createId(), title: "Facebook", icon: "facebook", link: { url: "#" } },
+        { id: createId(), title: "X", icon: "twitter", link: { url: "#" } },
+        { id: createId(), title: "LinkedIn", icon: "linkedin", link: { url: "#" } },
+      ],
+    },
+    slides: {
+      settings: { autoplay: true, autoplaySpeed: 5000, showDots: true, showArrows: true },
+      items: [
+        { id: createId(), title: "Slide One", content: "Describe your offer or announcement.", image: "" },
+        { id: createId(), title: "Slide Two", content: "Add another message for visitors.", image: "" },
+      ],
+    },
     map: { content: "New York, NY", settings: { mapAddress: "New York, NY" } },
     soundcloud: { url: "", content: "SoundCloud track" },
     shortcode: { content: "[your-shortcode]" },
@@ -485,11 +684,25 @@ const createWidget = (type: WidgetType): PageWidget => {
         },
       ]),
     ),
-    form: { settings: { submitText: "Submit", successMessage: "Thank you!" } },
+    form: {
+      settings: {
+        submitText: "Submit",
+        successMessage: "Thank you!",
+        formFields: [
+          { id: "name", title: "Name", fieldType: "text", required: true, placeholder: "Your name" },
+          { id: "email", title: "Email", fieldType: "email", required: true, placeholder: "you@example.com" },
+          { id: "message", title: "Message", fieldType: "textarea", required: true, placeholder: "Your message" },
+        ],
+        emailSubject: "New form submission",
+        emailTemplate: "New submission from {{page_title}}\n\n{{fields}}",
+      },
+    },
     posts: { settings: { postsPerPage: 6, queryType: "latest" } },
     post_grid: { settings: { postsPerPage: 6, queryType: "latest", columns: 3 } },
+    loop_grid: { settings: { postsPerPage: 6, queryType: "latest", columns: 3 } },
     post_list: { settings: { postsPerPage: 5, queryType: "latest" } },
     post_carousel: { settings: { postsPerPage: 6, queryType: "latest" } },
+    loop_carousel: { settings: { postsPerPage: 6, queryType: "latest", columns: 3 } },
     products: { settings: { postsPerPage: 8, columns: 4 } },
     product_grid: { settings: { postsPerPage: 8, columns: 4 } },
     product_title: { content: "Product Title" },
@@ -548,6 +761,13 @@ const createWidget = (type: WidgetType): PageWidget => {
   };
 
   const d = defaults[type] || {};
+  if (type === "loop_grid" || type === "loop_carousel") {
+    d.children = [
+      createWidget("product_image"),
+      createWidget("product_title"),
+      createWidget("product_price"),
+    ];
+  }
 
   return {
     id,
@@ -611,18 +831,22 @@ const SortableLayerItem = ({
   selectedId,
   onSelect,
   onDelete,
+  onDuplicate,
 }: {
   widget: PageWidget;
   depth: number;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: `layer-${widget.id}` });
 
   const [collapsed, setCollapsed] = useState(false);
-  const hasChildren = (widget.children?.length || 0) > 0;
+  const hasChildren =
+    (widget.children?.length || 0) > 0 ||
+    Boolean(widget.items?.some((item) => item.children?.length));
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -676,7 +900,22 @@ const SortableLayerItem = ({
 
         <button
           type="button"
+          className="structure-duplicate"
+          aria-label={`Duplicate ${widget.label}`}
+          title="Duplicate"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDuplicate(widget.id);
+          }}
+        >
+          ⧉
+        </button>
+
+        <button
+          type="button"
           className="structure-delete"
+          aria-label={`Delete ${widget.label}`}
+          title="Delete"
           onClick={(e) => {
             e.stopPropagation();
             onDelete(widget.id);
@@ -686,7 +925,7 @@ const SortableLayerItem = ({
         </button>
       </div>
 
-      {hasChildren && !collapsed && (
+      {(widget.children?.length || 0) > 0 && !collapsed && (
         <SortableContext
           items={widget.children!.map((c) => `layer-${c.id}`)}
           strategy={verticalListSortingStrategy}
@@ -699,10 +938,42 @@ const SortableLayerItem = ({
               selectedId={selectedId}
               onSelect={onSelect}
               onDelete={onDelete}
+              onDuplicate={onDuplicate}
             />
           ))}
         </SortableContext>
       )}
+
+      {hasChildren &&
+        !collapsed &&
+        widget.items?.map((item) =>
+          item.children?.length ? (
+            <div className="structure-item-group" key={item.id}>
+              <div
+                className="structure-group-label"
+                style={{ paddingLeft: 26 + depth * 16 }}
+              >
+                {item.title || "Item"}
+              </div>
+              <SortableContext
+                items={item.children.map((child) => `layer-${child.id}`)}
+                strategy={verticalListSortingStrategy}
+              >
+                {item.children.map((child) => (
+                  <SortableLayerItem
+                    key={child.id}
+                    widget={child}
+                    depth={depth + 1}
+                    selectedId={selectedId}
+                    onSelect={onSelect}
+                    onDelete={onDelete}
+                    onDuplicate={onDuplicate}
+                  />
+                ))}
+              </SortableContext>
+            </div>
+          ) : null,
+        )}
     </div>
   );
 };
@@ -731,6 +1002,7 @@ const PageBuilder = ({
   const pageId = searchParams.get("id");
   const contentId = searchParams.get("contentId");
   const urlPostType = searchParams.get("postType");
+  const newContentType = searchParams.get("newContent");
 
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -760,7 +1032,11 @@ const PageBuilder = ({
 
   const [showStructurePopup, setShowStructurePopup] = useState(false);
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(
+    Boolean(pageId || contentId || newContentType),
+  );
+  const [loadError, setLoadError] = useState("");
+  const [createdContentId, setCreatedContentId] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [isPreview, setIsPreview] = useState(false);
@@ -850,20 +1126,49 @@ const PageBuilder = ({
       let active = true;
       const loadPage = async () => {
         setLoading(true);
+        setLoadError("");
         try {
-          const page = await getPage(pageId);
+          let page;
+          try {
+            page = await getPage(pageId);
+          } catch (error) {
+            if (
+              !contentId ||
+              !axios.isAxiosError(error) ||
+              error.response?.status !== 404
+            ) {
+              throw error;
+            }
+            const result = await convertContentToBuilder(contentId);
+            if (!result.id) throw new Error("Content could not be opened in the builder.");
+            page = await getPage(result.id);
+            navigate(
+              `/admin/appearance/page-builder?id=${result.id}&contentId=${contentId}&postType=${urlPostType || ""}`,
+              { replace: true },
+            );
+          }
           if (!active) return;
           setTitle(page.title || "");
           setSlug(page.slug || "");
           setSlugManuallyEdited(false);
-          setLayout(page.layout || []);
+          const safeLayout = normalizeWidgetLayout(page.layout);
+          setLayout(safeLayout);
           setStatus(page.status || "draft");
           setShowTitle(page.show_title !== false);
           if (page.globals) setGlobals((prev) => ({ ...prev, ...page.globals }));
-          setHistory([page.layout || []]);
+          setHistory([safeLayout]);
           setHistoryIndex(0);
-        } catch {
-          if (active) setMessage("Unable to load page.");
+        } catch (error) {
+          console.error("Page builder load error:", error);
+          if (active) {
+            setLoadError(
+              axios.isAxiosError(error)
+                ? error.response?.data?.detail || "Unable to load this page in the builder."
+                : error instanceof Error
+                  ? error.message
+                  : "Unable to load this page in the builder.",
+            );
+          }
         } finally {
           if (active) setLoading(false);
         }
@@ -878,14 +1183,11 @@ const PageBuilder = ({
       let active = true;
       const loadFromContent = async () => {
         setLoading(true);
+        setLoadError("");
         try {
           const result = await convertContentToBuilder(contentId);
           const newPageId = result.id;
-
-          if (!newPageId) {
-            if (active) setMessage("Unable to convert content.");
-            return;
-          }
+          if (!newPageId) throw new Error("Content could not be opened in the builder.");
 
           const page = await getPage(newPageId);
           if (!active) return;
@@ -893,11 +1195,12 @@ const PageBuilder = ({
           setTitle(page.title || "");
           setSlug(page.slug || "");
           setSlugManuallyEdited(false);
-          setLayout(page.layout || []);
+          const safeLayout = normalizeWidgetLayout(page.layout);
+          setLayout(safeLayout);
           setStatus(page.status || "draft");
           setShowTitle(page.show_title !== false);
           if (page.globals) setGlobals((prev) => ({ ...prev, ...page.globals }));
-          setHistory([page.layout || []]);
+          setHistory([safeLayout]);
           setHistoryIndex(0);
 
           navigate(
@@ -912,9 +1215,17 @@ const PageBuilder = ({
               ? "Loaded existing builder page."
               : "Content converted to builder page. Start editing!",
           );
-        } catch (err) {
-          console.error("CONVERT ERROR:", err);
-          if (active) setMessage("Unable to load content into builder.");
+        } catch (error) {
+          console.error("Content-to-builder load error:", error);
+          if (active) {
+            setLoadError(
+              axios.isAxiosError(error)
+                ? error.response?.data?.detail || "Unable to load this content in the builder."
+                : error instanceof Error
+                  ? error.message
+                  : "Unable to load this content in the builder.",
+            );
+          }
         } finally {
           if (active) setLoading(false);
         }
@@ -924,7 +1235,51 @@ const PageBuilder = ({
         active = false;
       };
     }
-  }, [pageId, contentId, urlPostType, navigate, mode]);
+
+    if (newContentType) {
+      let active = true;
+      const prepareNewContent = async () => {
+        setLoading(true);
+        setLoadError("");
+        try {
+          const postType = await getPostTypeBySlug(newContentType);
+          if (!active) return;
+          const initialTitle = `New ${postType.name}`;
+          setTitle(initialTitle);
+          setSlug(
+            initialTitle
+              .toLowerCase()
+              .trim()
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/^-+|-+$/g, ""),
+          );
+          setSlugManuallyEdited(false);
+          setLayout([]);
+          setStatus("draft");
+          setHistory([[]]);
+          setHistoryIndex(0);
+        } catch (error) {
+          console.error("New content builder initialization error:", error);
+          if (active) {
+            setLoadError(
+              axios.isAxiosError(error)
+                ? error.response?.data?.detail || "Unable to open the builder for this content type."
+                : "Unable to open the builder for this content type.",
+            );
+          }
+        } finally {
+          if (active) setLoading(false);
+        }
+      };
+      void prepareNewContent();
+      return () => {
+        active = false;
+      };
+    }
+
+    setLoading(false);
+    setLoadError("");
+  }, [pageId, contentId, urlPostType, newContentType, navigate, mode]);
 
   const pushHistory = useCallback(
     (newLayout: PageWidget[]) => {
@@ -977,6 +1332,10 @@ const PageBuilder = ({
         if (widget.id === id) return widget;
         const found = findWidget(widget.children || [], id);
         if (found) return found;
+        for (const item of widget.items || []) {
+          const itemChild = findWidget(item.children || [], id);
+          if (itemChild) return itemChild;
+        }
       }
       return undefined;
     },
@@ -987,13 +1346,18 @@ const PageBuilder = ({
     (widgets: PageWidget[], id: string, changes: Partial<PageWidget>): PageWidget[] => {
       return widgets.map((widget) => {
         if (widget.id === id) return { ...widget, ...changes };
-        if (widget.children) {
-          return {
-            ...widget,
-            children: updateWidget(widget.children, id, changes),
-          };
-        }
-        return widget;
+        return {
+          ...widget,
+          children: widget.children
+            ? updateWidget(widget.children, id, changes)
+            : undefined,
+          items: widget.items?.map((item) => ({
+            ...item,
+            children: item.children
+              ? updateWidget(item.children, id, changes)
+              : undefined,
+          })),
+        };
       });
     },
     [],
@@ -1006,6 +1370,12 @@ const PageBuilder = ({
         .map((w) => ({
           ...w,
           children: w.children ? deleteWidgetById(w.children, id) : undefined,
+          items: w.items?.map((item) => ({
+            ...item,
+            children: item.children
+              ? deleteWidgetById(item.children, id)
+              : undefined,
+          })),
         }));
     },
     [],
@@ -1016,14 +1386,28 @@ const PageBuilder = ({
       const result: PageWidget[] = [];
       for (const w of widgets) {
         if (w.id === id) {
-          const clone = JSON.parse(JSON.stringify(w)) as PageWidget;
-          clone.id = createId();
-          if (clone.children) {
-            clone.children = clone.children.map((c) => ({ ...c, id: createId() }));
-          }
+          const cloneTree = (widget: PageWidget): PageWidget => ({
+            ...JSON.parse(JSON.stringify(widget)),
+            id: createId(),
+            children: widget.children?.map(cloneTree),
+            items: widget.items?.map((item) => ({
+              ...item,
+              children: item.children?.map(cloneTree),
+            })),
+          });
+          const clone = cloneTree(w);
           result.push(w, clone);
-        } else if (w.children) {
-          result.push({ ...w, children: duplicateWidgetById(w.children, id) });
+        } else if (w.children || w.items?.some((item) => item.children?.length)) {
+          result.push({
+            ...w,
+            children: w.children ? duplicateWidgetById(w.children, id) : undefined,
+            items: w.items?.map((item) => ({
+              ...item,
+              children: item.children
+                ? duplicateWidgetById(item.children, id)
+                : undefined,
+            })),
+          });
         } else {
           result.push(w);
         }
@@ -1121,12 +1505,15 @@ const PageBuilder = ({
 
   const handleDelete = useCallback(
     (id: string) => {
+      const target = findWidget(layout, id);
       const newLayout = deleteWidgetById(layout, id);
       setLayout(newLayout);
       pushHistory(newLayout);
-      if (selectedId === id) setSelectedId(null);
+      if (target && selectedId && findWidget([target], selectedId)) {
+        setSelectedId(null);
+      }
     },
-    [layout, deleteWidgetById, selectedId, pushHistory],
+    [layout, deleteWidgetById, findWidget, selectedId, pushHistory],
   );
 
   const handleDuplicate = useCallback(
@@ -1276,6 +1663,49 @@ const PageBuilder = ({
       const activeId = String(active.id);
       const overId = String(over.id);
       const activeData = active.data.current;
+      const overData = over.data.current;
+
+      if (overData?.type === "item-drop") {
+        const targetId = String(overData.widgetId || "");
+        const itemId = String(overData.itemId || "");
+        const targetWidget = findWidget(layout, targetId);
+        const targetItem = targetWidget?.items?.find((item) => item.id === itemId);
+        if (!targetWidget || !targetItem) return;
+
+        if (activeData?.type === "new-widget") {
+          const nestedWidget = createWidget(activeData.widgetType as WidgetType);
+          const items = (targetWidget.items || []).map((item) =>
+            item.id === itemId
+              ? { ...item, children: [...(item.children || []), nestedWidget] }
+              : item,
+          );
+          const newLayout = updateWidget(layout, targetId, { items });
+          setLayout(newLayout);
+          pushHistory(newLayout);
+          setSelectedId(nestedWidget.id);
+          return;
+        }
+
+        const draggedWidget = findWidget(layout, activeId);
+        if (
+          !draggedWidget ||
+          draggedWidget.id === targetId ||
+          findWidget([draggedWidget], targetId)
+        ) return;
+        const removed = deleteWidgetById(layout, activeId);
+        const updatedTarget = findWidget(removed, targetId);
+        if (!updatedTarget) return;
+        const items = (updatedTarget.items || []).map((item) =>
+          item.id === itemId
+            ? { ...item, children: [...(item.children || []), draggedWidget] }
+            : item,
+        );
+        const newLayout = updateWidget(removed, targetId, { items });
+        setLayout(newLayout);
+        pushHistory(newLayout);
+        setSelectedId(draggedWidget.id);
+        return;
+      }
 
       if (activeId.startsWith("layer-")) {
         const realActiveId = activeId.replace("layer-", "");
@@ -1292,6 +1722,10 @@ const PageBuilder = ({
           return widgets.map((w) => ({
             ...w,
             children: w.children ? reorderInTree(w.children) : undefined,
+            items: w.items?.map((item) => ({
+              ...item,
+              children: item.children ? reorderInTree(item.children) : undefined,
+            })),
           }));
         };
 
@@ -1375,7 +1809,7 @@ const PageBuilder = ({
         const targetWidget = findWidget(layout, overId);
         if (targetWidget) {
           const isContainerType = [
-            "container", "section", "column", "grid",
+            "container", "section", "column", "grid", "loop_grid", "loop_carousel",
           ].includes(targetWidget.type);
 
           if (isContainerType) {
@@ -1636,18 +2070,50 @@ const PageBuilder = ({
 
       try {
         if (pageId) {
-          await updatePage(pageId, pageData);
-        } else {
-          const result = await createPage({
-            ...pageData,
-            content_id: contentId || "",
-            post_type: urlPostType || "",
-          });
-          if (result.id && mode === "page") {
+          const result = await updatePage(pageId, pageData);
+          if (result.id && result.id !== pageId && mode === "page") {
             navigate(
               `/admin/appearance/page-builder?id=${result.id}${
                 contentId ? `&contentId=${contentId}` : ""
               }${urlPostType ? `&postType=${urlPostType}` : ""}`,
+              { replace: true },
+            );
+          }
+        } else {
+          let linkedContentId = createdContentId || contentId || "";
+          if (newContentType && !linkedContentId) {
+            const contentResult = await createContent(newContentType, {
+              title: title.trim(),
+              slug: slug.trim().toLowerCase(),
+              content: "",
+              description: "",
+              status: pageData.status,
+              featured_image: "",
+              featured_image_id: "",
+              parent_id: "",
+              categories: "",
+              tags: "",
+            });
+            linkedContentId = contentResult.id;
+            if (!linkedContentId) {
+              throw new Error("Content record was not created.");
+            }
+            setCreatedContentId(linkedContentId);
+          }
+
+          const result = await createPage({
+            ...pageData,
+            content_id: linkedContentId,
+            post_type: newContentType || urlPostType || "",
+          });
+          if (newContentType && linkedContentId && result.id) {
+            await updatePage(result.id, pageData);
+          }
+          if (result.id && mode === "page") {
+            navigate(
+              `/admin/appearance/page-builder?id=${result.id}${
+                linkedContentId ? `&contentId=${linkedContentId}` : ""
+              }${newContentType || urlPostType ? `&postType=${newContentType || urlPostType}` : ""}`,
               { replace: true },
             );
           }
@@ -1667,7 +2133,7 @@ const PageBuilder = ({
     },
     [
       title, slug, status, globals, showTitle, pageId, contentId,
-      urlPostType, navigate, saveHandler, mode,
+      urlPostType, newContentType, createdContentId, navigate, saveHandler, mode,
     ],
   );
 
@@ -1751,6 +2217,31 @@ const PageBuilder = ({
     return (
       <div className="page-builder-loading">
         {contentId ? "Loading content into builder..." : "Loading page builder..."}
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="page-builder">
+        <header className="builder-topbar">
+          <button
+            type="button"
+            className="builder-back"
+            onClick={() => navigate(-1)}
+            title="Back"
+          >
+            ← Back
+          </button>
+          <span className="builder-load-error-title">Page Builder</span>
+        </header>
+        <main className="builder-load-error" role="alert">
+          <h1>Page Builder could not open this content</h1>
+          <p>{loadError}</p>
+          <button type="button" onClick={() => navigate(-1)}>
+            Return to content
+          </button>
+        </main>
       </div>
     );
   }
@@ -1942,6 +2433,7 @@ const PageBuilder = ({
 
           <button
             type="button"
+            className="builder-save-draft"
             onClick={() => void handleSave(false)}
             disabled={saving}
           >
@@ -2104,6 +2596,7 @@ const PageBuilder = ({
                       <CanvasRenderer
                         key={widget.id}
                         widget={widget}
+                        isRoot
                         parentId={null}
                         index={index}
                         selectedId={selectedId}
@@ -2189,6 +2682,7 @@ const PageBuilder = ({
                           setShowStructurePopup(false);
                         }}
                         onDelete={handleDelete}
+                        onDuplicate={handleDuplicate}
                       />
                     ))}
                   </SortableContext>

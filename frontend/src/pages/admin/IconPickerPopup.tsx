@@ -24,6 +24,7 @@ const IconPickerPopup = ({
 }: IconPickerPopupProps) => {
   const [tab, setTab] = useState<"library" | "upload" | "char">("library");
   const [search, setSearch] = useState("");
+  const [family, setFamily] = useState("all");
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
 
   if (!isOpen) return null;
@@ -32,6 +33,10 @@ const IconPickerPopup = ({
     (item) =>
       item.label.toLowerCase().includes(search.toLowerCase()) ||
       item.name.toLowerCase().includes(search.toLowerCase()),
+  ).filter((item) =>
+    family === "all" ||
+    (family === "font-awesome" && item.family === "font-awesome") ||
+    item.style === family,
   );
 
   const handleMediaSelect = (media: PickedMedia | PickedMedia[]) => {
@@ -54,7 +59,7 @@ const IconPickerPopup = ({
           onClick={(e) => e.stopPropagation()}
         >
           <div className="media-picker-header">
-            <h3>Choose Icon</h3>
+            <h3>Icon Library</h3>
             <button
               type="button"
               className="media-picker-close"
@@ -91,6 +96,19 @@ const IconPickerPopup = ({
           <div className="media-picker-body">
             {tab === "library" && (
               <>
+                <select
+                  aria-label="Icon family"
+                  value={family}
+                  onChange={(event) => setFamily(event.target.value)}
+                  style={{ width: "100%", marginBottom: 12 }}
+                >
+                  <option value="all">All Icons</option>
+                  <option value="font-awesome">Font Awesome - All</option>
+                  <option value="regular">Font Awesome - Regular</option>
+                  <option value="solid">Font Awesome - Solid</option>
+                  <option value="brands">Font Awesome - Brands</option>
+                  <option value="filled">Material Design Icons - Filled</option>
+                </select>
                 <input
                   type="text"
                   className="media-search"

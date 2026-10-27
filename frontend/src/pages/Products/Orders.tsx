@@ -38,6 +38,9 @@ const Orders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [editingOrderId, setEditingOrderId] = useState("");
   const [customerDraft, setCustomerDraft] = useState<CustomerDetails>({
     customer_name: "",
@@ -115,6 +118,16 @@ const Orders = () => {
     }
   };
 
+  const visibleOrders = orders.filter((order) => {
+    const matchesSearch = [
+      order.order_number,
+      order.customer_name,
+      order.email,
+      order.payment_method,
+    ].some((value) => value.toLowerCase().includes(search.trim().toLowerCase()));
+    return matchesSearch && (statusFilter === "all" || order.status === statusFilter);
+  });
+
   return (
     <div className="products-page">
       <div className="page-heading">
@@ -128,25 +141,54 @@ const Orders = () => {
       </div>
       {error && <div role="alert" className="table-error">{error}</div>}
       <div className="table-card">
-        {loading ? <p style={{ padding: 20 }}>Loading orders…</p> : orders.length ? (
+        <div style={{ display: "flex", gap: 12, padding: 16, flexWrap: "wrap" }}>
+          <input
+            type="search"
+            aria-label="Search orders"
+            placeholder="Search orders, customers, or payment"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            style={{ flex: "1 1 260px", minWidth: 200 }}
+          />
+          <select
+            aria-label="Filter orders by status"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as OrderStatus | "all")}
+          >
+            <option value="all">All statuses</option>
+            {Object.entries(statusLabels).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </div>
+        {loading ? <p style={{ padding: 20 }}>Loading orders…</p> : visibleOrders.length ? (
           <div style={{ overflowX: "auto" }}>
             <table>
               <thead><tr><th>Order</th><th>Customer</th><th>Date</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th>Action</th></tr></thead>
               <tbody>
-                {orders.map((order) => (
+                {visibleOrders.map((order) => (
                   <tr key={order.id}>
-                    <td><strong>{order.order_number}</strong></td>
-                    <td>{order.customer_name}<small style={{ display: "block" }}>{order.email}</small><small>{order.phone}</small><small style={{ display: "block" }}>{order.address}</small></td>
+                    <td>
+                      <button
+                        type="button"
+                        className="text-button"
+                        onClick={() => setSelectedOrder(order)}
+                      >
+                        <strong>#{order.order_number}</strong>
+                      </button>
+                    </td>
+                    <td>{order.customer_name}<small style={{ display: "block" }}>{order.email}</small></td>
                     <td>{order.created_at ? new Date(order.created_at).toLocaleString() : "—"}</td>
-                    <td>{order.items.map((item, index) => <div key={`${item.name}-${index}`}>{item.name} × {item.quantity}</div>)}</td>
+                    <td>{order.items.reduce((sum, item) => sum + item.quantity, 0)} item(s)</td>
                     <td>₹{Number(order.total).toFixed(2)}</td>
-                    <td>{order.payment_method.replace("_", " ")}<small style={{ display: "block" }}>{order.payment_status}</small></td>
+                    <td>{order.payment_method.replaceAll("_", " ")}<small style={{ display: "block" }}>{order.payment_status}</small></td>
                     <td>{isTrash ? statusLabels[order.status] : (
                       <select aria-label={`Status for ${order.order_number}`} value={order.status} onChange={(event) => void changeStatus(order, event.target.value as OrderStatus)}>
                         {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                       </select>
                     )}</td>
                     <td>
+                      <button type="button" className="secondary-button" onClick={() => setSelectedOrder(order)}>View</button>
                       {!isTrash && <button type="button" className="secondary-button" onClick={() => {
                         setCustomerDraft({
                           customer_name: order.customer_name,
@@ -163,8 +205,70 @@ const Orders = () => {
               </tbody>
             </table>
           </div>
-        ) : <p style={{ padding: 20 }}>{isTrash ? "Trash is empty." : "No orders yet. Orders submitted through checkout will appear here."}</p>}
+        ) : <p style={{ padding: 20 }}>{orders.length ? "No orders match the current filters." : isTrash ? "Trash is empty." : "No orders yet. Orders submitted through checkout will appear here."}</p>}
       </div>
+      {selectedOrder && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 10000,
+            background: "rgba(15, 23, 42, 0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Order ${selectedOrder.order_number}`}
+            className="order-customer-dialog"
+            style={{ width: "min(760px, calc(100vw - 32px))", maxHeight: "85vh", overflowY: "auto", background: "#fff", borderRadius: 10, padding: 24 }}
+          >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+            <div>
+              <h2 style={{ marginTop: 0 }}>Order #{selectedOrder.order_number}</h2>
+              <p>{selectedOrder.created_at ? new Date(selectedOrder.created_at).toLocaleString() : "Date unavailable"}</p>
+            </div>
+            <button type="button" className="secondary-button" onClick={() => setSelectedOrder(null)}>Close</button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20 }}>
+            <section>
+              <h3>Customer</h3>
+              <p>{selectedOrder.customer_name}<br />{selectedOrder.email}<br />{selectedOrder.phone}</p>
+              <p>{selectedOrder.address}</p>
+            </section>
+            <section>
+              <h3>Payment</h3>
+              <p>{selectedOrder.payment_method.replaceAll("_", " ")}</p>
+              <p>Status: {selectedOrder.payment_status}</p>
+              <p>Order status: {statusLabels[selectedOrder.status]}</p>
+            </section>
+          </div>
+          <h3>Items</h3>
+          <div style={{ overflowX: "auto" }}>
+            <table>
+              <thead><tr><th>Product</th><th>Qty</th><th>Unit price</th><th>Subtotal</th></tr></thead>
+              <tbody>
+                {selectedOrder.items.map((item, index) => (
+                  <tr key={`${item.name}-${index}`}>
+                    <td>{item.name}</td>
+                    <td>{item.quantity}</td>
+                    <td>₹{Number(item.unit_price).toFixed(2)}</td>
+                    <td>₹{(Number(item.unit_price) * item.quantity).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ textAlign: "right", fontWeight: 700, padding: "16px 0" }}>
+            Total: ₹{Number(selectedOrder.total).toFixed(2)}
+          </div>
+          </div>
+        </div>
+      )}
       {editingOrderId && (
         <div role="dialog" aria-modal="true" aria-label="Edit order customer" className="order-customer-dialog">
           <h2>Edit customer information</h2>

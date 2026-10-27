@@ -1,14 +1,84 @@
 from datetime import datetime, timezone
+import logging
+import smtplib
+from email.message import EmailMessage
 from typing import Dict
 
+from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
+from pymongo.errors import PyMongoError
 
-from backend.database.connection import form_submissions_collection
+from backend.database.connection import (
+    form_submissions_collection,
+    pages_collection,
+    settings_collection,
+)
 from backend.utils.permissions import require_permission
+from backend.utils.secure_settings import decrypt_secret
 
 
 router = APIRouter(prefix="/api/forms", tags=["Forms"])
+
+
+def _find_widget(widgets: list, widget_id: str):
+    for widget in widgets:
+        if widget.get("id") == widget_id:
+            return widget
+        found = _find_widget(widget.get("children", []), widget_id)
+        if found:
+            return found
+    return None
+
+
+def _send_form_notification(page_id: str, widget_id: str, page_title: str, fields: Dict[str, str]):
+    try:
+        if not ObjectId.is_valid(page_id):
+            return
+        page = pages_collection.find_one({"_id": ObjectId(page_id), "status": "published"})
+        if not page:
+            return
+        widget = _find_widget(page.get("layout", []), widget_id)
+        if not widget or widget.get("type") != "form":
+            return
+        settings = settings_collection.find_one({"type": "payments"}) or {}
+        recipient = settings.get("admin_notification_email", "")
+        if not recipient or not settings.get("smtp_host") or not settings.get("smtp_from_email"):
+            return
+
+        field_text = "\n".join(f"{name}: {value}" for name, value in fields.items())
+        replacements = {"page_title": page_title, "fields": field_text, **fields}
+        form_settings = widget.get("settings", {})
+        subject = form_settings.get("emailSubject", "New form submission")
+        body = form_settings.get(
+            "emailTemplate",
+            "New submission from {{page_title}}\n\n{{fields}}",
+        )
+        for key, value in replacements.items():
+            subject = subject.replace("{{" + key + "}}", value)
+            body = body.replace("{{" + key + "}}", value)
+
+        message = EmailMessage()
+        message["Subject"] = " ".join(str(subject).splitlines())[:200]
+        message["From"] = settings["smtp_from_email"]
+        message["To"] = recipient
+        message.set_content(body[:10000])
+        with smtplib.SMTP(settings["smtp_host"], int(settings.get("smtp_port", 587)), timeout=15) as smtp:
+            smtp.starttls()
+            username = settings.get("smtp_username", "")
+            encrypted_password = settings.get("smtp_password_encrypted")
+            if username and encrypted_password:
+                smtp.login(username, decrypt_secret(encrypted_password))
+            smtp.send_message(message)
+    except (
+        OSError,
+        smtplib.SMTPException,
+        RuntimeError,
+        ValueError,
+        TypeError,
+        PyMongoError,
+    ):
+        logging.exception("Form notification email could not be sent")
 
 
 class FormSubmissionCreate(BaseModel):
@@ -42,6 +112,12 @@ def create_form_submission(submission: FormSubmissionCreate):
         "submitted_at": datetime.now(timezone.utc),
     }
     result = form_submissions_collection.insert_one(record)
+    _send_form_notification(
+        submission.page_id,
+        submission.widget_id,
+        submission.page_title,
+        submission.fields,
+    )
     return {"id": str(result.inserted_id), "message": "Form submitted successfully"}
 
 

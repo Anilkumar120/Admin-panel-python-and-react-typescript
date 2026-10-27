@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter, HTTPException, Query
 from bson import ObjectId
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from backend.database.connection import (
@@ -416,10 +416,24 @@ def get_homepage_full():
 
         if page:
             builder_page = pages_collection.find_one({
-                "slug": page.get("slug", ""),
+                "content_id": str(page["_id"]),
                 "status": "published",
                 "template_type": {"$in": ["page", None]},
             })
+            if not builder_page:
+                builder_page = pages_collection.find_one({
+                    "slug": page.get("slug", ""),
+                    "post_type": page.get("post_type", "pages"),
+                    "status": "published",
+                    "template_type": {"$in": ["page", None]},
+                })
+            if not builder_page:
+                builder_page = pages_collection.find_one({
+                    "slug": page.get("slug", ""),
+                    "post_type": {"$in": ["", None]},
+                    "status": "published",
+                    "template_type": {"$in": ["page", None]},
+                })
 
             if builder_page:
                 return {
@@ -459,10 +473,13 @@ def get_homepage_full():
 
 @router.get("/products")
 def get_public_products(
+    page: int = Query(1, ge=1),
     limit: int = Query(12, ge=1, le=100),
     category: Optional[str] = Query(None),
     tag: Optional[str] = Query(None),
     sort: Optional[str] = Query(None),
+    exclude: bool = Query(False),
+    order: str = Query("ASC"),
 ):
     query = {
         "is_deleted": {"$ne": True},
@@ -475,22 +492,37 @@ def get_public_products(
     }
 
     if category:
-        query["category"] = category
+        categories = [value.strip() for value in category.split(",") if value.strip()]
+        query["category"] = (
+            {"$nin" if exclude else "$in": categories}
+            if len(categories) > 1 or exclude
+            else categories[0]
+        )
 
     if tag:
-        query["tags"] = tag
+        tags = [value.strip() for value in tag.split(",") if value.strip()]
+        query["tags"] = {"$nin" if exclude else "$in": tags}
 
-    sort_field = [("name", 1)]
+    sort_direction = 1 if order == "ASC" else -1
+    sort_field = [("name", sort_direction)]
 
     if sort == "recent":
-        sort_field = [("_id", -1)]
+        sort_field = [("_id", -1 if order == "DESC" else 1)]
+    elif sort == "title":
+        sort_field = [("name", sort_direction)]
     elif sort == "price_low":
         sort_field = [("price", 1)]
     elif sort == "price_high":
         sort_field = [("price", -1)]
+    elif sort == "price":
+        sort_field = [("price", sort_direction)]
 
+    total = products_collection.count_documents(query)
     products = list(
-        products_collection.find(query).sort(sort_field).limit(limit)
+        products_collection.find(query)
+        .sort(sort_field)
+        .skip((page - 1) * limit)
+        .limit(limit)
     )
 
     permalink_settings = (
@@ -501,7 +533,10 @@ def get_public_products(
         "products": [
             format_public_product(product, permalink_settings)
             for product in products
-        ]
+        ],
+        "total": total,
+        "page": page,
+        "pages": (total + limit - 1) // limit,
     }
 
 
@@ -833,6 +868,10 @@ def get_public_posts(
     category: Optional[str] = Query(None),
     tag: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    order_by: str = Query("date"),
+    order: str = Query("DESC"),
+    exclude: bool = Query(False),
+    date_range: str = Query("all"),
 ):
     if limit is None:
         reading_settings = (
@@ -847,10 +886,21 @@ def get_public_posts(
     }
 
     if category:
-        query["categories"] = category
+        categories = [value.strip() for value in category.split(",") if value.strip()]
+        query["categories"] = {"$nin" if exclude else "$in": categories}
 
     if tag:
-        query["tags"] = tag
+        tags = [value.strip() for value in tag.split(",") if value.strip()]
+        query["tags"] = {"$nin" if exclude else "$in": tags}
+
+    date_delta = {
+        "day": timedelta(days=1),
+        "week": timedelta(weeks=1),
+        "month": timedelta(days=30),
+        "year": timedelta(days=365),
+    }.get(date_range)
+    if date_delta:
+        query["created_at"] = {"$gte": datetime.now(timezone.utc) - date_delta}
 
     if search:
         query["$or"] = [
@@ -861,9 +911,11 @@ def get_public_posts(
     total = content_collection.count_documents(query)
     skip = (page - 1) * limit
 
+    sort_field = "title" if order_by == "title" else "created_at"
+    sort_direction = 1 if order == "ASC" else -1
     posts = list(
         content_collection.find(query)
-        .sort("created_at", -1)
+        .sort(sort_field, sort_direction)
         .skip(skip)
         .limit(limit)
     )
@@ -960,19 +1012,42 @@ def get_public_items(
     post_type_slug: str,
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
+    category: Optional[str] = Query(None),
+    tag: Optional[str] = Query(None),
+    order_by: str = Query("date"),
+    order: str = Query("DESC"),
+    exclude: bool = Query(False),
+    date_range: str = Query("all"),
 ):
     query = {
         "post_type": post_type_slug,
         "status": "published",
         "is_deleted": False,
     }
+    if category:
+        categories = [value.strip() for value in category.split(",") if value.strip()]
+        query["categories"] = {"$nin" if exclude else "$in": categories}
+    if tag:
+        tags = [value.strip() for value in tag.split(",") if value.strip()]
+        query["tags"] = {"$nin" if exclude else "$in": tags}
+
+    date_delta = {
+        "day": timedelta(days=1),
+        "week": timedelta(weeks=1),
+        "month": timedelta(days=30),
+        "year": timedelta(days=365),
+    }.get(date_range)
+    if date_delta:
+        query["created_at"] = {"$gte": datetime.now(timezone.utc) - date_delta}
 
     total = content_collection.count_documents(query)
     skip = (page - 1) * limit
 
+    sort_field = "title" if order_by == "title" else "created_at"
+    sort_direction = 1 if order == "ASC" else -1
     items = list(
         content_collection.find(query)
-        .sort("created_at", -1)
+        .sort(sort_field, sort_direction)
         .skip(skip)
         .limit(limit)
     )
@@ -982,6 +1057,7 @@ def get_public_items(
         "total": total,
         "page": page,
         "limit": limit,
+        "pages": (total + limit - 1) // limit,
     }
 
 

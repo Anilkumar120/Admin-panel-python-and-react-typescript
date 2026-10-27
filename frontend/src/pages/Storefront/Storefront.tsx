@@ -263,6 +263,15 @@ const Storefront = ({
   const showCod = settings.showCod !== false;
   const showBankTransfer = settings.showBankTransfer !== false;
   const showRazorpayOpt = settings.showRazorpay === true;
+  const cashOnDeliveryLabel =
+    settings.cashOnDeliveryLabel || "Cash on delivery";
+  const bankTransferLabel =
+    settings.bankTransferLabel || "Offline bank transfer";
+  const bankTransferInstructions =
+    settings.bankTransferInstructions ||
+    "Payment instructions will need to be configured by the store administrator. Your order will remain pending until payment is confirmed.";
+  const razorpayLabel =
+    settings.razorpayLabel || "Pay online (Razorpay)";
 
   // My Account
   const accountLayout = settings.accountLayout || "sidebar";
@@ -1491,16 +1500,16 @@ const Storefront = ({
                   >
                     {showCod && (
                       <option value="cash_on_delivery">
-                        Cash on delivery
+                        {cashOnDeliveryLabel}
                       </option>
                     )}
                     {showBankTransfer && (
                       <option value="bank_transfer">
-                        Offline bank transfer
+                        {bankTransferLabel}
                       </option>
                     )}
                     {(razorpayEnabled || showRazorpayOpt) && (
-                      <option value="razorpay">Pay online (Razorpay)</option>
+                      <option value="razorpay">{razorpayLabel}</option>
                     )}
                   </select>
                 </div>
@@ -1516,9 +1525,7 @@ const Storefront = ({
                       borderRadius: 8,
                     }}
                   >
-                    Payment instructions will need to be configured by the
-                    store administrator. Your order will remain pending until
-                    payment is confirmed.
+                    {bankTransferInstructions}
                   </p>
                 )}
 

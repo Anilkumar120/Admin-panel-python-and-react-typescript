@@ -400,6 +400,35 @@ def convert_content_to_builder(
             "existing": True,
         }
 
+    base_slug = content_item.get("slug", "")
+    if not base_slug:
+        base_slug = f"page-{int(datetime.now().timestamp() * 1000)}"
+
+    existing_by_slug = pages_collection.find_one({
+        "slug": base_slug,
+        "template_type": {"$in": ["page", None]},
+        "$or": [
+            {"post_type": content_item.get("post_type", "")},
+            {"post_type": {"$in": ["", None]}},
+        ],
+    })
+    if existing_by_slug:
+        pages_collection.update_one(
+            {"_id": existing_by_slug["_id"]},
+            {
+                "$set": {
+                    "content_id": content_id,
+                    "post_type": content_item.get("post_type", ""),
+                    "updated_at": now(),
+                }
+            },
+        )
+        return {
+            "message": "Existing builder page linked to content",
+            "id": str(existing_by_slug["_id"]),
+            "existing": True,
+        }
+
     layout = []
     timestamp = int(datetime.now().timestamp() * 1000)
 
@@ -448,14 +477,6 @@ def convert_content_to_builder(
                 },
             }
         )
-
-    base_slug = content_item.get("slug", "")
-    if not base_slug:
-        base_slug = f"page-{timestamp}"
-
-    existing_duplicate = pages_collection.find_one({"slug": base_slug})
-    if existing_duplicate:
-        pages_collection.delete_one({"_id": existing_duplicate["_id"]})
 
     builder_page = {
         "title": content_item.get("title", ""),
@@ -542,9 +563,38 @@ def create_page(
     if data.status not in ["draft", "published"]:
         raise HTTPException(status_code=400, detail="Invalid page status")
 
-    existing = pages_collection.find_one({"slug": slug})
+    existing = pages_collection.find_one({
+        "slug": slug,
+        "template_type": {"$in": ["page", None]},
+        "$or": [
+            {"post_type": data.post_type or ""},
+            {"post_type": {"$in": ["", None]}},
+        ],
+    })
     if existing:
-        pages_collection.delete_one({"_id": existing["_id"]})
+        update_data = {
+            "title": title,
+            "slug": slug,
+            "layout": [w.model_dump() for w in data.layout],
+            "status": data.status,
+            "globals": data.globals.model_dump() if data.globals else {},
+            "show_title": data.show_title if data.show_title is not None else True,
+            "updated_at": now(),
+        }
+        if data.content_id:
+            update_data["content_id"] = data.content_id
+        if data.post_type:
+            update_data["post_type"] = data.post_type
+        pages_collection.update_one(
+            {"_id": existing["_id"]},
+            {"$set": update_data},
+        )
+        return {
+            "message": "Existing builder page updated successfully",
+            "id": str(existing["_id"]),
+            "slug": slug,
+            "updated": True,
+        }
 
     page = {
         "title": title,
@@ -584,6 +634,7 @@ def update_page(
         raise HTTPException(status_code=404, detail="Page not found")
 
     update_data = {"updated_at": now()}
+    target_page = page
 
     if data.title is not None:
         title = data.title.strip()
@@ -598,11 +649,20 @@ def update_page(
 
         existing = pages_collection.find_one({
             "slug": slug,
+            "template_type": {"$in": ["page", None]},
             "_id": {"$ne": ObjectId(page_id)},
+            "$or": [
+                {"post_type": page.get("post_type", "")},
+                {"post_type": {"$in": ["", None]}},
+            ],
         })
 
         if existing:
-            pages_collection.delete_one({"_id": existing["_id"]})
+            target_page = existing
+            if not target_page.get("content_id") and page.get("content_id"):
+                update_data["content_id"] = page["content_id"]
+            if not target_page.get("post_type") and page.get("post_type"):
+                update_data["post_type"] = page["post_type"]
 
         update_data["slug"] = slug
 
@@ -621,12 +681,12 @@ def update_page(
         update_data["show_title"] = data.show_title
 
     pages_collection.update_one(
-        {"_id": ObjectId(page_id)},
+        {"_id": target_page["_id"]},
         {"$set": update_data},
     )
 
     # Sync back to content
-    content_id = page.get("content_id", "")
+    content_id = target_page.get("content_id") or page.get("content_id", "")
     if content_id and ObjectId.is_valid(content_id):
         sync_data = {"updated_at": now()}
 
@@ -648,6 +708,7 @@ def update_page(
 
     return {
         "message": "Page updated successfully",
+        "id": str(target_page["_id"]),
         "slug": update_data.get("slug", page.get("slug")),
     }
 

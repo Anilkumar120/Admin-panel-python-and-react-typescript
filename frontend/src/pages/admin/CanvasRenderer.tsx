@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import type { ElementType } from "react";
 import {
   useSortable,
   SortableContext,
@@ -7,8 +8,10 @@ import {
 import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import type {
+  DimensionValue,
   PageWidget,
   ResponsiveDevice,
+  WidgetItem,
   WidgetStyle,
   WidgetType,
 } from "../../types/pageBuilder";
@@ -17,11 +20,22 @@ import MediaPicker, { type PickedMedia } from "./MediaPicker";
 import { getImageUrl } from "../../api/products";
 import BuilderIcon from "../../components/BuilderIcon";
 import { ICON_LIBRARY } from "../../components/iconLibrary";
+import { loadGoogleFont } from "../../utils/googleFonts";
 import { lazy, Suspense } from "react";
 
 const StorefrontWidget = lazy(
   () => import("../../pages/Storefront/Storefront"),
 );
+
+const toCssDimension = (
+  value: DimensionValue | string | null | undefined,
+): string | undefined => {
+  if (value === null || value === undefined || value === "") return undefined;
+  if (typeof value === "string") return value;
+  if (typeof value !== "object") return undefined;
+  if (value.unit === "auto" || value.value === "auto") return "auto";
+  return `${value.value}${value.unit}`;
+};
 
 // ============ STYLE INJECTOR ============
 const StyleInjector = ({ css }: { css: string }) => {
@@ -36,18 +50,32 @@ const StyleInjector = ({ css }: { css: string }) => {
 
 // ============ HOVER + ANIMATION ============
 const getHoverAndAnimation = (style: any, widgetId: string) => {
+  const hasHoverBorderRadius =
+    style?.hoverBorderRadius != null &&
+    Number.isFinite(Number(style.hoverBorderRadius));
+  const hasHoverOpacity =
+    style?.hoverOpacity != null &&
+    Number.isFinite(Number(style.hoverOpacity)) &&
+    Number(style.hoverOpacity) !== 1;
   const hasHover =
     style?.hoverBackgroundColor ||
     style?.hoverColor ||
     style?.hoverBorderColor ||
+    hasHoverBorderRadius ||
+    style?.hoverBackgroundGradient ||
+    style?.hoverOverlayGradient ||
+    style?.hoverOverlayColor ||
+    style?.hoverCssFilters ||
     style?.hoverBoxShadow ||
     (style?.hoverScale && style.hoverScale !== 1) ||
-    (style?.hoverOpacity !== undefined && style.hoverOpacity !== 1) ||
+    hasHoverOpacity ||
     style?.hoverTranslateY;
 
   const hasAnimation = style?.animation && style.animation !== "none";
+  const hasCustomCss = Boolean(String(style?.customCss || "").trim());
+  const hasVisualEffects = (style?.backgroundType === "video" && style?.backgroundVideo) || (style?.backgroundType === "slideshow" && Array.isArray(style?.backgroundSlideshow) && style.backgroundSlideshow.length) || ["top", "bottom"].some((side) => style?.[`shapeDivider${side}Type`] && style[`shapeDivider${side}Type`] !== "none");
 
-  if (!hasHover && !hasAnimation) {
+  if (!hasHover && !hasAnimation && !hasCustomCss && !hasVisualEffects) {
     return { className: "", cssText: "" };
   }
 
@@ -61,13 +89,21 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
     const duration = style.transitionDuration || 300;
     const hoverRules: string[] = [];
     if (style.hoverBackgroundColor)
-      hoverRules.push(
-        `background-color: ${style.hoverBackgroundColor} !important;`,
-      );
+      hoverRules.push(`background-color: ${style.hoverBackgroundColor} !important;`);
+    if (style.hoverBackgroundGradient)
+      hoverRules.push(`background-image: ${style.hoverBackgroundGradient} !important;`);
+    if (style.hoverOverlayGradient)
+      hoverRules.push(`background-image: ${style.hoverOverlayGradient} !important;`);
+    if (style.hoverOverlayColor)
+      hoverRules.push(`background-image: linear-gradient(color-mix(in srgb, ${style.hoverOverlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${style.hoverOverlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent)) !important;`);
     if (style.hoverColor)
       hoverRules.push(`color: ${style.hoverColor} !important;`);
     if (style.hoverBorderColor)
       hoverRules.push(`border-color: ${style.hoverBorderColor} !important;`);
+    if (hasHoverBorderRadius)
+      hoverRules.push(`border-radius: ${style.hoverBorderRadius}px !important;`);
+    if (style.hoverCssFilters)
+      hoverRules.push(`filter: ${style.hoverCssFilters} !important;`);
     if (style.hoverBoxShadow)
       hoverRules.push(`box-shadow: ${style.hoverBoxShadow} !important;`);
     const transforms: string[] = [];
@@ -75,9 +111,10 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
       transforms.push(`scale(${style.hoverScale})`);
     if (style.hoverTranslateY)
       transforms.push(`translateY(${style.hoverTranslateY}px)`);
+    if (style.hoverRotate) transforms.push(`rotate(${style.hoverRotate}deg)`);
     if (transforms.length)
       hoverRules.push(`transform: ${transforms.join(" ")} !important;`);
-    if (style.hoverOpacity !== undefined && style.hoverOpacity !== 1)
+    if (hasHoverOpacity)
       hoverRules.push(`opacity: ${style.hoverOpacity} !important;`);
     cssParts.push(`
       .${hoverClass} {
@@ -115,6 +152,41 @@ const getHoverAndAnimation = (style: any, widgetId: string) => {
     `);
   }
 
+  if (style?.backgroundType === "slideshow" && Array.isArray(style?.backgroundSlideshow) && style.backgroundSlideshow.length) {
+    const images: string[] = style.backgroundSlideshow.filter((url: unknown) => typeof url === "string" && url.trim()).map((url: string) => `url("${url}")`);
+    if (images.length) {
+      const slideClass = `${uid}-slideshow`;
+      classes.push(slideClass);
+      const frames = images.map((bg, i) => `${(i / images.length) * 100}% { background-image: ${bg}; }`).join(" ");
+      cssParts.push(`@keyframes ${uid}-slides { ${frames} 100% { background-image: ${images[0]}; } } .${slideClass} { animation: ${uid}-slides ${Math.max(3, images.length * 3)}s infinite; background-size: cover; background-position: center; }`);
+    }
+  }
+  const shapeSides = ["top", "bottom"].filter((side) => style?.[`shapeDivider${side}Type`] && style[`shapeDivider${side}Type`] !== "none");
+  if (shapeSides.length) {
+    const shapeClass = `${uid}-shape-divider`;
+    classes.push(shapeClass);
+    const shapeRules = shapeSides.map((side) => {
+      const type = style[`shapeDivider${side}Type`];
+      const height = Math.max(0, Number(style[`shapeDivider${side}Height`] ?? 50));
+      const color = style[`shapeDivider${side}Color`] || "#ffffff";
+      const clip = type === "triangle" ? (side === "top" ? "polygon(0 0, 100% 0, 50% 100%)" : "polygon(0 100%, 100% 100%, 50% 0)") : type === "tilt" ? (side === "top" ? "polygon(0 0, 100% 0, 100% 35%, 0 100%)" : "polygon(0 65%, 100% 0, 100% 100%, 0 100%)") : type === "curve" ? "ellipse(75% 100% at 50% 0%)" : type === "wave" ? (side === "top" ? "polygon(0 0, 100% 0, 100% 65%, 75% 100%, 50% 65%, 25% 100%, 0 65%)" : "polygon(0 35%, 25% 0, 50% 35%, 75% 0, 100% 35%, 100% 100%, 0 100%)") : "none";
+      return `.${shapeClass}::${side === "top" ? "before" : "after"} { content: ""; position: absolute; left: 0; right: 0; ${side}: 0; width: 100%; height: ${height}px; background: ${color}; clip-path: ${clip}; pointer-events: none; z-index: 2; }`;
+    }).join("\n");
+    cssParts.push(`.${shapeClass} { position: relative; } ${shapeRules}`);
+  }
+  if (style?.backgroundType === "video" && style?.backgroundVideo) {
+    const videoClass = `${uid}-video-bg`;
+    classes.push(videoClass);
+    cssParts.push(`.${videoClass} > *:not(video) { position: relative; z-index: 1; }`);
+  }
+  const customCss = String(style?.customCss || "").trim();
+  const customClass = `${uid}-custom`;
+  if (customCss) {
+    classes.push(customClass);
+    const scopedCss = customCss.replace(/selector/g, `.${customClass}`);
+    cssParts.push(scopedCss.includes(`.${customClass}`) ? scopedCss : `.${customClass} { ${scopedCss} }`);
+  }
+
   return {
     className: classes.join(" "),
     cssText: cssParts.join("\n"),
@@ -131,13 +203,15 @@ export const renderWidgetStyles = (
   const getPadding = () => {
     const p = rs.padding || style.padding;
     if (!p) return undefined;
-    return `${p.top || 0}px ${p.right || 0}px ${p.bottom || 0}px ${p.left || 0}px`;
+    const unit = p.unit || "px";
+    return `${p.top || 0}${unit} ${p.right || 0}${unit} ${p.bottom || 0}${unit} ${p.left || 0}${unit}`;
   };
 
   const getMargin = () => {
     const m = rs.margin || style.margin;
     if (!m) return undefined;
-    return `${m.top || 0}px ${m.right || 0}px ${m.bottom || 0}px ${m.left || 0}px`;
+    const unit = m.unit || "px";
+    return `${m.top || 0}${unit} ${m.right || 0}${unit} ${m.bottom || 0}${unit} ${m.left || 0}${unit}`;
   };
 
   const resolvedDisplay = (rs.display || style.display) as string | undefined;
@@ -175,6 +249,11 @@ export const renderWidgetStyles = (
     display: resolvedDisplay as any,
     flexDirection: effectiveDirection as any,
     flexWrap: (rs.flexWrap || style.flexWrap) as any,
+    flexGrow: rs.flexGrow ?? style.flexGrow,
+    flexShrink: rs.flexShrink ?? style.flexShrink,
+    flexBasis: rs.flexBasis || style.flexBasis,
+    order: rs.order ?? style.order,
+    alignSelf: (rs.alignSelf || style.alignSelf) as any,
     justifyContent: rs.justifyContent || style.justifyContent,
     alignItems: rs.alignItems || style.alignItems,
     gap: computeGap(),
@@ -192,48 +271,68 @@ export const renderWidgetStyles = (
 
   return {
     backgroundColor: rs.backgroundColor || style.backgroundColor || undefined,
-    backgroundImage: style.backgroundImage
-      ? `url(${style.backgroundImage})`
-      : style.backgroundGradient || undefined,
+    backgroundImage: style.backgroundType === "slideshow" ? undefined : ([
+      style.overlayGradient || (style.overlayColor
+        ? `linear-gradient(color-mix(in srgb, ${style.overlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${style.overlayColor} ${(Number(style.overlayOpacity ?? 0.35) * 100)}%, transparent))`
+        : ""),
+      style.backgroundGradient || (style.backgroundImage ? `url(${style.backgroundImage})` : ""),
+    ].filter(Boolean).join(", ") || undefined),
     backgroundSize: style.backgroundSize || "cover",
     backgroundPosition: style.backgroundPosition || "center",
     backgroundRepeat: style.backgroundRepeat || "no-repeat",
     color: rs.color || style.color || undefined,
-    fontSize: rs.fontSize
-      ? `${rs.fontSize}px`
-      : style.fontSize
-        ? `${style.fontSize}px`
-        : undefined,
-    fontFamily: style.fontFamily || undefined,
-    fontWeight: style.fontWeight || undefined,
-    fontStyle: style.fontStyle || undefined,
-    lineHeight: style.lineHeight || undefined,
-    letterSpacing: style.letterSpacing ? `${style.letterSpacing}px` : undefined,
+    fontSize: rs.fontSize ? `${rs.fontSize}px` : style.fontSize ? `${style.fontSize}px` : undefined,
+    fontFamily: rs.fontFamily || style.fontFamily || undefined,
+    fontWeight: rs.fontWeight || style.fontWeight || undefined,
+    fontStyle: rs.fontStyle || style.fontStyle || undefined,
+    lineHeight: rs.lineHeight || style.lineHeight || undefined,
+    letterSpacing: (rs.letterSpacing ?? style.letterSpacing) !== undefined ? `${rs.letterSpacing ?? style.letterSpacing}px` : undefined,
     textAlign: (rs.textAlign || style.textAlign) as any,
     textTransform: style.textTransform || undefined,
     textDecoration: style.textDecoration || undefined,
     textShadow: style.textShadow || undefined,
-    width: style.width || undefined,
-    height: style.height || undefined,
-    minWidth: style.minWidth || undefined,
-    maxWidth: "100%",
-    minHeight: style.minHeight || undefined,
-    maxHeight: style.maxHeight || undefined,
+    width: toCssDimension(rs.width ?? style.width),
+    height: toCssDimension(rs.height ?? style.height),
+    minWidth: toCssDimension(rs.minWidth ?? style.minWidth),
+    maxWidth: toCssDimension(rs.maxWidth ?? style.maxWidth) || "100%",
+    minHeight: toCssDimension(rs.minHeight ?? style.minHeight),
+    maxHeight: toCssDimension(rs.maxHeight ?? style.maxHeight),
     padding: getPadding(),
     margin: getMargin(),
-    borderColor: style.borderColor || undefined,
-    borderWidth: style.borderWidth ? `${style.borderWidth}px` : undefined,
-    borderStyle: style.borderStyle || undefined,
-    borderRadius: style.borderRadius ? `${style.borderRadius}px` : undefined,
-    boxShadow: style.boxShadow || undefined,
-    opacity: style.opacity ?? undefined,
-    position: style.position || undefined,
-    top: style.top || undefined,
-    right: style.right || undefined,
-    bottom: style.bottom || undefined,
-    left: style.left || undefined,
-    zIndex: style.zIndex || undefined,
-    overflow: "hidden",
+    borderColor: rs.borderColor || style.borderColor || undefined,
+    borderWidth: (rs.borderWidth ?? style.borderWidth) ? `${rs.borderWidth ?? style.borderWidth}px` : undefined,
+    borderStyle: rs.borderStyle || style.borderStyle || undefined,
+    borderRadius: (rs.borderRadius ?? style.borderRadius) ? `${rs.borderRadius ?? style.borderRadius}px` : undefined,
+    borderTopWidth: (rs.borderTopWidth ?? style.borderTopWidth) !== undefined ? `${rs.borderTopWidth ?? style.borderTopWidth}px` : undefined,
+    borderRightWidth: (rs.borderRightWidth ?? style.borderRightWidth) !== undefined ? `${rs.borderRightWidth ?? style.borderRightWidth}px` : undefined,
+    borderBottomWidth: (rs.borderBottomWidth ?? style.borderBottomWidth) !== undefined ? `${rs.borderBottomWidth ?? style.borderBottomWidth}px` : undefined,
+    borderLeftWidth: (rs.borderLeftWidth ?? style.borderLeftWidth) !== undefined ? `${rs.borderLeftWidth ?? style.borderLeftWidth}px` : undefined,
+    borderTopColor: rs.borderTopColor || style.borderTopColor || undefined,
+    borderRightColor: rs.borderRightColor || style.borderRightColor || undefined,
+    borderBottomColor: rs.borderBottomColor || style.borderBottomColor || undefined,
+    borderLeftColor: rs.borderLeftColor || style.borderLeftColor || undefined,
+    borderTopLeftRadius: (rs.borderTopLeftRadius ?? style.borderTopLeftRadius) !== undefined ? `${rs.borderTopLeftRadius ?? style.borderTopLeftRadius}px` : undefined,
+    borderTopRightRadius: (rs.borderTopRightRadius ?? style.borderTopRightRadius) !== undefined ? `${rs.borderTopRightRadius ?? style.borderTopRightRadius}px` : undefined,
+    borderBottomLeftRadius: (rs.borderBottomLeftRadius ?? style.borderBottomLeftRadius) !== undefined ? `${rs.borderBottomLeftRadius ?? style.borderBottomLeftRadius}px` : undefined,
+    borderBottomRightRadius: (rs.borderBottomRightRadius ?? style.borderBottomRightRadius) !== undefined ? `${rs.borderBottomRightRadius ?? style.borderBottomRightRadius}px` : undefined,
+    boxShadow: rs.boxShadow || style.boxShadow || undefined,
+    boxSizing: "border-box",
+    transform: [
+      style.rotate ? `rotate(${style.rotate}deg)` : "",
+      style.scale !== undefined && style.scale !== 1 ? `scale(${style.scale})` : "",
+      style.translateX ? `translateX(${style.translateX})` : "",
+      style.translateY ? `translateY(${style.translateY})` : "",
+    ].filter(Boolean).join(" ") || undefined,
+    filter: style.cssFilters || undefined,
+    opacity: rs.opacity ?? style.opacity ?? undefined,
+    position: rs.position || style.position || ((rs.sticky || style.sticky) && (rs.sticky || style.sticky) !== "none" ? "sticky" : style.backgroundType === "video" ? "relative" : undefined),
+    top: (rs.sticky || style.sticky) === "top" ? ((rs.stickyOffset ?? style.stickyOffset) ? `${rs.stickyOffset ?? style.stickyOffset}px` : "0px") : rs.top || style.top || undefined,
+    right: rs.right || style.right || undefined,
+    bottom: (rs.sticky || style.sticky) === "bottom" ? ((rs.stickyOffset ?? style.stickyOffset) ? `${rs.stickyOffset ?? style.stickyOffset}px` : "0px") : rs.bottom || style.bottom || undefined,
+    left: rs.left || style.left || undefined,
+    zIndex: rs.zIndex ?? style.zIndex ?? undefined,
+    overflow: (rs.overflow || style.overflow) as React.CSSProperties["overflow"] || undefined,
+    clipPath: style.maskShape === "circle" ? "circle(50% at 50% 50%)" : style.maskShape === "triangle" ? "polygon(50% 0%, 0% 100%, 100% 100%)" : style.maskShape === "diamond" ? "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)" : style.maskShape === "hexagon" ? "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)" : undefined,
     cursor: style.cursor || undefined,
     ...responsiveStyle,
   };
@@ -301,6 +400,12 @@ const CanvasMenuWidget = ({
   const cssText = `
     .${uid}-wrapper { width: 100%; position: relative; display: flex; align-items: center; justify-content: space-between; }
     .${uid}-toggle { display: ${forceShowHamburger ? "flex" : "none"}; align-items: center; justify-content: center; width: 44px; height: 44px; background: transparent; border: none; cursor: pointer; padding: 0; margin-left: auto; }
+    .${uid}-toggle .${uid}-bar { position: absolute; left: 0; display: block; width: 24px; height: 2px; background: ${hamburgerColor}; transition: transform 0.2s ease, opacity 0.2s ease; }
+    .${uid}-toggle .${uid}-bar-top { transform: translateY(-8px); }
+    .${uid}-toggle .${uid}-bar-bottom { transform: translateY(8px); }
+    .${uid}-toggle.open .${uid}-bar-middle { opacity: 0; }
+    .${uid}-toggle.open .${uid}-bar-top { transform: rotate(45deg); }
+    .${uid}-toggle.open .${uid}-bar-bottom { transform: rotate(-45deg); }
     .${uid}-list { display: flex; gap: ${menuGap}px; justify-content: ${menuJustify}; align-items: center; flex-wrap: wrap; margin: 0; padding: 12px 0; list-style: none; width: 100%; }
     .${uid}-list > li { position: relative; }
     .${uid}-list > li > a {
@@ -442,8 +547,10 @@ const CanvasMenuWidget = ({
       <div className={`${uid}-wrapper`}>
         <button
           type="button"
-          className={`${uid}-toggle`}
-          aria-label="Toggle menu"
+          className={`${uid}-toggle${menuOpen ? " open" : ""}`}
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={menuOpen}
+          aria-controls={`${uid}-list`}
           onClick={(e) => {
             e.stopPropagation();
             setMenuOpen((v) => !v);
@@ -459,41 +566,16 @@ const CanvasMenuWidget = ({
             cursor: "pointer",
             padding: 0,
             marginLeft: "auto",
+            position: "relative",
           }}
         >
-          <span
-            style={{
-              display: "block",
-              width: 24,
-              height: 2,
-              background: hamburgerColor,
-              position: "relative",
-            }}
-          >
-            <span
-              style={{
-                position: "absolute",
-                top: -8,
-                left: 0,
-                width: 24,
-                height: 2,
-                background: hamburgerColor,
-              }}
-            />
-            <span
-              style={{
-                position: "absolute",
-                top: 8,
-                left: 0,
-                width: 24,
-                height: 2,
-                background: hamburgerColor,
-              }}
-            />
-          </span>
+          <span aria-hidden="true" className={`${uid}-bar ${uid}-bar-top`} />
+          <span aria-hidden="true" className={`${uid}-bar ${uid}-bar-middle`} />
+          <span aria-hidden="true" className={`${uid}-bar ${uid}-bar-bottom`} />
         </button>
 
         <ul
+          id={`${uid}-list`}
           className={`${uid}-list`}
           style={{
             display: menuOpen || !forceShowHamburger ? "flex" : "none",
@@ -589,6 +671,43 @@ const ContainerDropZone = ({
   );
 };
 
+const ItemDropZone = ({
+  widgetId,
+  itemId,
+  isEditMode,
+}: {
+  widgetId: string;
+  itemId: string;
+  isEditMode: boolean;
+}) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `item-drop-${widgetId}-${itemId}`,
+    data: { type: "item-drop", widgetId, itemId },
+    disabled: !isEditMode,
+  });
+  if (!isEditMode) return null;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        minHeight: 72,
+        marginTop: 12,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        border: `1px dashed ${isOver ? "#93003c" : "#b8bec9"}`,
+        borderRadius: 4,
+        color: isOver ? "#93003c" : "#68707d",
+        background: isOver ? "rgba(147, 0, 60, 0.06)" : "rgba(0, 0, 0, 0.02)",
+        fontSize: 13,
+      }}
+    >
+      {isOver ? "Drop widget here" : "＋ Drag widget here"}
+    </div>
+  );
+};
+
 // ============ EMPTY STATE ============
 const WidgetEmptyState = ({
   icon,
@@ -626,19 +745,22 @@ const WidgetEmptyState = ({
 const MaybeLink = ({
   widget,
   children,
+  linkUrl,
 }: {
   widget: PageWidget;
   children: React.ReactNode;
+  linkUrl?: string | null;
 }) => {
-  const linkUrl = widget.link?.url || widget.url;
+  const resolvedUrl =
+    linkUrl !== undefined ? linkUrl : widget.link?.url || widget.url;
 
-  if (!linkUrl || linkUrl === "#") {
+  if (!resolvedUrl || resolvedUrl === "#") {
     return <>{children}</>;
   }
 
   return (
     <a
-      href={linkUrl}
+      href={resolvedUrl}
       target={widget.link?.target || "_self"}
       rel={widget.link?.noFollow ? "nofollow noopener" : undefined}
       onClick={(e) => e.preventDefault()}
@@ -656,137 +778,54 @@ const MaybeLink = ({
 // ============ NESTED CHILDREN RENDERER ============
 const RenderNestedChildren = ({
   children,
+  device,
+  isEditMode,
+  selectedId,
+  onSelect,
+  onDelete,
+  onDuplicate,
+  onResize,
+  onUpdateWidget,
+  onContextMenu,
 }: {
-  children: any[];
+  children: PageWidget[];
+  device: ResponsiveDevice;
+  isEditMode: boolean;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
+  onResize?: (id: string, changes: Partial<WidgetStyle>) => void;
+  onUpdateWidget?: (id: string, changes: Partial<PageWidget>) => void;
+  onContextMenu?: (e: React.MouseEvent, widgetId: string) => void;
 }) => {
   if (!children || children.length === 0) return null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {children.map((child) => {
-        if (child.type === "heading") {
-          return (
-            <h3 key={child.id} style={{ margin: 0, fontSize: 20 }}>
-              {child.content || "Heading"}
-            </h3>
-          );
-        }
-        if (child.type === "text") {
-          return (
-            <p key={child.id} style={{ margin: 0 }}>
-              {child.content || "Text content"}
-            </p>
-          );
-        }
-        if (child.type === "image" && child.url) {
-          return (
-            <img
-              key={child.id}
-              src={child.url}
-              alt=""
-              style={{
-                width: "100%",
-                maxHeight: 300,
-                objectFit: "cover",
-                borderRadius: 4,
-              }}
-            />
-          );
-        }
-        if (child.type === "video" && child.url) {
-          return (
-            <div
-              key={child.id}
-              style={{
-                position: "relative",
-                paddingBottom: "56.25%",
-                height: 0,
-                borderRadius: 4,
-                overflow: "hidden",
-              }}
-            >
-              {child.url.match(/\.(mp4|webm|ogg)$/i) ? (
-                <video
-                  src={child.url}
-                  controls
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                  }}
-                />
-              ) : (
-                <iframe
-                  src={child.url}
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    border: "none",
-                  }}
-                  allowFullScreen
-                />
-              )}
-            </div>
-          );
-        }
-        if (child.type === "iframe" && child.url) {
-          return (
-            <iframe
-              key={child.id}
-              src={child.url}
-              style={{
-                width: "100%",
-                minHeight: 300,
-                border: "none",
-                borderRadius: 4,
-              }}
-              allowFullScreen
-            />
-          );
-        }
-        if (child.type === "icon") {
-          return (
-            <div
-              key={child.id}
-              style={{ fontSize: 32, display: "inline-block" }}
-            >
-              {child.url ? (
-                <img
-                  src={child.url}
-                  alt=""
-                  style={{ width: 32, height: 32, objectFit: "contain" }}
-                />
-              ) : (
-                child.icon || child.content || "★"
-              )}
-            </div>
-          );
-        }
-        if (child.type === "button") {
-          return (
-            <a
-              key={child.id}
-              href={child.link?.url || "#"}
-              style={{
-                display: "inline-block",
-                padding: "8px 16px",
-                background: "#0c2f55",
-                color: "#fff",
-                borderRadius: 4,
-                textDecoration: "none",
-              }}
-            >
-              {child.content || "Click Here"}
-            </a>
-          );
-        }
-        return null;
-      })}
-    </div>
+    <SortableContext
+      items={children.map((child) => child.id)}
+      strategy={verticalListSortingStrategy}
+    >
+      {children.map((child, index) => (
+        <CanvasRenderer
+          key={child.id}
+          widget={child}
+          parentId={null}
+          index={index}
+          selectedId={selectedId}
+          onSelect={onSelect}
+          onDelete={onDelete}
+          onDuplicate={onDuplicate}
+          onAddInside={() => undefined}
+          onResize={onResize}
+          onUpdateWidget={onUpdateWidget}
+          device={device}
+          isPreview={!isEditMode}
+          onContextMenu={onContextMenu}
+          disableDrag
+        />
+      ))}
+    </SortableContext>
   );
 };
 
@@ -797,13 +836,28 @@ const WidgetContent = ({
   isEditMode,
   onOpenMedia,
   onChangeContent,
+  selectedId,
+  onSelect,
+  onDelete,
+  onDuplicate,
+  onResize,
+  onUpdateWidget,
+  onContextMenu,
 }: {
   widget: PageWidget;
   device: ResponsiveDevice;
   isEditMode: boolean;
   onOpenMedia: (multiple: boolean, target?: string) => void;
   onChangeContent?: (content: string) => void;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
+  onResize?: (id: string, changes: Partial<WidgetStyle>) => void;
+  onUpdateWidget?: (id: string, changes: Partial<PageWidget>) => void;
+  onContextMenu?: (e: React.MouseEvent, widgetId: string) => void;
 }) => {
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
   const s = widget.style;
   const rs = s.responsive?.[device] || {};
 
@@ -936,6 +990,8 @@ const WidgetContent = ({
 
       const isJustified = btnTextAlign === "justify";
       const hover = getHoverAndAnimation(s, widget.id);
+      const buttonPadding = rs.padding || s.padding;
+      const buttonPaddingUnit = buttonPadding?.unit || "px";
 
       const buttonStyle: React.CSSProperties = {
         display: "inline-flex",
@@ -945,10 +1001,10 @@ const WidgetContent = ({
         width: isJustified ? "100%" : undefined,
         maxWidth: "100%",
         minHeight: 44,
-        padding: s.padding
-          ? `${s.padding.top ?? 12}px ${s.padding.right ?? 24}px ${
-              s.padding.bottom ?? 12
-            }px ${s.padding.left ?? 24}px`
+        padding: buttonPadding
+          ? `${buttonPadding.top ?? 12}${buttonPaddingUnit} ${buttonPadding.right ?? 24}${buttonPaddingUnit} ${
+              buttonPadding.bottom ?? 12
+            }${buttonPaddingUnit} ${buttonPadding.left ?? 24}${buttonPaddingUnit}`
           : "12px 24px",
         margin: 0,
         fontSize: `${fontSize}px`,
@@ -1008,31 +1064,76 @@ const WidgetContent = ({
           <div
             className="widget-image-wrapper"
             style={{
-              textAlign: (s.textAlign as any) || "left",
+              ...baseStyle,
+              display: "flex",
+              justifyContent:
+                (rs.elementAlign || s.elementAlign) === "center"
+                  ? "center"
+                  : (rs.elementAlign || s.elementAlign) === "right"
+                    ? "flex-end"
+                    : "flex-start",
               width: "100%",
               alignSelf: "stretch",
             }}
           >
-            <MaybeLink widget={widget}>
+            <MaybeLink
+              widget={widget}
+              linkUrl={
+                widget.settings?.imageLinkType === "none"
+                  ? null
+                  : widget.settings?.imageLinkType === "media"
+                    ? widget.url
+                    : widget.link?.url || null
+              }
+            >
               <img
                 src={widget.url}
                 alt={widget.accessibility?.altText || widget.label}
                 className={hover.className}
                 style={{
-                  width: s.width || "100%",
-                  height: s.height || "auto",
-                  maxWidth: s.maxWidth || "100%",
-                  maxHeight: s.maxHeight || undefined,
+                  width: toCssDimension(rs.width ?? s.width) || "100%",
+                  height: toCssDimension(rs.height ?? s.height) || "auto",
+                  maxWidth:
+                    toCssDimension(rs.maxWidth ?? s.maxWidth) || "100%",
+                  maxHeight: toCssDimension(rs.maxHeight ?? s.maxHeight),
                   display: "inline-block",
-                  borderRadius: s.borderRadius ? `${s.borderRadius}px` : "8px",
+                  borderRadius: (rs.borderRadius ?? s.borderRadius)
+                    ? `${rs.borderRadius ?? s.borderRadius}px`
+                    : "8px",
+                  borderColor: rs.borderColor || s.borderColor || undefined,
+                  borderWidth:
+                    (rs.borderWidth ?? s.borderWidth)
+                      ? `${rs.borderWidth ?? s.borderWidth}px`
+                      : undefined,
+                  borderStyle: rs.borderStyle || s.borderStyle || undefined,
+                  boxShadow: rs.boxShadow || s.boxShadow || undefined,
                   objectFit:
-                    (s.objectFit as any) ||
+                    rs.objectFit ||
+                    s.objectFit ||
                     (widget.settings?.imageFit as any) ||
                     "cover",
-                  objectPosition: s.objectPosition || "center",
+                  objectPosition: rs.objectPosition || s.objectPosition || "center",
+                  opacity: rs.opacity ?? s.opacity ?? 1,
+                  filter: rs.cssFilters || s.cssFilters || undefined,
                 }}
               />
             </MaybeLink>
+            {widget.settings?.captionType &&
+              widget.settings.captionType !== "none" && (
+                <div
+                  className="widget-image-caption"
+                  style={{
+                    marginTop: 6,
+                    textAlign: rs.textAlign || s.textAlign || "left",
+                    color: s.color || "inherit",
+                    fontSize: 13,
+                  }}
+                >
+                  {widget.settings.captionType === "custom"
+                    ? widget.settings.captionText || ""
+                    : widget.label}
+                </div>
+              )}
             {isEditMode && (
               <button
                 type="button"
@@ -1072,7 +1173,16 @@ const WidgetContent = ({
             }}
           >
             {widget.url ? (
-              <MaybeLink widget={widget}>
+              <MaybeLink
+                widget={widget}
+                linkUrl={
+                  widget.settings?.imageLinkType === "none"
+                    ? null
+                    : widget.settings?.imageLinkType === "media"
+                      ? widget.url
+                      : widget.link?.url || null
+                }
+              >
                 <img
                   src={widget.url}
                   alt={widget.accessibility?.altText || "Logo"}
@@ -1248,23 +1358,31 @@ const WidgetContent = ({
             ...renderWidgetStyles(widget.style, device),
             listStyle: "none",
             display: "flex",
-            flexDirection: (s.flexDirection as "row" | "column") || "column",
+            flexDirection:
+              widget.settings?.iconListLayout === "inline"
+                ? "row"
+                : (s.flexDirection as "row" | "column") || "column",
+            flexWrap: "wrap",
             gap: `${s.gap ?? 12}px`,
             padding: 0,
             margin: 0,
           }}
         >
-          {(widget.items || []).map((item) => (
-            <li key={item.id}>
+          {(widget.items || []).map((item) => {
+            const content = (
               <span
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 10,
                   color: s.color || color || "inherit",
+                  width:
+                    widget.settings?.iconListLinkFullWidth && item.link?.url
+                      ? "100%"
+                      : undefined,
                 }}
               >
-                {item.image ? (
+                {item.iconType === "text" ? null : item.iconType === "image" || item.image ? (
                   <img
                     src={item.image}
                     alt=""
@@ -1288,8 +1406,38 @@ const WidgetContent = ({
                 )}
                 <span>{item.title || item.content}</span>
               </span>
-            </li>
-          ))}
+            );
+            return (
+              <li
+                key={item.id}
+                style={{
+                  width:
+                    widget.settings?.iconListLinkFullWidth && item.link?.url
+                      ? "100%"
+                      : undefined,
+                }}
+              >
+                {item.link?.url ? (
+                  <a
+                    href={item.link.url}
+                    target={item.link.target || "_self"}
+                    rel={item.link.noFollow ? "nofollow noopener" : undefined}
+                    style={{
+                      display: widget.settings?.iconListLinkFullWidth
+                        ? "flex"
+                        : "inline-flex",
+                      width: widget.settings?.iconListLinkFullWidth
+                        ? "100%"
+                        : undefined,
+                      textDecoration: "none",
+                    }}
+                  >
+                    {content}
+                  </a>
+                ) : content}
+              </li>
+            );
+          })}
         </ul>
       );
 
@@ -1338,12 +1486,17 @@ const WidgetContent = ({
       );
     }
 
-    case "icon_box":
+    case "icon_box": {
+      const iconPosition = widget.settings?.iconPosition || "top";
       return (
         <MaybeLink widget={widget}>
           <div
             style={{
-              textAlign: "center",
+              display: "flex",
+              flexDirection: iconPosition === "left" || iconPosition === "right" ? "row" : "column",
+              alignItems: "center",
+              textAlign: iconPosition === "left" ? "left" : "center",
+              gap: 16,
               padding: 24,
               color,
               backgroundColor: bgColor || "transparent",
@@ -1355,25 +1508,34 @@ const WidgetContent = ({
             <div
               style={{
                 fontSize: 48,
-                marginBottom: 16,
+                marginBottom: iconPosition === "top" ? 16 : 0,
+                order: iconPosition === "right" ? 1 : 0,
+                flex: "0 0 auto",
                 color: color || "#0c2f55",
               }}
             >
-              {widget.content || "★"}
+              {widget.url ? (
+                <img src={widget.url} alt="" style={{ width: 48, height: 48, objectFit: "contain" }} />
+              ) : (
+                <BuilderIcon name={widget.content || "FaStar"} />
+              )}
             </div>
-            <h3 style={{ margin: "0 0 8px", fontSize: 20, color }}>
-              {widget.items?.[0]?.title ||
-                widget.settings?.items?.[0]?.title ||
-                "Feature Title"}
-            </h3>
-            <p style={{ margin: 0, color, fontSize: 14, opacity: 0.75 }}>
-              {widget.items?.[0]?.content ||
-                widget.settings?.items?.[0]?.content ||
-                "Add feature description here."}
-            </p>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ margin: "0 0 8px", fontSize: 20, color }}>
+                {widget.items?.[0]?.title ||
+                  widget.settings?.items?.[0]?.title ||
+                  "Feature Title"}
+              </h3>
+              <p style={{ margin: 0, color, fontSize: 14, opacity: 0.75 }}>
+                {widget.items?.[0]?.content ||
+                  widget.settings?.items?.[0]?.content ||
+                  "Add feature description here."}
+              </p>
+            </div>
           </div>
         </MaybeLink>
       );
+    }
 
     case "image_box":
       return (
@@ -1820,7 +1982,9 @@ const WidgetContent = ({
       return (
         <div
           style={{
-            minHeight: `${s.padding?.top || 40}px`,
+            height: toCssDimension(s.spacerHeight !== undefined
+              ? { value: s.spacerHeight, unit: s.spacerUnit || "px" }
+              : { value: s.padding?.top || 50, unit: "px" }) || "50px",
             background:
               "repeating-linear-gradient(45deg, #f3f5f8, #f3f5f8 6px, #e5e9ef 6px, #e5e9ef 12px)",
             borderRadius: 4,
@@ -1842,12 +2006,13 @@ const WidgetContent = ({
       return (
         <hr
           style={{
-            borderColor: s.borderColor || "#e0e0e0",
-            borderWidth: `${s.borderWidth || 1}px`,
-            borderStyle: s.borderStyle || "solid",
+            border: 0,
+            borderTop: `${s.borderWidth || 1}px ${s.borderStyle || "solid"} ${s.borderColor || "#e0e0e0"}`,
             margin: "16px 0",
-            width: "100%",
-            alignSelf: "stretch",
+            width: toCssDimension(rs.width ?? s.width) || "100%",
+            alignSelf: "auto",
+            marginLeft: (rs.elementAlign || s.elementAlign) === "center" ? "auto" : undefined,
+            marginRight: (rs.elementAlign || s.elementAlign) === "center" ? "auto" : undefined,
           }}
         />
       );
@@ -1887,6 +2052,7 @@ const WidgetContent = ({
           {widget.items?.map((item, i) => (
             <details
               key={item.id}
+              id={item.cssId || undefined}
               style={{
                 borderBottom:
                   i < (widget.items?.length || 0) - 1
@@ -1910,10 +2076,26 @@ const WidgetContent = ({
               >
                 {/* ✅ Render nested children here */}
                 {item.children && item.children.length > 0 ? (
-                  <RenderNestedChildren children={item.children} />
+                  <RenderNestedChildren
+                    children={item.children}
+                    device={device}
+                    isEditMode={isEditMode}
+                    selectedId={selectedId}
+                    onSelect={onSelect}
+                    onDelete={onDelete}
+                    onDuplicate={onDuplicate}
+                    onResize={onResize}
+                    onUpdateWidget={onUpdateWidget}
+                    onContextMenu={onContextMenu}
+                  />
                 ) : (
                   item.content
                 )}
+                <ItemDropZone
+                  widgetId={widget.id}
+                  itemId={item.id}
+                  isEditMode={isEditMode}
+                />
               </div>
             </details>
           ))}
@@ -1937,25 +2119,54 @@ const WidgetContent = ({
             }}
           >
             {widget.items?.map((item, i) => (
-              <div
+              <button
                 key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={i === activeTabIndex}
+                onClick={() => setActiveTabIndex(i)}
                 style={{
                   padding: "10px 20px",
-                  fontWeight: i === 0 ? 700 : 500,
-                  color: i === 0 ? color || "#0c2f55" : "#666",
-                  borderBottom: i === 0 ? `2px solid ${color || "#0c2f55"}` : "none",
+                  fontWeight: i === activeTabIndex ? 700 : 500,
+                  color: i === activeTabIndex ? color || "#0c2f55" : "#666",
+                  border: 0,
+                  borderBottom: i === activeTabIndex ? `2px solid ${color || "#0c2f55"}` : "2px solid transparent",
+                  background: "transparent",
+                  cursor: "pointer",
                 }}
               >
                 {item.title}
-              </div>
+              </button>
             ))}
           </div>
-          <div style={{ padding: 12, color: "#666" }}>
-            {widget.items?.[0]?.children &&
-            widget.items[0].children.length > 0 ? (
-              <RenderNestedChildren children={widget.items[0].children} />
+          <div
+            id={widget.items?.[activeTabIndex]?.cssId || undefined}
+            style={{ padding: 12, color: "#666" }}
+            role="tabpanel"
+          >
+            {widget.items?.[activeTabIndex]?.children &&
+            widget.items[activeTabIndex].children!.length > 0 ? (
+              <RenderNestedChildren
+                children={widget.items[activeTabIndex].children!}
+                device={device}
+                isEditMode={isEditMode}
+                selectedId={selectedId}
+                onSelect={onSelect}
+                onDelete={onDelete}
+                onDuplicate={onDuplicate}
+                onResize={onResize}
+                onUpdateWidget={onUpdateWidget}
+                onContextMenu={onContextMenu}
+              />
             ) : (
-              widget.items?.[0]?.content
+              widget.items?.[activeTabIndex]?.content
+            )}
+            {widget.items?.[activeTabIndex] && (
+              <ItemDropZone
+                widgetId={widget.id}
+                itemId={widget.items[activeTabIndex].id}
+                isEditMode={isEditMode}
+              />
             )}
           </div>
         </div>
@@ -1968,18 +2179,44 @@ const WidgetContent = ({
       );
 
     case "testimonial":
+      {
+      const slides = widget.items || [];
+      const slide = slides.length
+        ? slides[activeTabIndex % slides.length]
+        : undefined;
+      const alignment = widget.settings?.testimonialAlignment || "center";
+      const testimonialLayout = widget.settings?.testimonialLayout || "image-inline";
       return (
         <div
           style={{
             background: bgColor || "#f8f9fc",
             padding: 32,
-            borderRadius: 12,
-            textAlign: "center",
+            borderRadius:
+              widget.settings?.testimonialSkin === "bubble" ? 24 : 12,
+            textAlign: alignment,
             width: "100%",
             alignSelf: "stretch",
+            boxSizing: "border-box",
           }}
         >
-          <div style={{ fontSize: 32, color: "#f0b429", marginBottom: 12 }}>
+          {slide?.image && (
+            <img
+              src={slide.image}
+              alt={slide.title || "Testimonial author"}
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: "50%",
+                objectFit: "cover",
+                display: "block",
+                margin:
+                  testimonialLayout === "image-above"
+                    ? "0 auto 16px"
+                    : "0 0 16px",
+              }}
+            />
+          )}
+          <div style={{ fontSize: 24, color: "#f0b429", marginBottom: 12 }}>
             ★★★★★
           </div>
           <p
@@ -1990,13 +2227,61 @@ const WidgetContent = ({
               fontSize: 15,
             }}
           >
-            "{widget.items?.[0]?.content}"
+            "{slide?.content || "Add a testimonial quote."}"
           </p>
-          <div style={{ fontWeight: 700 }}>{widget.items?.[0]?.title}</div>
+          <div style={{ fontWeight: 700 }}>{slide?.title}</div>
+          {slide?.label && (
+            <div style={{ marginTop: 4, color: "#667085", fontSize: 13 }}>
+              {slide.label}
+            </div>
+          )}
+          {slides.length > 1 && (
+            <div
+              className="testimonial-preview-controls"
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 12,
+                marginTop: 18,
+              }}
+            >
+              <button
+                type="button"
+                aria-label="Previous testimonial"
+                onClick={() =>
+                  setActiveTabIndex((index) => (index - 1 + slides.length) % slides.length)
+                }
+              >
+                ‹
+              </button>
+              <span>{(activeTabIndex % slides.length) + 1} / {slides.length}</span>
+              <button
+                type="button"
+                aria-label="Next testimonial"
+                onClick={() =>
+                  setActiveTabIndex((index) => (index + 1) % slides.length)
+                }
+              >
+                ›
+              </button>
+            </div>
+          )}
         </div>
       );
+      }
 
     case "counter":
+      {
+      const rawEnd =
+        widget.settings?.counterEnd ??
+        Number(widget.items?.[0]?.content || widget.settings?.items?.[0]?.content || widget.content || 1000);
+      const number = widget.settings?.counterThousandsSeparator === false
+        ? String(rawEnd)
+        : String(rawEnd).replace(/\B(?=(\d{3})+(?!\d))/g, widget.settings?.counterSeparator || ",");
+      const CounterTitle = (["div", "p", "span", "h1", "h2", "h3", "h4", "h5", "h6"].includes(
+        widget.settings?.counterTitleTag || "div",
+      ) ? widget.settings?.counterTitleTag || "div" : "div") as ElementType;
       return (
         <div
           style={{
@@ -2014,19 +2299,32 @@ const WidgetContent = ({
               lineHeight: 1,
             }}
           >
-            {widget.items?.[0]?.content ||
-              widget.settings?.items?.[0]?.content ||
-              "1000"}
+            {widget.settings?.counterPrefix || ""}
+            {number}
+            {widget.settings?.counterSuffix || ""}
           </div>
-          <div style={{ color, marginTop: 12, fontSize: 15, opacity: 0.75 }}>
+          <CounterTitle style={{ color, marginTop: 12, fontSize: 15, opacity: 0.75 }}>
             {widget.items?.[0]?.title ||
               widget.settings?.items?.[0]?.title ||
               "Happy Clients"}
-          </div>
+          </CounterTitle>
         </div>
       );
+      }
 
     case "progress_bar":
+      {
+      const percentage = Math.max(
+        0,
+        Math.min(
+          100,
+          Number(widget.settings?.progressPercent ?? widget.items?.[0]?.content ?? 50),
+        ),
+      );
+      const titleTag = widget.settings?.progressTitleTag || "span";
+      const ProgressTitle = (["span", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6"].includes(titleTag)
+        ? titleTag
+        : "span") as ElementType;
       return (
         <div style={{ padding: "8px 0", width: "100%", alignSelf: "stretch" }}>
           <div
@@ -2037,10 +2335,14 @@ const WidgetContent = ({
               color,
             }}
           >
-            <span style={{ fontWeight: 600 }}>
-              {widget.items?.[0]?.title || "Progress"}
-            </span>
-            <span>{widget.items?.[0]?.content || "80"}%</span>
+            {widget.settings?.showProgressTitle !== false && (
+              <ProgressTitle style={{ fontWeight: 600, margin: 0 }}>
+                {widget.settings?.progressTitle || widget.items?.[0]?.title || "My Skill"}
+              </ProgressTitle>
+            )}
+            {widget.settings?.showProgressPercent !== false && (
+              <span>{percentage}%</span>
+            )}
           </div>
           <div
             style={{
@@ -2052,17 +2354,46 @@ const WidgetContent = ({
           >
             <div
               style={{
-                width: `${widget.items?.[0]?.content || 80}%`,
+                width: `${percentage}%`,
                 height: "100%",
                 background: color || "#0c2f55",
                 borderRadius: 6,
               }}
-            />
+            >
+              {widget.settings?.progressInnerText && (
+                <span
+                  style={{
+                    display: "block",
+                    overflow: "hidden",
+                    padding: "0 10px",
+                    color: "#fff",
+                    fontSize: 12,
+                    lineHeight: "12px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {widget.settings.progressInnerText}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       );
+      }
 
     case "form":
+      {
+      const configuredFields = Array.isArray(widget.settings?.formFields)
+        ? widget.settings.formFields.filter(
+            (field): field is WidgetItem =>
+              Boolean(field) && typeof field === "object",
+          )
+        : null;
+      const formFields: WidgetItem[] = configuredFields ?? [
+        { id: "name", title: "Name", fieldType: "text" },
+        { id: "email", title: "Email", fieldType: "email" },
+        { id: "message", title: "Message", fieldType: "textarea" },
+      ];
       return (
         <div
           style={{
@@ -2073,45 +2404,28 @@ const WidgetContent = ({
             alignSelf: "stretch",
           }}
         >
-          <input
-            type="text"
-            placeholder="Name"
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 12,
-              border: "1px solid #ddd",
-              borderRadius: 6,
-              boxSizing: "border-box",
-            }}
-            readOnly
-          />
-          <input
-            type="email"
-            placeholder="Email"
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 12,
-              border: "1px solid #ddd",
-              borderRadius: 6,
-              boxSizing: "border-box",
-            }}
-            readOnly
-          />
-          <textarea
-            placeholder="Message"
-            rows={4}
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 12,
-              border: "1px solid #ddd",
-              borderRadius: 6,
-              boxSizing: "border-box",
-            }}
-            readOnly
-          />
+          {formFields.map((field) => (
+            <label key={field.id} style={{ display: "block", marginBottom: 12 }}>
+              <span>{field.title}</span>
+              {field.fieldType === "textarea" ? (
+                <textarea placeholder={field.placeholder || ""} rows={3} readOnly style={{ width: "100%", padding: 12, marginTop: 4, border: "1px solid #ddd", borderRadius: 6, boxSizing: "border-box" }} />
+              ) : field.fieldType === "select" ? (
+                <select disabled style={{ width: "100%", padding: 12, marginTop: 4, border: "1px solid #ddd", borderRadius: 6, boxSizing: "border-box" }}>
+                  {(Array.isArray(field.options)
+                    ? field.options.filter(
+                        (option): option is string =>
+                          typeof option === "string",
+                      )
+                    : []
+                  ).map((option) => <option key={option}>{option}</option>)}
+                </select>
+              ) : field.fieldType === "checkbox" ? (
+                <input type="checkbox" disabled />
+              ) : (
+                <input type={field.fieldType || "text"} placeholder={field.placeholder || ""} readOnly style={{ width: "100%", padding: 12, marginTop: 4, border: "1px solid #ddd", borderRadius: 6, boxSizing: "border-box" }} />
+              )}
+            </label>
+          ))}
           <button
             style={{
               width: "100%",
@@ -2128,6 +2442,7 @@ const WidgetContent = ({
           </button>
         </div>
       );
+      }
 
     case "search":
       return (
@@ -2202,7 +2517,7 @@ const WidgetContent = ({
                 overflow: "hidden",
               }}
             >
-              {item.image ? (
+              {item.image || item.iconType === "image" ? (
                 <img
                   src={item.image}
                   alt=""
@@ -2211,6 +2526,11 @@ const WidgetContent = ({
                     height: 24,
                     objectFit: "contain",
                   }}
+                />
+              ) : ICON_LIBRARY.some((entry) => entry.name === item.icon) ? (
+                <BuilderIcon
+                  name={item.icon}
+                  style={{ fontSize: s.iconSize || 20, color: s.iconColor || color || "#fff" }}
                 />
               ) : (
                 (item.icon || item.title || "•").slice(0, 2)
@@ -2221,12 +2541,17 @@ const WidgetContent = ({
       );
 
     case "post_grid":
+    case "loop_grid":
+    case "loop_carousel": {
+      const isLoopCarousel = widget.type === "loop_carousel";
       return (
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
+            display: isLoopCarousel ? "flex" : "grid",
+            gridTemplateColumns: isLoopCarousel ? undefined : `repeat(${widget.settings?.columns || 3}, minmax(0, 1fr))`,
             gap: 20,
+            overflowX: isLoopCarousel ? "auto" : undefined,
+            scrollSnapType: isLoopCarousel ? "x mandatory" : undefined,
             width: "100%",
             alignSelf: "stretch",
           }}
@@ -2239,6 +2564,8 @@ const WidgetContent = ({
                 borderRadius: 8,
                 overflow: "hidden",
                 background: "#fff",
+                flex: isLoopCarousel ? "0 0 min(82vw, 360px)" : undefined,
+                scrollSnapAlign: isLoopCarousel ? "start" : undefined,
               }}
             >
               <img
@@ -2268,6 +2595,7 @@ const WidgetContent = ({
           ))}
         </div>
       );
+    }
 
     case "post_list":
       return (
@@ -2383,9 +2711,21 @@ const WidgetContent = ({
     case "product_price":
       return (
         <div style={{ ...baseStyle, fontWeight: 700 }}>
-          {productPreview
-            ? `₹${Number(productPreview.price || 0).toFixed(2)}`
-            : "Product Price"}
+          {productPreview ? (
+            <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+              {Number(productPreview.regular_price || 0) > Number(productPreview.price || 0) && (
+                <del style={{ color: "#6b7280", fontSize: "0.9em", fontWeight: 400 }}>
+                  ₹{Number(productPreview.regular_price).toFixed(2)}
+                </del>
+              )}
+              <strong>₹{Number(productPreview.price || 0).toFixed(2)}</strong>
+              {Number(productPreview.regular_price || 0) > Number(productPreview.price || 0) && (
+                <small style={{ color: "#b42318" }}>
+                  {Math.round(((Number(productPreview.regular_price) - Number(productPreview.price)) / Number(productPreview.regular_price)) * 100)}% off
+                </small>
+              )}
+            </span>
+          ) : "Product Price"}
         </div>
       );
 
@@ -2406,9 +2746,15 @@ const WidgetContent = ({
         <div
           style={{
             ...baseStyle,
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
             minHeight: 160,
             display: "grid",
             placeItems: "center",
+            padding: 16,
+            textAlign: "center",
+            overflowWrap: "anywhere",
             background: "#f3f4f6",
           }}
         >
@@ -2417,7 +2763,10 @@ const WidgetContent = ({
       );
 
     case "product_gallery":
-      return productPreview?.gallery?.length ? (
+      return Array.isArray(productPreview?.gallery) &&
+        productPreview.gallery.some(
+          (image) => image && typeof image.url === "string",
+        ) ? (
         <div
           style={{
             display: "grid",
@@ -2425,7 +2774,9 @@ const WidgetContent = ({
             gap: 8,
           }}
         >
-          {productPreview.gallery.map((image, index) => (
+          {productPreview.gallery
+            .filter((image) => image && typeof image.url === "string")
+            .map((image, index) => (
             <img
               key={`${image.url}-${index}`}
               src={getImageUrl(image.url)}
@@ -2493,7 +2844,9 @@ const WidgetContent = ({
     case "product_tags":
       return (
         <div style={baseStyle}>
-          {productPreview?.tags?.join(", ") || "Product Tags"}
+          {Array.isArray(productPreview?.tags)
+            ? productPreview.tags.join(", ") || "Product Tags"
+            : "Product Tags"}
         </div>
       );
 
@@ -2509,12 +2862,17 @@ const WidgetContent = ({
       );
 
     case "product_attributes":
-      return productPreview?.attributes?.length ? (
+      return Array.isArray(productPreview?.attributes) &&
+        productPreview.attributes.some(
+          (attr) => attr && typeof attr === "object",
+        ) ? (
         <table
           style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}
         >
           <tbody>
-            {productPreview.attributes.map((attr, i) => (
+            {productPreview.attributes
+              .filter((attr) => attr && typeof attr === "object")
+              .map((attr, i) => (
               <tr key={i}>
                 <th
                   style={{
@@ -2544,7 +2902,10 @@ const WidgetContent = ({
       );
 
     case "product_variations":
-      return productPreview?.variations?.length ? (
+      return Array.isArray(productPreview?.variations) &&
+        productPreview.variations.some(
+          (variation) => variation && typeof variation === "object",
+        ) ? (
         <table
           style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}
         >
@@ -2580,7 +2941,9 @@ const WidgetContent = ({
             </tr>
           </thead>
           <tbody>
-            {productPreview.variations.map((v, i) => (
+            {productPreview.variations
+              .filter((variation) => variation && typeof variation === "object")
+              .map((v, i) => (
               <tr key={i}>
                 <td
                   style={{ padding: "8px 12px", border: "1px solid #e5e7eb" }}
@@ -2842,7 +3205,9 @@ const WidgetContent = ({
       );
 
     case "tablepress": {
-      const headers = widget.settings?.tableHeaders || ["Name", "Role"];
+      const headers = Array.isArray(widget.settings?.tableHeaders)
+        ? widget.settings.tableHeaders
+        : ["Name", "Role"];
       return (
         <div style={{ width: "100%", overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -2889,6 +3254,109 @@ const WidgetContent = ({
       );
     }
 
+    case "audio":
+      return widget.url ? (
+        <audio
+          src={widget.url}
+          controls={widget.settings?.controls !== false}
+          style={{ width: "100%" }}
+        />
+      ) : (
+        <WidgetEmptyState icon="♫" title="Audio" subtitle="Choose an audio file in Content settings" />
+      );
+
+    case "blockquote":
+      return (
+        <blockquote style={{ ...baseStyle, borderLeft: "3px solid #2563eb", paddingLeft: 20, marginLeft: 0 }}>
+          <p>{widget.content}</p>
+          {widget.settings?.author && <footer>— {widget.settings.author}</footer>}
+        </blockquote>
+      );
+
+    case "breadcrumbs":
+      return (
+        <nav aria-label="Breadcrumb">
+          {(widget.items || []).map((item, index) => (
+            <span key={item.id}>
+              {index > 0 && " / "}
+              {item.title}
+            </span>
+          ))}
+        </nav>
+      );
+
+    case "call_to_action":
+      return (
+        <section style={{ ...baseStyle, padding: 24, textAlign: "center", background: bgColor || "#f3f6fb" }}>
+          <h2>{widget.settings?.title || "Take the next step"}</h2>
+          <p>{widget.settings?.description}</p>
+          <button type="button" className="canvas-widget-action">{widget.content || "Get Started"}</button>
+        </section>
+      );
+
+    case "flip_box": {
+      const front = widget.items?.[0];
+      const back = widget.items?.[1];
+      return (
+        <details style={{ ...baseStyle, minHeight: 140, padding: 20, border: "1px solid #e5e7eb" }}>
+          <summary style={{ cursor: "pointer" }}>
+            <strong>{front?.title || "Front"}</strong>
+            <p>{front?.content}</p>
+          </summary>
+          <div>
+            <strong>{back?.title || "Back"}</strong>
+            <p>{back?.content}</p>
+          </div>
+        </details>
+      );
+    }
+
+    case "price_list":
+      return (
+        <div style={{ ...baseStyle, display: "grid", gap: 12 }}>
+          {(widget.items || []).map((item) => (
+            <div key={item.id} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px dotted #cbd5e1", paddingBottom: 8 }}>
+              <span><strong>{item.title}</strong><br />{item.content}</span>
+              <strong>{item.label}</strong>
+            </div>
+          ))}
+        </div>
+      );
+
+    case "price_table":
+      return (
+        <section style={{ ...baseStyle, padding: 24, textAlign: "center", border: "1px solid #e5e7eb", borderRadius: 8 }}>
+          <h2>{widget.settings?.title || "Plan"}</h2>
+          <strong>{widget.settings?.author}</strong>
+          <p>{widget.content}</p>
+          <ul style={{ listStyle: "none", padding: 0 }}>
+            {(widget.items || []).map((item) => <li key={item.id}>✓ {item.title}</li>)}
+          </ul>
+          <button type="button" className="canvas-widget-action">Choose Plan</button>
+        </section>
+      );
+
+    case "share_buttons":
+      return (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {(widget.items || []).map((item) => (
+            <button type="button" key={item.id} className="canvas-widget-action">{item.title || "Share"}</button>
+          ))}
+        </div>
+      );
+
+    case "slides":
+      return (
+        <div style={{ display: "flex", gap: 12, overflowX: "auto" }}>
+          {(widget.items || []).map((item) => (
+            <article key={item.id} style={{ flex: "0 0 100%", minHeight: 180, padding: 20, background: item.image ? `linear-gradient(#0005,#0005),url("${item.image}") center/cover` : "#f1f5f9", color: item.image ? "#fff" : color }}>
+              <h2>{item.title}</h2>
+              <p>{item.content}</p>
+            </article>
+          ))}
+        </div>
+      );
+
     default:
       return (
         <WidgetEmptyState
@@ -2916,6 +3384,8 @@ interface CanvasRendererProps {
   parentId?: string | null;
   index?: number;
   onContextMenu?: (e: React.MouseEvent, widgetId: string) => void;
+  disableDrag?: boolean;
+  isRoot?: boolean;
 }
 
 const CanvasRenderer = ({
@@ -2932,6 +3402,8 @@ const CanvasRenderer = ({
   parentId = null,
   index = 0,
   onContextMenu,
+  disableDrag = false,
+  isRoot = false,
 }: CanvasRendererProps) => {
   const {
     attributes,
@@ -2940,7 +3412,7 @@ const CanvasRenderer = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: widget.id, disabled: isPreview });
+  } = useSortable({ id: widget.id, disabled: isPreview || disableDrag });
 
   const [resizing, setResizing] = useState<{
     width: number;
@@ -2948,11 +3420,19 @@ const CanvasRenderer = ({
   } | null>(null);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [mediaPickerMultiple, setMediaPickerMultiple] = useState(false);
+  const fontFamily =
+    widget.style.responsive?.[device]?.fontFamily ?? widget.style.fontFamily;
+
+  useEffect(() => {
+    loadGoogleFont(fontFamily);
+  }, [fontFamily]);
 
   const isSelected = selectedId === widget.id;
-  const isContainer = ["container", "section", "column", "grid"].includes(
-    widget.type,
-  );
+  const isContainer = [
+    "container", "section", "column", "grid",
+    "box", "col", "flex", "flexbox", "fbox", "loop_grid", "loop_carousel",
+  ].includes(widget.type);
+  const isLoopWidget = widget.type === "loop_grid" || widget.type === "loop_carousel";
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -2960,10 +3440,85 @@ const CanvasRenderer = ({
     opacity: isDragging ? 0.4 : 1,
   };
 
+  const responsiveWidgetStyle = widget.style.responsive?.[device] || {};
+  const explicitWidth = toCssDimension(
+    responsiveWidgetStyle.width ?? widget.style.width,
+  );
+  const hasConstrainedWidth =
+    Boolean(explicitWidth) &&
+    explicitWidth !== "auto" &&
+    !(explicitWidth!.endsWith("%") && Number.parseFloat(explicitWidth!) >= 100);
+  const itemFlexGrow =
+    responsiveWidgetStyle.flexGrow ?? widget.style.flexGrow;
+  const itemFlexShrink =
+    responsiveWidgetStyle.flexShrink ?? widget.style.flexShrink;
+  const itemFlexBasis =
+    responsiveWidgetStyle.flexBasis ?? widget.style.flexBasis;
+  const configuredMinWidth = toCssDimension(
+    responsiveWidgetStyle.minWidth ?? widget.style.minWidth,
+  );
+  const configuredMaxWidth = toCssDimension(
+    responsiveWidgetStyle.maxWidth ?? widget.style.maxWidth,
+  );
+  const configuredElementAlign = String(
+    responsiveWidgetStyle.elementAlign ??
+      widget.style.elementAlign ??
+      (hasConstrainedWidth ? "center" : ""),
+  ).toLowerCase();
+  const itemStyle: React.CSSProperties = {
+    ...style,
+    boxSizing: "border-box",
+    width: explicitWidth,
+    maxWidth: configuredMaxWidth
+      ? `min(100%, ${configuredMaxWidth})`
+      : "100%",
+    minWidth: configuredMinWidth
+      ? `min(100%, ${configuredMinWidth})`
+      : 0,
+    flex:
+      hasConstrainedWidth || itemFlexGrow !== undefined || itemFlexBasis
+        ? `${itemFlexGrow ?? 0} ${itemFlexShrink ?? 1} ${itemFlexBasis ? toCssDimension(itemFlexBasis) : "auto"}`
+        : undefined,
+    alignSelf:
+      responsiveWidgetStyle.alignSelf ?? widget.style.alignSelf,
+    order: responsiveWidgetStyle.order ?? widget.style.order,
+    marginLeft:
+      isRoot && hasConstrainedWidth
+        ? configuredElementAlign === "right" ||
+          configuredElementAlign === "end" ||
+          configuredElementAlign === "center" ||
+          configuredElementAlign === "middle"
+          ? "auto"
+          : undefined
+        : undefined,
+    marginRight:
+      isRoot && hasConstrainedWidth
+        ? configuredElementAlign === "left" ||
+          configuredElementAlign === "start" ||
+          configuredElementAlign === "center" ||
+          configuredElementAlign === "middle"
+          ? "auto"
+          : undefined
+        : undefined,
+  };
+
   const rawWidgetStyle = renderWidgetStyles(widget.style, device);
+  let customAttributes: Record<string, any> = {};
+  try {
+    const parsed = JSON.parse(String((widget.style as any).customAttributes || "{}"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) customAttributes = parsed;
+  } catch { /* Invalid attribute JSON should not break the editor canvas. */ }
 
   const widgetStyle: React.CSSProperties =
-    widget.type === "button"
+    isLoopWidget
+      ? {
+          ...rawWidgetStyle,
+          display: "block",
+          width: "100%",
+          minWidth: 0,
+          boxSizing: "border-box",
+        }
+      : widget.type === "button"
       ? {
           ...rawWidgetStyle,
           display: "block",
@@ -3095,12 +3650,16 @@ const CanvasRenderer = ({
       <div
         ref={setNodeRef}
         data-widget-id={widget.id}
-        style={style}
+        style={itemStyle}
         className={`canvas-element ${
           isSelected ? "active" : ""
         } ${isPreview ? "preview-mode" : ""} ${
           isContainer ? "is-container" : ""
-        } ${widget.children?.length ? "has-children" : "no-children"}`}
+        } ${hasConstrainedWidth ? "has-explicit-width" : ""} ${
+          isRoot ? "is-root-element" : ""
+        } ${
+          widget.children?.length ? "has-children" : "no-children"
+        }`}
         onClick={handleClick}
         onContextMenu={handleRightClick}
       >
@@ -3161,40 +3720,120 @@ const CanvasRenderer = ({
           </div>
         )}
 
-        <div style={widgetStyle} className="canvas-element-inner">
+        <StyleInjector css={getHoverAndAnimation({ ...widget.style, ...(widget.style.responsive?.[device] || {}) }, widget.id).cssText} />
+        <div
+          {...customAttributes}
+          id={(widget.style as any).cssId || undefined}
+          style={widgetStyle}
+          className={`canvas-element-inner ${getHoverAndAnimation({ ...widget.style, ...(widget.style.responsive?.[device] || {}) }, widget.id).className} ${(widget.style as any).customClasses || ""}`.trim()}
+          data-widget-type={widget.type}
+          data-widget-id={widget.id}
+        >
           {isContainer ? (
             <>
-              <SortableContext
-                items={(widget.children || []).map((c) => c.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {widget.children?.map((child, childIndex) => (
-                  <CanvasRenderer
-                    key={child.id}
-                    widget={child}
-                    parentId={widget.id}
-                    index={childIndex}
-                    selectedId={selectedId}
-                    onSelect={onSelect}
-                    onDelete={onDelete}
-                    onDuplicate={onDuplicate}
-                    onAddInside={() => undefined}
-                    onResize={onResize}
-                    onUpdateWidget={onUpdateWidget}
-                    device={device}
-                    isPreview={isPreview}
-                    activeDragType={activeDragType}
-                    onContextMenu={onContextMenu}
-                  />
-                ))}
-              </SortableContext>
-
-              {!isPreview && (
-                <ContainerDropZone
-                  containerId={widget.id}
-                  isEmpty={!widget.children?.length}
-                  activeDragType={activeDragType}
-                />
+              {(widget.style as any).backgroundType === "video" && (widget.style as any).backgroundVideo ? (
+                <video aria-hidden="true" autoPlay muted loop playsInline src={(widget.style as any).backgroundVideo} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0, pointerEvents: "none" }} />
+              ) : null}
+              {isLoopWidget ? (
+                <div
+                  className="loop-canvas-preview"
+                  style={{
+                    display: widget.type === "loop_carousel" ? "flex" : "grid",
+                    gridTemplateColumns: widget.type === "loop_carousel"
+                      ? undefined
+                      : `repeat(${Math.max(1, Math.min(6, widget.settings?.columns || 3))}, minmax(0, 1fr))`,
+                    gap: 12,
+                    overflowX: widget.type === "loop_carousel" ? "auto" : undefined,
+                    width: "100%",
+                    minWidth: 0,
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <div className="loop-template-card" style={{ minWidth: 0, width: "100%", boxSizing: "border-box", padding: 12, border: "1px dashed #7c83ff", background: "#f8f9ff", borderRadius: 6 }}>
+                    <strong style={{ display: "block", marginBottom: 8, fontSize: 11, color: "#596273" }}>
+                      {widget.settings?.loopSource === "products" ? "PRODUCT ITEM TEMPLATE" : "LOOP ITEM TEMPLATE"}
+                    </strong>
+                    <SortableContext
+                      items={(widget.children || []).map((child) => child.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {widget.children?.map((child, childIndex) => (
+                        <CanvasRenderer
+                          key={child.id}
+                          widget={child}
+                          parentId={widget.id}
+                          index={childIndex}
+                          selectedId={selectedId}
+                          onSelect={onSelect}
+                          onDelete={onDelete}
+                          onDuplicate={onDuplicate}
+                          onAddInside={() => undefined}
+                          onResize={onResize}
+                          onUpdateWidget={onUpdateWidget}
+                          device={device}
+                          isPreview={isPreview}
+                          activeDragType={activeDragType}
+                          onContextMenu={onContextMenu}
+                          disableDrag={disableDrag}
+                        />
+                      ))}
+                    </SortableContext>
+                    {!isPreview && (
+                      <ContainerDropZone
+                        containerId={widget.id}
+                        isEmpty={!widget.children?.length}
+                        activeDragType={activeDragType}
+                      />
+                    )}
+                  </div>
+                  {[1, 2].map((previewIndex) => (
+                    <div
+                      key={previewIndex}
+                      aria-hidden="true"
+                      style={{
+                        minHeight: 140,
+                        border: "1px dashed #cbd5e1",
+                        borderRadius: 6,
+                        background: "rgba(255,255,255,.25)",
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <SortableContext
+                    items={(widget.children || []).map((c) => c.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {widget.children?.map((child, childIndex) => (
+                      <CanvasRenderer
+                        key={child.id}
+                        widget={child}
+                        parentId={widget.id}
+                        index={childIndex}
+                        selectedId={selectedId}
+                        onSelect={onSelect}
+                        onDelete={onDelete}
+                        onDuplicate={onDuplicate}
+                        onAddInside={() => undefined}
+                        onResize={onResize}
+                        onUpdateWidget={onUpdateWidget}
+                        device={device}
+                        isPreview={isPreview}
+                        activeDragType={activeDragType}
+                        onContextMenu={onContextMenu}
+                        disableDrag={disableDrag}
+                      />
+                    ))}
+                  </SortableContext>
+                  {!isPreview && (
+                    <ContainerDropZone
+                      containerId={widget.id}
+                      isEmpty={!widget.children?.length}
+                      activeDragType={activeDragType}
+                    />
+                  )}
+                </>
               )}
             </>
           ) : (
@@ -3203,6 +3842,13 @@ const CanvasRenderer = ({
               device={device}
               isEditMode={!isPreview}
               onOpenMedia={handleOpenMedia}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              onDelete={onDelete}
+              onDuplicate={onDuplicate}
+              onResize={onResize}
+              onUpdateWidget={onUpdateWidget}
+              onContextMenu={onContextMenu}
               onChangeContent={(content) => {
                 if (onUpdateWidget) {
                   onUpdateWidget(widget.id, { content });
