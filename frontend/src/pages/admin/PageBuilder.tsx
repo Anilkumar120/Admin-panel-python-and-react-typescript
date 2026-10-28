@@ -832,6 +832,7 @@ const SortableLayerItem = ({
   onSelect,
   onDelete,
   onDuplicate,
+  onRename,
 }: {
   widget: PageWidget;
   depth: number;
@@ -839,11 +840,14 @@ const SortableLayerItem = ({
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
+  onRename: (id: string, label: string) => void;
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: `layer-${widget.id}` });
 
   const [collapsed, setCollapsed] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [draftLabel, setDraftLabel] = useState(widget.label);
   const hasChildren =
     (widget.children?.length || 0) > 0 ||
     Boolean(widget.items?.some((item) => item.children?.length));
@@ -852,6 +856,16 @@ const SortableLayerItem = ({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
+  };
+
+  const finishRename = () => {
+    const nextLabel = draftLabel.trim();
+    if (nextLabel && nextLabel !== widget.label) {
+      onRename(widget.id, nextLabel);
+    } else {
+      setDraftLabel(widget.label);
+    }
+    setIsRenaming(false);
   };
 
   return (
@@ -886,17 +900,56 @@ const SortableLayerItem = ({
           <span className="structure-toggle-placeholder" />
         )}
 
-        <button
-          type="button"
-          className="structure-item-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(widget.id);
-          }}
-        >
-          <span className="structure-icon">{getLayerIcon(widget.type)}</span>
-          <span className="structure-label">{widget.label}</span>
-        </button>
+        {isRenaming ? (
+          <input
+            type="text"
+            className="structure-rename-input"
+            value={draftLabel}
+            autoFocus
+            aria-label={`Rename ${widget.label}`}
+            onChange={(event) => setDraftLabel(event.target.value)}
+            onBlur={finishRename}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === "Enter") {
+                event.preventDefault();
+                finishRename();
+              } else if (event.key === "Escape") {
+                setDraftLabel(widget.label);
+                setIsRenaming(false);
+              }
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            className="structure-item-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(widget.id);
+            }}
+          >
+            <span className="structure-icon">{getLayerIcon(widget.type)}</span>
+            <span className="structure-label">{widget.label}</span>
+          </button>
+        )}
+
+        {!isRenaming && (
+          <button
+            type="button"
+            className="structure-rename"
+            aria-label={`Rename ${widget.label}`}
+            title="Rename"
+            onClick={(event) => {
+              event.stopPropagation();
+              setDraftLabel(widget.label);
+              setIsRenaming(true);
+            }}
+          >
+            ✎
+          </button>
+        )}
 
         <button
           type="button"
@@ -939,6 +992,7 @@ const SortableLayerItem = ({
               onSelect={onSelect}
               onDelete={onDelete}
               onDuplicate={onDuplicate}
+              onRename={onRename}
             />
           ))}
         </SortableContext>
@@ -968,6 +1022,7 @@ const SortableLayerItem = ({
                     onSelect={onSelect}
                     onDelete={onDelete}
                     onDuplicate={onDuplicate}
+                    onRename={onRename}
                   />
                 ))}
               </SortableContext>
@@ -1046,6 +1101,13 @@ const PageBuilder = ({
   const [history, setHistory] = useState<PageWidget[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!message) return;
+
+    const timeoutId = window.setTimeout(() => setMessage(""), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [message]);
 
   // 🆕 CLIPBOARD STATE for copy/paste
   const [clipboard, setClipboard] = useState<PageWidget | null>(null);
@@ -1554,7 +1616,6 @@ const PageBuilder = ({
     if (widget) {
       setClipboard(JSON.parse(JSON.stringify(widget)));
       setMessage("✅ Element copied. Press Ctrl+V to paste.");
-      setTimeout(() => setMessage(""), 2000);
     }
   }, [selectedId, layout, findWidget]);
 
@@ -1574,7 +1635,6 @@ const PageBuilder = ({
     pushHistory(newLayout);
     setSelectedId(clone.id);
     setMessage("✅ Element pasted.");
-    setTimeout(() => setMessage(""), 2000);
   }, [clipboard, layout, pushHistory]);
 
   // 🆕 ELEMENT ACTIONS - Copy style only
@@ -1584,7 +1644,6 @@ const PageBuilder = ({
     if (widget) {
       setClipboardStyle(JSON.parse(JSON.stringify(widget.style)));
       setMessage("✅ Style copied. Select another element and paste style.");
-      setTimeout(() => setMessage(""), 2000);
     }
   }, [selectedId, layout, findWidget]);
 
@@ -1599,7 +1658,6 @@ const PageBuilder = ({
     setLayout(newLayout);
     pushHistory(newLayout);
     setMessage("✅ Style pasted.");
-    setTimeout(() => setMessage(""), 2000);
   }, [selectedId, clipboardStyle, layout, findWidget, updateWidget, pushHistory]);
 
   // 🆕 Right-click handler
@@ -2601,8 +2659,6 @@ const PageBuilder = ({
                         index={index}
                         selectedId={selectedId}
                         onSelect={setSelectedId}
-                        onDelete={handleDelete}
-                        onDuplicate={handleDuplicate}
                         onAddInside={(parentId: string, type: WidgetType) =>
                           addWidget(type, parentId)
                         }
@@ -2683,6 +2739,9 @@ const PageBuilder = ({
                         }}
                         onDelete={handleDelete}
                         onDuplicate={handleDuplicate}
+                        onRename={(id, label) =>
+                          handleUpdateWidget(id, { label })
+                        }
                       />
                     ))}
                   </SortableContext>
@@ -2714,6 +2773,17 @@ const PageBuilder = ({
           }}
           onClick={(e) => e.stopPropagation()}
         >
+          <div className="ctx-menu-header">
+            <span>Widget Actions</span>
+            <button
+              type="button"
+              aria-label="Close widget actions"
+              title="Close"
+              onClick={() => setContextMenu(null)}
+            >
+              ×
+            </button>
+          </div>
           <button
             type="button"
             className="ctx-menu-item"

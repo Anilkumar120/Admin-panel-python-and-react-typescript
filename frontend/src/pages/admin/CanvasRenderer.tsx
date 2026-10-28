@@ -937,8 +937,6 @@ const RenderNestedChildren = ({
   isEditMode,
   selectedId,
   onSelect,
-  onDelete,
-  onDuplicate,
   onResize,
   onUpdateWidget,
   onContextMenu,
@@ -948,8 +946,6 @@ const RenderNestedChildren = ({
   isEditMode: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
   onResize?: (id: string, changes: Partial<WidgetStyle>) => void;
   onUpdateWidget?: (id: string, changes: Partial<PageWidget>) => void;
   onContextMenu?: (e: React.MouseEvent, widgetId: string) => void;
@@ -969,8 +965,6 @@ const RenderNestedChildren = ({
           index={index}
           selectedId={selectedId}
           onSelect={onSelect}
-          onDelete={onDelete}
-          onDuplicate={onDuplicate}
           onAddInside={() => undefined}
           onResize={onResize}
           onUpdateWidget={onUpdateWidget}
@@ -993,8 +987,6 @@ const WidgetContent = ({
   onChangeContent,
   selectedId,
   onSelect,
-  onDelete,
-  onDuplicate,
   onResize,
   onUpdateWidget,
   onContextMenu,
@@ -1006,8 +998,6 @@ const WidgetContent = ({
   onChangeContent?: (content: string) => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
   onResize?: (id: string, changes: Partial<WidgetStyle>) => void;
   onUpdateWidget?: (id: string, changes: Partial<PageWidget>) => void;
   onContextMenu?: (e: React.MouseEvent, widgetId: string) => void;
@@ -2282,8 +2272,6 @@ const WidgetContent = ({
                     isEditMode={isEditMode}
                     selectedId={selectedId}
                     onSelect={onSelect}
-                    onDelete={onDelete}
-                    onDuplicate={onDuplicate}
                     onResize={onResize}
                     onUpdateWidget={onUpdateWidget}
                     onContextMenu={onContextMenu}
@@ -2352,8 +2340,6 @@ const WidgetContent = ({
                 isEditMode={isEditMode}
                 selectedId={selectedId}
                 onSelect={onSelect}
-                onDelete={onDelete}
-                onDuplicate={onDuplicate}
                 onResize={onResize}
                 onUpdateWidget={onUpdateWidget}
                 onContextMenu={onContextMenu}
@@ -3581,8 +3567,6 @@ interface CanvasRendererProps {
   widget: PageWidget;
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
   onAddInside: (parentId: string, type: WidgetType) => void;
   onResize?: (id: string, changes: Partial<WidgetStyle>) => void;
   onUpdateWidget?: (id: string, changes: Partial<PageWidget>) => void;
@@ -3600,8 +3584,6 @@ const CanvasRenderer = ({
   widget,
   selectedId,
   onSelect,
-  onDelete,
-  onDuplicate,
   onResize = () => undefined,
   onUpdateWidget,
   device,
@@ -3852,6 +3834,8 @@ const CanvasRenderer = ({
     <>
       <div
         ref={setNodeRef}
+        {...attributes}
+        {...listeners}
         data-widget-id={widget.id}
         style={itemStyle}
         className={`canvas-element ${
@@ -3884,42 +3868,6 @@ const CanvasRenderer = ({
         {resizing && (
           <div className="resize-size-label">
             {resizing.width} × {resizing.height}
-          </div>
-        )}
-
-        {!isPreview && (
-          <div className="canvas-element-label">
-            <span
-              className="element-drag-handle"
-              {...attributes}
-              {...listeners}
-              onClick={(e) => e.stopPropagation()}
-              style={{ touchAction: "none" }}
-            >
-              ⠿ {widget.label}
-            </span>
-            <div className="element-actions">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDuplicate(widget.id);
-                }}
-                title="Duplicate"
-              >
-                ⧉
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(widget.id);
-                }}
-                title="Delete"
-              >
-                ×
-              </button>
-            </div>
           </div>
         )}
 
@@ -3968,8 +3916,6 @@ const CanvasRenderer = ({
                           index={childIndex}
                           selectedId={selectedId}
                           onSelect={onSelect}
-                          onDelete={onDelete}
-                          onDuplicate={onDuplicate}
                           onAddInside={() => undefined}
                           onResize={onResize}
                           onUpdateWidget={onUpdateWidget}
@@ -4016,8 +3962,6 @@ const CanvasRenderer = ({
                         index={childIndex}
                         selectedId={selectedId}
                         onSelect={onSelect}
-                        onDelete={onDelete}
-                        onDuplicate={onDuplicate}
                         onAddInside={() => undefined}
                         onResize={onResize}
                         onUpdateWidget={onUpdateWidget}
@@ -4047,8 +3991,6 @@ const CanvasRenderer = ({
               onOpenMedia={handleOpenMedia}
               selectedId={selectedId}
               onSelect={onSelect}
-              onDelete={onDelete}
-              onDuplicate={onDuplicate}
               onResize={onResize}
               onUpdateWidget={onUpdateWidget}
               onContextMenu={onContextMenu}

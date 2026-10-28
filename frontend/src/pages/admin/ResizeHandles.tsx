@@ -72,6 +72,7 @@ const ResizeHandles = ({ onResize, onResizeEnd }: ResizeHandlesProps) => {
         <div
           key={dir}
           className={`resize-handle resize-handle-${dir}`}
+          onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={handleMouseDown(dir)}
         />
       ))}

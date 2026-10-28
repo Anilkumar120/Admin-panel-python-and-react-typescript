@@ -28,6 +28,9 @@ const AdminLayout = () => {
 
   const location = useLocation();
   const navigate = useNavigate();
+  const isBuilderRoute =
+    location.pathname === "/admin/appearance/page-builder" ||
+    location.pathname === "/admin/appearance/header-footer/edit";
 
   const [postTypes, setPostTypes] = useState<PostType[]>([]);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -100,7 +103,9 @@ const AdminLayout = () => {
     : "U";
 
   return (
-    <div className="admin-layout">
+    <div
+      className={`admin-layout${isBuilderRoute ? " builder-fullscreen" : ""}`}
+    >
       <aside className="sidebar">
         <div className="sidebar-logo">
           <h2>Admin Panel</h2>
