@@ -5106,8 +5106,8 @@ const SettingsPanel = ({
                   <label className="setting-field">
                     <span>
                       {buttonStyleTab === "hover"
-                        ? "Hover Color"
-                        : "Color"}
+                        ? "Background Hover Color"
+                        : "Background Color"}
                     </span>
                     <HexColorInput
                       value={
@@ -5216,6 +5216,32 @@ const SettingsPanel = ({
                     <option value="double">Double</option>
                   </select>
                 </label>
+                <EdgeValuesEditor
+                  label="Border Width (px)"
+                  values={buttonBorderWidthEdges.map((edge) => ({
+                    ...edge,
+                    value:
+                      currentStyle[edge.key] ??
+                      currentStyle[
+                        edge.key.replace("buttonBorder", "border") as EdgeValueKey
+                      ] ??
+                      currentStyle.buttonBorderWidth ??
+                      currentStyle.borderWidth ??
+                      0,
+                  }))}
+                  linked={linkedBorderWidths}
+                  onToggleLinked={() =>
+                    setLinkedBorderWidths((value) => !value)
+                  }
+                  onChange={(key, value) =>
+                    updateEdgeValue(
+                      key,
+                      value,
+                      buttonBorderWidthEdges.map((edge) => edge.key),
+                      linkedBorderWidths,
+                    )
+                  }
+                />
                 <EdgeValuesEditor
                   label="Border Radius (px)"
                   values={buttonBorderRadiusEdges.map((edge) => ({
