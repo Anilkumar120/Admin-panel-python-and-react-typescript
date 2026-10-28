@@ -240,6 +240,12 @@ export interface ResponsiveStyle {
   borderWidth?: number;
   borderStyle?: BorderStyle;
   borderRadius?: number;
+  buttonBackgroundColor?: string;
+  buttonBackgroundType?: "classic" | "gradient";
+  buttonBackgroundGradientColor1?: string;
+  buttonBackgroundGradientColor2?: string;
+  buttonBackgroundGradientAngle?: number;
+  buttonHoverBackgroundColor?: string;
   buttonPadding?: BoxSpacing;
   buttonBorderColor?: string;
   buttonBorderWidth?: number;
@@ -351,6 +357,12 @@ export interface WidgetStyle {
   borderWidth?: number;
   borderStyle?: BorderStyle;
   borderRadius?: number;
+  buttonBackgroundColor?: string;
+  buttonBackgroundType?: "classic" | "gradient";
+  buttonBackgroundGradientColor1?: string;
+  buttonBackgroundGradientColor2?: string;
+  buttonBackgroundGradientAngle?: number;
+  buttonHoverBackgroundColor?: string;
   buttonPadding?: BoxSpacing;
   buttonBorderColor?: string;
   buttonBorderWidth?: number;

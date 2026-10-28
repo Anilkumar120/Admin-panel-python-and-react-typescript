@@ -2708,10 +2708,31 @@ const WidgetRenderer = ({
 
     case "button": {
       const btnTextAlign = (rs.textAlign || s.textAlign || "left") as any;
-      const hover = getHoverAndAnimation(s, widget.id);
+      const buttonHoverBackgroundColor =
+        rs.buttonHoverBackgroundColor ??
+        s.buttonHoverBackgroundColor ??
+        s.hoverBackgroundColor;
+      const hover = getHoverAndAnimation(
+        {
+          ...s,
+          hoverBackgroundColor: buttonHoverBackgroundColor,
+          ...(buttonHoverBackgroundColor
+            ? { hoverBackgroundGradient: "none" }
+            : {}),
+        },
+        widget.id,
+      );
       const buttonPadding =
         rs.buttonPadding || s.buttonPadding || rs.padding || s.padding;
       const buttonPaddingUnit = buttonPadding?.unit || "px";
+      const buttonBackgroundType =
+        rs.buttonBackgroundType ?? s.buttonBackgroundType ?? "classic";
+      const buttonBackgroundColor =
+        rs.buttonBackgroundColor ??
+        s.buttonBackgroundColor ??
+        rs.backgroundColor ??
+        s.backgroundColor ??
+        "#0c2f55";
       const buttonBorderRadius =
         rs.buttonBorderRadius ??
         s.buttonBorderRadius ??
@@ -2743,7 +2764,16 @@ const WidgetRenderer = ({
                 boxSizing: "border-box",
                 maxWidth: "100%",
                 textAlign: btnTextAlign,
-                backgroundColor: bgColor || "#0c2f55",
+                backgroundColor:
+                  buttonBackgroundType === "gradient"
+                    ? rs.buttonBackgroundGradientColor1 ??
+                      s.buttonBackgroundGradientColor1 ??
+                      "#0c2f55"
+                    : buttonBackgroundColor,
+                backgroundImage:
+                  buttonBackgroundType === "gradient"
+                    ? `linear-gradient(${rs.buttonBackgroundGradientAngle ?? s.buttonBackgroundGradientAngle ?? 135}deg, ${rs.buttonBackgroundGradientColor1 ?? s.buttonBackgroundGradientColor1 ?? "#0c2f55"}, ${rs.buttonBackgroundGradientColor2 ?? s.buttonBackgroundGradientColor2 ?? "#ffffff"})`
+                    : undefined,
                 color: rs.color || s.color || "#ffffff",
                 padding: buttonPadding
                   ? `${buttonPadding.top ?? 12}${buttonPaddingUnit} ${buttonPadding.right ?? 24}${buttonPaddingUnit} ${buttonPadding.bottom ?? 12}${buttonPaddingUnit} ${buttonPadding.left ?? 24}${buttonPaddingUnit}`

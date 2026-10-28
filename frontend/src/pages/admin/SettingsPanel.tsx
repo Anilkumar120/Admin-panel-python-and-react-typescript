@@ -559,6 +559,9 @@ const SettingsPanel = ({
   const [imageStyleTab, setImageStyleTab] = useState<"normal" | "hover">(
     "normal",
   );
+  const [buttonStyleTab, setButtonStyleTab] = useState<"normal" | "hover">(
+    "normal",
+  );
   const [overlayStyleTab, setOverlayStyleTab] = useState<"normal" | "hover">(
     "normal",
   );
@@ -702,6 +705,13 @@ const SettingsPanel = ({
   const updateStyle = (changes: Partial<WidgetStyle>) => {
     const nextChanges = { ...changes };
     if (widget.type === "button" && activeTab === "advanced") {
+      if ("backgroundColor" in changes) {
+        nextChanges.buttonBackgroundColor ??=
+          currentStyle.buttonBackgroundColor ??
+          currentStyle.backgroundColor ??
+          "#0c2f55";
+      }
+
       if ("padding" in changes && currentStyle.buttonPadding === undefined) {
         nextChanges.buttonPadding = currentStyle.padding;
       }
@@ -4950,6 +4960,303 @@ const SettingsPanel = ({
         {/* ============================================ */}
         {activeTab === "style" && (
           <>
+            {isButton ? (
+              <div className="settings-section">
+                <h4 className="section-title">Button</h4>
+                <label className="setting-field">
+                  <span>Position</span>
+                  <div className="button-group">
+                    {(["left", "center", "right", "justify"] as const).map(
+                      (alignment) => (
+                        <button
+                          key={alignment}
+                          type="button"
+                          className={
+                            (currentStyle.textAlign || "left") === alignment
+                              ? "active"
+                              : ""
+                          }
+                          onClick={() => updateStyle({ textAlign: alignment })}
+                          aria-label={`Align button ${alignment}`}
+                        >
+                          {alignment === "left"
+                            ? "⇤"
+                            : alignment === "center"
+                              ? "↔"
+                              : alignment === "right"
+                                ? "⇥"
+                                : "↔"}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                </label>
+
+                <details className="setting-field">
+                  <summary>Typography</summary>
+                  <div className="field-row">
+                    <label className="setting-field">
+                      <span>Font Family</span>
+                      <input
+                        type="text"
+                        value={currentStyle.fontFamily || ""}
+                        onChange={(event) =>
+                          updateStyle({ fontFamily: event.target.value })
+                        }
+                      />
+                    </label>
+                    <label className="setting-field">
+                      <span>Font Size (px)</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={currentStyle.fontSize ?? 16}
+                        onChange={(event) =>
+                          updateStyle({ fontSize: Number(event.target.value) })
+                        }
+                      />
+                    </label>
+                  </div>
+                  <label className="setting-field">
+                    <span>Font Weight</span>
+                    <select
+                      value={currentStyle.fontWeight ?? 600}
+                      onChange={(event) =>
+                        updateStyle({
+                          fontWeight: Number(event.target.value),
+                        })
+                      }
+                    >
+                      {[300, 400, 500, 600, 700, 800].map((weight) => (
+                        <option key={weight} value={weight}>
+                          {weight}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </details>
+
+                <details className="setting-field">
+                  <summary>Text Shadow</summary>
+                  <input
+                    type="text"
+                    value={currentStyle.textShadow || ""}
+                    placeholder="2px 2px 4px #000000"
+                    onChange={(event) =>
+                      updateStyle({ textShadow: event.target.value })
+                    }
+                  />
+                </details>
+
+                <div className="button-group" style={{ marginBottom: 12 }}>
+                  {(["normal", "hover"] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      className={buttonStyleTab === tab ? "active" : ""}
+                      onClick={() => setButtonStyleTab(tab)}
+                    >
+                      {tab === "normal" ? "Normal" : "Hover"}
+                    </button>
+                  ))}
+                </div>
+                <label className="setting-field">
+                  <span>Text Color</span>
+                  <HexColorInput
+                    value={
+                      buttonStyleTab === "hover"
+                        ? currentStyle.hoverColor || "#ffffff"
+                        : currentStyle.color || "#ffffff"
+                    }
+                    fallbackColor="#ffffff"
+                    onChange={(color) =>
+                      updateStyle(
+                        buttonStyleTab === "hover"
+                          ? { hoverColor: color }
+                          : { color },
+                      )
+                    }
+                  />
+                </label>
+                <label className="setting-field">
+                  <span>Background Type</span>
+                  <div className="button-group">
+                    {(["classic", "gradient"] as const).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        className={
+                          (currentStyle.buttonBackgroundType || "classic") ===
+                          type
+                            ? "active"
+                            : ""
+                        }
+                        onClick={() =>
+                          updateStyle({ buttonBackgroundType: type })
+                        }
+                      >
+                        {type === "classic" ? "Classic" : "Gradient"}
+                      </button>
+                    ))}
+                  </div>
+                </label>
+                {buttonStyleTab === "hover" ||
+                (currentStyle.buttonBackgroundType || "classic") ===
+                  "classic" ? (
+                  <label className="setting-field">
+                    <span>
+                      {buttonStyleTab === "hover"
+                        ? "Hover Color"
+                        : "Color"}
+                    </span>
+                    <HexColorInput
+                      value={
+                        buttonStyleTab === "hover"
+                          ? currentStyle.buttonHoverBackgroundColor ||
+                            currentStyle.hoverBackgroundColor ||
+                            "#0c2f55"
+                          : currentStyle.buttonBackgroundColor ||
+                            currentStyle.backgroundColor ||
+                            "#0c2f55"
+                      }
+                      fallbackColor="#0c2f55"
+                      onChange={(color) =>
+                        updateStyle(
+                          buttonStyleTab === "hover"
+                            ? { buttonHoverBackgroundColor: color }
+                            : { buttonBackgroundColor: color },
+                        )
+                      }
+                    />
+                  </label>
+                ) : (
+                  <>
+                    <div className="field-row">
+                      <label className="setting-field">
+                        <span>Gradient Color 1</span>
+                        <HexColorInput
+                          value={
+                            currentStyle.buttonBackgroundGradientColor1 ||
+                            "#0c2f55"
+                          }
+                          fallbackColor="#0c2f55"
+                          onChange={(color) =>
+                            updateStyle({
+                              buttonBackgroundGradientColor1: color,
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="setting-field">
+                        <span>Gradient Color 2</span>
+                        <HexColorInput
+                          value={
+                            currentStyle.buttonBackgroundGradientColor2 ||
+                            "#ffffff"
+                          }
+                          fallbackColor="#ffffff"
+                          onChange={(color) =>
+                            updateStyle({
+                              buttonBackgroundGradientColor2: color,
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <label className="setting-field">
+                      <span>Gradient Angle</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="360"
+                        value={currentStyle.buttonBackgroundGradientAngle ?? 135}
+                        onChange={(event) =>
+                          updateStyle({
+                            buttonBackgroundGradientAngle: Number(
+                              event.target.value,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                  </>
+                )}
+
+                <details className="setting-field">
+                  <summary>Box Shadow</summary>
+                  <input
+                    type="text"
+                    value={currentStyle.boxShadow || ""}
+                    placeholder="0 4px 12px rgba(0, 0, 0, 0.15)"
+                    onChange={(event) =>
+                      updateStyle({ boxShadow: event.target.value })
+                    }
+                  />
+                </details>
+                <label className="setting-field">
+                  <span>Border Type</span>
+                  <select
+                    value={currentStyle.buttonBorderStyle || "default"}
+                    onChange={(event) =>
+                      updateStyle(
+                        event.target.value === "default"
+                          ? { buttonBorderStyle: undefined }
+                          : {
+                              buttonBorderStyle:
+                                event.target.value as WidgetStyle["borderStyle"],
+                            },
+                      )
+                    }
+                  >
+                    <option value="default">Default</option>
+                    <option value="none">None</option>
+                    <option value="solid">Solid</option>
+                    <option value="dashed">Dashed</option>
+                    <option value="dotted">Dotted</option>
+                    <option value="double">Double</option>
+                  </select>
+                </label>
+                <EdgeValuesEditor
+                  label="Border Radius (px)"
+                  values={buttonBorderRadiusEdges.map((edge) => ({
+                    ...edge,
+                    value:
+                      currentStyle[edge.key] ??
+                      currentStyle[
+                        edge.key.replace("buttonBorder", "border") as EdgeValueKey
+                      ] ??
+                      currentStyle.buttonBorderRadius ??
+                      currentStyle.borderRadius ??
+                      0,
+                  }))}
+                  linked={linkedBorderRadii}
+                  onToggleLinked={() =>
+                    setLinkedBorderRadii((value) => !value)
+                  }
+                  onChange={(key, value) =>
+                    updateEdgeValue(
+                      key,
+                      value,
+                      buttonBorderRadiusEdges.map((edge) => edge.key),
+                      linkedBorderRadii,
+                    )
+                  }
+                />
+                <SpacingEditor
+                  label="Padding"
+                  spacing={
+                    currentStyle.buttonPadding || currentStyle.padding
+                  }
+                  linked={linkedPadding}
+                  onToggleLinked={() =>
+                    setLinkedPadding((value) => !value)
+                  }
+                  onChangeSide={updateButtonPadding}
+                  onChangeUnit={updateButtonPaddingUnit}
+                />
+              </div>
+            ) : (
+              <>
             {isImageWidget && (
               <div className="settings-section">
                 <h4 className="section-title">Image</h4>
@@ -6884,6 +7191,8 @@ const SettingsPanel = ({
                   )}
                 </div>
               </>
+            )}
+            </>
             )}
           </>
         )}

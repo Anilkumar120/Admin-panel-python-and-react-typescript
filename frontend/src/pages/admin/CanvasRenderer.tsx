@@ -996,9 +996,31 @@ const WidgetContent = ({
       }[btnTextAlign];
 
       const isJustified = btnTextAlign === "justify";
-      const hover = getHoverAndAnimation(s, widget.id);
+      const buttonHoverBackgroundColor =
+        rs.buttonHoverBackgroundColor ??
+        s.buttonHoverBackgroundColor ??
+        s.hoverBackgroundColor;
+      const hover = getHoverAndAnimation(
+        {
+          ...s,
+          hoverBackgroundColor: buttonHoverBackgroundColor,
+          hoverColor: s.hoverColor,
+          ...(buttonHoverBackgroundColor
+            ? { hoverBackgroundGradient: "none" }
+            : {}),
+        },
+        widget.id,
+      );
       const buttonPadding = rs.buttonPadding || s.buttonPadding || rs.padding || s.padding;
       const buttonPaddingUnit = buttonPadding?.unit || "px";
+      const buttonBackgroundType =
+        rs.buttonBackgroundType ?? s.buttonBackgroundType ?? "classic";
+      const buttonBackgroundColor =
+        rs.buttonBackgroundColor ??
+        s.buttonBackgroundColor ??
+        rs.backgroundColor ??
+        s.backgroundColor ??
+        "#0c2f55";
 
       const buttonStyle: React.CSSProperties = {
         display: "inline-flex",
@@ -1025,7 +1047,16 @@ const WidgetContent = ({
         textTransform: s.textTransform as React.CSSProperties["textTransform"],
         textDecoration: s.textDecoration || "none",
         textShadow: s.textShadow || undefined,
-        backgroundColor: bgColor || "#0c2f55",
+        backgroundColor:
+          buttonBackgroundType === "gradient"
+            ? rs.buttonBackgroundGradientColor1 ??
+              s.buttonBackgroundGradientColor1 ??
+              "#0c2f55"
+            : buttonBackgroundColor,
+        backgroundImage:
+          buttonBackgroundType === "gradient"
+            ? `linear-gradient(${rs.buttonBackgroundGradientAngle ?? s.buttonBackgroundGradientAngle ?? 135}deg, ${rs.buttonBackgroundGradientColor1 ?? s.buttonBackgroundGradientColor1 ?? "#0c2f55"}, ${rs.buttonBackgroundGradientColor2 ?? s.buttonBackgroundGradientColor2 ?? "#ffffff"})`
+            : undefined,
         borderRadius:
           (rs.buttonBorderRadius ?? s.buttonBorderRadius ?? rs.borderRadius ?? s.borderRadius)
             ? `${rs.buttonBorderRadius ?? s.buttonBorderRadius ?? rs.borderRadius ?? s.borderRadius}px`
