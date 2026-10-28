@@ -65,14 +65,57 @@ const renderStyles = (
     return `${m.top || 0}px ${m.right || 0}px ${m.bottom || 0}px ${m.left || 0}px`;
   };
 
+  const overlayGradient =
+    rs.overlayGradient ||
+    style.overlayGradient ||
+    ((rs.overlayColor ?? style.overlayColor)
+      ? `linear-gradient(color-mix(in srgb, ${rs.overlayColor ?? style.overlayColor} ${(Number(rs.overlayOpacity ?? style.overlayOpacity ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${rs.overlayColor ?? style.overlayColor} ${(Number(rs.overlayOpacity ?? style.overlayOpacity ?? 0.35) * 100)}%, transparent))`
+      : "");
+  const overlayImage = rs.overlayImage ?? style.overlayImage;
+  const backgroundImage = rs.backgroundImage ?? style.backgroundImage;
+  const backgroundGradient = rs.backgroundGradient || style.backgroundGradient;
+  const baseBackgroundLayer = backgroundGradient
+    ? backgroundGradient
+    : backgroundImage
+      ? `url("${getImageUrl(backgroundImage)}")`
+      : "";
+  const backgroundSizeFor = (value?: string) =>
+    value && value !== "default" ? value : "cover";
+  const backgroundPositionFor = (value?: string) =>
+    value && value !== "default" ? value : "center";
+  const backgroundLayers = [
+    ...(overlayGradient ? ["cover"] : []),
+    ...(overlayImage
+      ? [backgroundSizeFor(rs.overlayImageSize ?? style.overlayImageSize)]
+      : []),
+    ...(baseBackgroundLayer
+      ? [backgroundSizeFor(rs.backgroundSize ?? style.backgroundSize)]
+      : []),
+  ];
+  const backgroundPositions = [
+    ...(overlayGradient ? ["center"] : []),
+    ...(overlayImage
+      ? [
+          backgroundPositionFor(
+            rs.overlayImagePosition ?? style.overlayImagePosition,
+          ),
+        ]
+      : []),
+    ...(baseBackgroundLayer
+      ? [backgroundPositionFor(rs.backgroundPosition ?? style.backgroundPosition)]
+      : []),
+  ];
+
   return {
     backgroundColor: rs.backgroundColor || style.backgroundColor || undefined,
-    backgroundImage: style.backgroundImage
-      ? `url(${getImageUrl(style.backgroundImage)})`
-      : style.backgroundGradient || undefined,
-    backgroundSize: style.backgroundSize || "cover",
-    backgroundPosition: style.backgroundPosition || "center",
-    backgroundRepeat: style.backgroundRepeat || "no-repeat",
+    backgroundImage: [
+      overlayGradient,
+      overlayImage ? `url("${getImageUrl(overlayImage)}")` : "",
+      baseBackgroundLayer,
+    ].filter(Boolean).join(", ") || undefined,
+    backgroundSize: backgroundLayers.join(", ") || "cover",
+    backgroundPosition: backgroundPositions.join(", ") || "center",
+    backgroundRepeat: rs.backgroundRepeat || style.backgroundRepeat || "no-repeat",
     color: rs.color || style.color || undefined,
     fontSize: rs.fontSize
       ? `${rs.fontSize}px`

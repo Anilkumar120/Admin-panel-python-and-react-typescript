@@ -229,6 +229,10 @@ export interface ResponsiveStyle {
   hoverColor?: string;
   hamburgerColor?: string;
   closeIconColor?: string;
+  backgroundSize?: string;
+  backgroundPosition?: string;
+  overlayImageSize?: string;
+  overlayImagePosition?: string;
   mobileMenuBgColor?: string;
   mobileMenuPadding?: BoxSpacing;
   mobileMenuMargin?: BoxSpacing;
@@ -310,6 +314,8 @@ export interface WidgetStyle {
   hoverOverlayImage?: string;
   backgroundSize?: string;
   backgroundPosition?: string;
+  overlayImageSize?: string;
+  overlayImagePosition?: string;
   iconSize?: number;
   iconColor?: string;
   backgroundRepeat?: string;

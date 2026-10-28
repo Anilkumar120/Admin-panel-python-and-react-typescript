@@ -251,6 +251,46 @@ export const renderWidgetStyles = (
     return undefined;
   };
 
+  const resolvedOverlayColor = rs.overlayColor ?? style.overlayColor;
+  const overlayGradient =
+    rs.overlayGradient ||
+    style.overlayGradient ||
+    (resolvedOverlayColor
+      ? `linear-gradient(color-mix(in srgb, ${resolvedOverlayColor} ${(Number(rs.overlayOpacity ?? style.overlayOpacity ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${resolvedOverlayColor} ${(Number(rs.overlayOpacity ?? style.overlayOpacity ?? 0.35) * 100)}%, transparent))`
+      : "");
+  const overlayImage = rs.overlayImage ?? style.overlayImage;
+  const resolvedBackgroundImage = rs.backgroundImage ?? style.backgroundImage;
+  const backgroundGradient = rs.backgroundGradient || style.backgroundGradient;
+  const baseBackgroundLayer =
+    backgroundGradient ||
+    (resolvedBackgroundImage ? `url("${resolvedBackgroundImage}")` : "");
+  const backgroundSizeFor = (value?: string) =>
+    value && value !== "default" ? value : "cover";
+  const backgroundPositionFor = (value?: string) =>
+    value && value !== "default" ? value : "center";
+  const backgroundSizeLayers = [
+    ...(overlayGradient ? ["cover"] : []),
+    ...(overlayImage
+      ? [backgroundSizeFor(rs.overlayImageSize ?? style.overlayImageSize)]
+      : []),
+    ...(baseBackgroundLayer
+      ? [backgroundSizeFor(rs.backgroundSize ?? style.backgroundSize)]
+      : []),
+  ];
+  const backgroundPositionLayers = [
+    ...(overlayGradient ? ["center"] : []),
+    ...(overlayImage
+      ? [
+          backgroundPositionFor(
+            rs.overlayImagePosition ?? style.overlayImagePosition,
+          ),
+        ]
+      : []),
+    ...(baseBackgroundLayer
+      ? [backgroundPositionFor(rs.backgroundPosition ?? style.backgroundPosition)]
+      : []),
+  ];
+
   const responsiveStyle: React.CSSProperties = {
     display: resolvedDisplay as any,
     flexDirection: effectiveDirection as any,
@@ -278,14 +318,12 @@ export const renderWidgetStyles = (
   return {
     backgroundColor: rs.backgroundColor || style.backgroundColor || undefined,
     backgroundImage: (rs.backgroundType ?? style.backgroundType) === "slideshow" ? undefined : ([
-      rs.overlayGradient || style.overlayGradient || ((rs.overlayColor ?? style.overlayColor)
-        ? `linear-gradient(color-mix(in srgb, ${rs.overlayColor ?? style.overlayColor} ${(Number(rs.overlayOpacity ?? style.overlayOpacity ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${rs.overlayColor ?? style.overlayColor} ${(Number(rs.overlayOpacity ?? style.overlayOpacity ?? 0.35) * 100)}%, transparent))`
-        : ""),
-      (rs.overlayImage ?? style.overlayImage) ? `url("${rs.overlayImage ?? style.overlayImage}")` : "",
-      rs.backgroundGradient || style.backgroundGradient || ((rs.backgroundImage ?? style.backgroundImage) ? `url(${rs.backgroundImage ?? style.backgroundImage})` : ""),
+      overlayGradient,
+      overlayImage ? `url("${overlayImage}")` : "",
+      baseBackgroundLayer,
     ].filter(Boolean).join(", ") || undefined),
-    backgroundSize: style.backgroundSize || "cover",
-    backgroundPosition: style.backgroundPosition || "center",
+    backgroundSize: backgroundSizeLayers.join(", ") || "cover",
+    backgroundPosition: backgroundPositionLayers.join(", ") || "center",
     backgroundRepeat: style.backgroundRepeat || "no-repeat",
     color: rs.color || style.color || undefined,
     fontSize: rs.fontSize ? `${rs.fontSize}px` : style.fontSize ? `${style.fontSize}px` : undefined,
@@ -2564,10 +2602,18 @@ const WidgetContent = ({
             borderRadius: 12,
             width: "100%",
             alignSelf: "stretch",
+            textAlign: textAlign as React.CSSProperties["textAlign"],
           }}
         >
           {formFields.map((field) => (
-            <label key={field.id} style={{ display: "block", marginBottom: 12 }}>
+            <label
+              key={field.id}
+              style={{
+                display: "block",
+                marginBottom: 12,
+                textAlign: textAlign as React.CSSProperties["textAlign"],
+              }}
+            >
               <span>{field.title}</span>
               {field.fieldType === "textarea" ? (
                 <textarea placeholder={field.placeholder || ""} rows={3} readOnly style={{ width: "100%", padding: 12, marginTop: 4, border: "1px solid #ddd", borderRadius: 6, boxSizing: "border-box" }} />

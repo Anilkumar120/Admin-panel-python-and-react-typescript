@@ -126,6 +126,87 @@ const NumberInput = ({
   );
 };
 
+const BackgroundImageControls = ({
+  label,
+  position,
+  size,
+  onChangePosition,
+  onChangeSize,
+}: {
+  label: string;
+  position?: string;
+  size?: string;
+  onChangePosition: (position: string) => void;
+  onChangeSize: (size: string) => void;
+}) => {
+  const positions = [
+    "default",
+    "top center",
+    "bottom center",
+    "left center",
+    "right center",
+    "center center",
+  ];
+  const normalizePosition = (value?: string) => {
+    if (!value || value === "default") return "default";
+    if (value === "center") return "center center";
+    if (value === "top") return "top center";
+    if (value === "bottom") return "bottom center";
+    if (value === "left") return "left center";
+    if (value === "right") return "right center";
+    return positions.includes(value) ? value : "custom";
+  };
+  const positionValue = normalizePosition(position);
+
+  return (
+    <>
+      <div className="setting-field">
+        <span>{label} Position</span>
+        <select
+          value={positionValue}
+          onChange={(event) =>
+            onChangePosition(
+              event.target.value === "custom" ? "50% 50%" : event.target.value,
+            )
+          }
+        >
+          <option value="default">Default</option>
+          <option value="top center">Top Center</option>
+          <option value="bottom center">Bottom Center</option>
+          <option value="left center">Left Center</option>
+          <option value="right center">Right Center</option>
+          <option value="center center">Center Center</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+      {positionValue === "custom" && (
+        <label className="setting-field">
+          <span>{label} Custom Position</span>
+          <input
+            type="text"
+            value={position || "50% 50%"}
+            placeholder="50% 50%"
+            onChange={(event) => onChangePosition(event.target.value)}
+          />
+        </label>
+      )}
+      <label className="setting-field">
+        <span>{label} Size</span>
+        <select
+          value={size || "default"}
+          onChange={(event) => onChangeSize(event.target.value)}
+        >
+          <option value="default">Default</option>
+          <option value="cover">Cover</option>
+          <option value="contain">Contain</option>
+          <option value="auto">Auto</option>
+          <option value="100% auto">Full Width</option>
+        </select>
+      </label>
+    </>
+  );
+};
+
 type SpacingSide = "top" | "right" | "bottom" | "left";
 type SpacingProperty = "padding" | "margin";
 
@@ -5588,7 +5669,7 @@ const SettingsPanel = ({
                               }
                             />
                           </label>
-                          <label className="setting-field">
+                          <div className="setting-field">
                             <span>Background Image URL</span>
                             <input
                               type="text"
@@ -5616,7 +5697,20 @@ const SettingsPanel = ({
                                 Remove Background Image
                               </button>
                             )}
-                          </label>
+                            {currentStyle.backgroundImage && (
+                              <BackgroundImageControls
+                                label="Background Image"
+                                position={currentStyle.backgroundPosition}
+                                size={currentStyle.backgroundSize}
+                                onChangePosition={(backgroundPosition) =>
+                                  updateStyle({ backgroundPosition })
+                                }
+                                onChangeSize={(backgroundSize) =>
+                                  updateStyle({ backgroundSize })
+                                }
+                              />
+                            )}
+                          </div>
                         </>
                       )}
                       {(currentStyle as any).backgroundType === "video" && (
@@ -5772,6 +5866,20 @@ const SettingsPanel = ({
                         Remove Overlay Image
                       </button>
                     )}
+                    {overlayStyleTab === "normal" &&
+                      currentStyle.overlayImage && (
+                        <BackgroundImageControls
+                          label="Overlay Image"
+                          position={currentStyle.overlayImagePosition}
+                          size={currentStyle.overlayImageSize}
+                          onChangePosition={(overlayImagePosition) =>
+                            updateStyle({ overlayImagePosition })
+                          }
+                          onChangeSize={(overlayImageSize) =>
+                            updateStyle({ overlayImageSize })
+                          }
+                        />
+                      )}
                   </div>
                   <label className="setting-field">
                     <span>Overlay Gradient CSS</span>
@@ -6656,10 +6764,10 @@ const SettingsPanel = ({
 
                       <div className="setting-field">
                         <span>Background Image</span>
-                        {s.backgroundImage && (
+                        {currentStyle.backgroundImage && (
                           <div className="background-image-preview">
                             <img
-                              src={s.backgroundImage}
+                              src={currentStyle.backgroundImage}
                               alt="Background preview"
                             />
                             <button
@@ -6680,43 +6788,62 @@ const SettingsPanel = ({
                         >
                           Choose from Media Library or Upload
                         </button>
-                        {s.backgroundImage && (
-                          <div className="field-row">
-                            <label className="setting-field">
-                              <span>Size</span>
-                              <select
-                                value={s.backgroundSize || "cover"}
-                                onChange={(event) =>
-                                  updateStyle({
-                                    backgroundSize: event.target.value,
-                                  })
-                                }
-                              >
-                                <option value="cover">Cover</option>
-                                <option value="contain">Contain</option>
-                                <option value="auto">Auto</option>
-                              </select>
-                            </label>
-                            <label className="setting-field">
-                              <span>Position</span>
-                              <select
-                                value={s.backgroundPosition || "center"}
-                                onChange={(event) =>
-                                  updateStyle({
-                                    backgroundPosition: event.target.value,
-                                  })
-                                }
-                              >
-                                <option value="center">Center</option>
-                                <option value="top">Top</option>
-                                <option value="bottom">Bottom</option>
-                                <option value="left">Left</option>
-                                <option value="right">Right</option>
-                              </select>
-                            </label>
-                          </div>
+                        {currentStyle.backgroundImage && (
+                          <BackgroundImageControls
+                            label="Background Image"
+                            position={currentStyle.backgroundPosition}
+                            size={currentStyle.backgroundSize}
+                            onChangePosition={(backgroundPosition) =>
+                              updateStyle({ backgroundPosition })
+                            }
+                            onChangeSize={(backgroundSize) =>
+                              updateStyle({ backgroundSize })
+                            }
+                          />
                         )}
                       </div>
+                      {!isContainer && (
+                        <div className="setting-field">
+                          <span>Background Overlay Image</span>
+                          {currentStyle.overlayImage && (
+                            <div className="background-image-preview">
+                              <img
+                                src={currentStyle.overlayImage}
+                                alt="Background overlay preview"
+                              />
+                              <button
+                                type="button"
+                                className="remove-media-btn"
+                                onClick={() =>
+                                  updateStyle({ overlayImage: "" })
+                                }
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            className="change-media-btn"
+                            onClick={() => openMediaPicker("overlay-image")}
+                          >
+                            Choose from Media Library or Upload
+                          </button>
+                          {currentStyle.overlayImage && (
+                            <BackgroundImageControls
+                              label="Overlay Image"
+                              position={currentStyle.overlayImagePosition}
+                              size={currentStyle.overlayImageSize}
+                              onChangePosition={(overlayImagePosition) =>
+                                updateStyle({ overlayImagePosition })
+                              }
+                              onChangeSize={(overlayImageSize) =>
+                                updateStyle({ overlayImageSize })
+                              }
+                            />
+                          )}
+                        </div>
+                      )}
 
                       {globals.colors && globals.colors.length > 0 && (
                         <div className="global-colors-row">
@@ -7483,7 +7610,7 @@ const SettingsPanel = ({
                   }
                 />
               </label>
-              <label className="setting-field">
+              <div className="setting-field">
                 <span>Background Image URL</span>
                 <input
                   type="url"
@@ -7509,7 +7636,7 @@ const SettingsPanel = ({
                     Remove Background Image
                   </button>
                 )}
-              </label>
+              </div>
               <label className="setting-field">
                 <span>Overlay Image URL</span>
                 <input

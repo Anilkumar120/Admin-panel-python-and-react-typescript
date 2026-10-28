@@ -714,11 +714,13 @@ const PublicFormWidget = ({
   pageId,
   pageTitle,
   background,
+  textAlign,
 }: {
   widget: PageWidget;
   pageId: string;
   pageTitle: string;
   background?: string;
+  textAlign?: React.CSSProperties["textAlign"];
 }) => {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
@@ -769,6 +771,7 @@ const PublicFormWidget = ({
         padding: 24,
         background: background || "#f8f9fc",
         borderRadius: 12,
+        textAlign,
       }}
     >
       {(widget.settings?.formFields || [
@@ -776,7 +779,10 @@ const PublicFormWidget = ({
         { id: "email", title: "Email", fieldType: "email", required: true },
         { id: "message", title: "Message", fieldType: "textarea", required: true },
       ]).map((field) => (
-        <label key={field.id} style={{ display: "block", marginBottom: 12 }}>
+        <label
+          key={field.id}
+          style={{ display: "block", marginBottom: 12, textAlign }}
+        >
           <span>{field.title}</span>
           {field.fieldType === "textarea" ? (
             <textarea
@@ -1428,13 +1434,64 @@ const renderStyles = (
   const backgroundImage = value("backgroundImage");
   const overlayImage = value("overlayImage");
   const backgroundGradient = value("backgroundGradient");
-  const resolvedBackgroundImage = [
-    value("overlayGradient") || (value("overlayColor")
+  const overlayGradient =
+    value("overlayGradient") ||
+    (value("overlayColor")
       ? `linear-gradient(color-mix(in srgb, ${value("overlayColor")} ${(Number(value("overlayOpacity") ?? 0.35) * 100)}%, transparent), color-mix(in srgb, ${value("overlayColor")} ${(Number(value("overlayOpacity") ?? 0.35) * 100)}%, transparent))`
-      : ""),
+      : "");
+  const baseBackgroundLayer =
+    backgroundGradient ||
+    (backgroundImage
+      ? `url("${getImageUrl(String(backgroundImage))}")`
+      : value("backgroundType") === "slideshow" &&
+          Array.isArray(value("backgroundSlideshow")) &&
+          value("backgroundSlideshow")[0]
+        ? `url("${value("backgroundSlideshow")[0]}")`
+        : "");
+  const hasOverlayImage = Boolean(overlayImage);
+  const hasOverlayGradient = Boolean(overlayGradient);
+  const hasBaseBackgroundLayer = Boolean(baseBackgroundLayer);
+  const resolvedBackgroundImage = [
+    overlayGradient,
     overlayImage ? `url("${getImageUrl(String(overlayImage))}")` : "",
-    backgroundGradient || (backgroundImage ? `url("${getImageUrl(String(backgroundImage))}")` : value("backgroundType") === "slideshow" && Array.isArray(value("backgroundSlideshow")) && value("backgroundSlideshow")[0] ? `url("${value("backgroundSlideshow")[0]}")` : ""),
+    baseBackgroundLayer,
   ].filter(Boolean).join(", ") || undefined;
+  const backgroundSizeLayers = [
+    ...(hasOverlayGradient ? ["cover"] : []),
+    ...(hasOverlayImage
+      ? [
+          value("overlayImageSize") && value("overlayImageSize") !== "default"
+            ? value("overlayImageSize")
+            : "cover",
+        ]
+      : []),
+    ...(hasBaseBackgroundLayer
+      ? [
+          value("backgroundSize") && value("backgroundSize") !== "default"
+            ? value("backgroundSize")
+            : "cover",
+        ]
+      : []),
+  ];
+  const backgroundPositionLayers = [
+    ...(hasOverlayGradient ? ["center"] : []),
+    ...(hasOverlayImage
+      ? [
+          !value("overlayImagePosition") ||
+          value("overlayImagePosition") === "default"
+            ? "center"
+            : value("overlayImagePosition"),
+        ]
+      : []),
+    ...(hasBaseBackgroundLayer
+      ? [
+          !value("backgroundPosition") ||
+          value("backgroundPosition") === "default"
+            ? "center"
+            : value("backgroundPosition"),
+        ]
+      : []),
+  ];
 
   const gridColumns = responsive.gridColumns ?? base.gridColumns;
   const gridRows = responsive.gridRows ?? base.gridRows;
@@ -1493,8 +1550,8 @@ const renderStyles = (
 
     backgroundColor: value("backgroundColor"),
     backgroundImage: value("backgroundType") === "slideshow" ? undefined : resolvedBackgroundImage,
-    backgroundSize: value("backgroundSize") ?? "cover",
-    backgroundPosition: value("backgroundPosition") ?? "center",
+    backgroundSize: backgroundSizeLayers.join(", ") || "cover",
+    backgroundPosition: backgroundPositionLayers.join(", ") || "center",
     backgroundRepeat: value("backgroundRepeat") ?? "no-repeat",
     backgroundAttachment: value("backgroundAttachment") as
       React.CSSProperties["backgroundAttachment"],
@@ -3830,6 +3887,7 @@ const WidgetRenderer = ({
           pageId={pageId}
           pageTitle={pageTitle}
           background={bgColor}
+          textAlign={textAlign as React.CSSProperties["textAlign"]}
         />
       );
 
