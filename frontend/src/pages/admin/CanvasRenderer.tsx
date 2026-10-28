@@ -391,9 +391,61 @@ const CanvasMenuWidget = ({
   const menuJustify = (rs.justifyContent ||
     s.justifyContent ||
     "center") as any;
-  const hamburgerColor = s.hamburgerColor || color || "#0c2f55";
-  const mobileMenuBg = s.mobileMenuBgColor || "#ffffff";
-  const breakpoint = s.mobileBreakpoint === "tablet" ? 1024 : 768;
+  const hamburgerColor =
+    rs.hamburgerColor || s.hamburgerColor || color || "#0c2f55";
+  const closeIconColor = rs.closeIconColor || s.closeIconColor || hamburgerColor;
+  const mobileMenuBg = rs.mobileMenuBgColor || s.mobileMenuBgColor || "#ffffff";
+  const mobileMenuHoverColor =
+    rs.mobileMenuHoverColor ||
+    s.mobileMenuHoverColor ||
+    rs.hoverColor ||
+    s.hoverColor ||
+    "#f0b429";
+  const mobileMenuHoverBgColor =
+    rs.mobileMenuHoverBgColor ||
+    s.mobileMenuHoverBgColor ||
+    "rgba(12, 47, 85, 0.08)";
+  const menuIcon = rs.mobileMenuIcon || s.mobileMenuIcon || "hamburger";
+  const closeIcon = rs.mobileCloseIcon || s.mobileCloseIcon || "x";
+  const menuIconImage = rs.mobileMenuIconImage || s.mobileMenuIconImage;
+  const closeIconImage = rs.mobileCloseIconImage || s.mobileCloseIconImage;
+  const menuIconName =
+    menuIcon === "hamburger"
+      ? "☰"
+      : menuIcon === "dots"
+        ? "⋮"
+        : menuIcon === "plus"
+          ? "+"
+          : menuIcon;
+  const closeIconName =
+    closeIcon === "x"
+      ? "×"
+      : closeIcon === "plus"
+        ? "+"
+        : closeIcon === "minus"
+          ? "−"
+          : closeIcon;
+  const closeIconPosition =
+    rs.mobileCloseIconPosition || s.mobileCloseIconPosition || "top-right";
+  const closeIconOffsetX =
+    rs.mobileCloseIconOffsetX ?? s.mobileCloseIconOffsetX ?? 16;
+  const closeIconOffsetY =
+    rs.mobileCloseIconOffsetY ?? s.mobileCloseIconOffsetY ?? 16;
+  const closeIconPositionCss = `${
+    closeIconPosition.startsWith("top")
+      ? `top: ${closeIconOffsetY}px;`
+      : `bottom: ${closeIconOffsetY}px;`
+  } ${
+    closeIconPosition.endsWith("left")
+      ? `left: ${closeIconOffsetX}px;`
+      : `right: ${closeIconOffsetX}px;`
+  }`;
+  const menuPadding = rs.mobileMenuPadding || s.mobileMenuPadding;
+  const menuPaddingUnit = menuPadding?.unit || "px";
+  const mobileMenuPadding = `${menuPadding?.top ?? 80}${menuPaddingUnit} ${menuPadding?.right ?? 24}${menuPaddingUnit} ${menuPadding?.bottom ?? 24}${menuPaddingUnit} ${menuPadding?.left ?? 24}${menuPaddingUnit}`;
+  const menuMargin = rs.mobileMenuMargin || s.mobileMenuMargin;
+  const menuMarginUnit = menuMargin?.unit || "px";
+  const mobileMenuMargin = `${menuMargin?.top ?? 0}${menuMarginUnit} ${menuMargin?.right ?? 0}${menuMarginUnit} ${menuMargin?.bottom ?? 0}${menuMarginUnit} ${menuMargin?.left ?? 0}${menuMarginUnit}`;
   const uid = `canvas-nav-${widget.id.replace(/[^a-z0-9]/gi, "")}`;
 
   const isMobileView = device === "mobile";
@@ -403,16 +455,90 @@ const CanvasMenuWidget = ({
   const menuFontSize = fontSize || s.fontSize || 14;
   const menuFontWeight = s.fontWeight || 500;
   const hoverColor = s.hoverColor || "#f0b429";
+  const mobileMenuCss = forceShowHamburger
+    ? `
+      .${uid}-list {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 300px;
+        max-width: 85vw;
+        height: 100vh;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: flex-start;
+        gap: 0;
+        padding: ${mobileMenuPadding};
+        margin: ${mobileMenuMargin};
+        box-sizing: border-box;
+        background: ${mobileMenuBg};
+        box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+        z-index: 1000;
+        transform: translateX(100%);
+        transition: transform 0.3s ease-out;
+        overflow-y: auto;
+        flex-wrap: nowrap;
+      }
+      .${uid}-list.open { transform: translateX(0); }
+      .${uid}-list.open > .${uid}-close-item { display: block; }
+      .${uid}-list.open > .${uid}-close-item > .${uid}-close { display: flex; }
+      .${uid}-close-item { position: static; width: auto; display: none; }
+      .${uid}-close {
+        display: none;
+        position: absolute;
+        ${closeIconPositionCss}
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        color: ${closeIconColor};
+        font-size: 28px;
+        line-height: 1;
+        cursor: pointer;
+        z-index: 1;
+      }
+      .${uid}-close img, .${uid}-close svg { width: 24px; height: 24px; }
+      .${uid}-list > li { width: 100%; }
+      .${uid}-list > li > a {
+        width: 100%;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(0,0,0,0.08);
+        font-size: 15px;
+        justify-content: space-between;
+      }
+      .${uid}-list > li > a:hover {
+        color: ${mobileMenuHoverColor};
+        background: ${mobileMenuHoverBgColor};
+      }
+      .${uid}-submenu {
+        position: static;
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        box-shadow: none;
+        padding: 0 0 0 16px;
+        display: none;
+        background: transparent;
+      }
+      .${uid}-submenu.open { display: block; }
+      .${uid}-submenu a { padding: 10px 0; font-size: 14px; }
+      .${uid}-submenu a:hover {
+        color: ${mobileMenuHoverColor};
+        background: ${mobileMenuHoverBgColor};
+      }
+    `
+    : "";
 
   const cssText = `
     .${uid}-wrapper { width: 100%; position: relative; display: flex; align-items: center; justify-content: space-between; }
     .${uid}-toggle { display: ${forceShowHamburger ? "flex" : "none"}; align-items: center; justify-content: center; width: 44px; height: 44px; background: transparent; border: none; cursor: pointer; padding: 0; margin-left: auto; }
-    .${uid}-toggle .${uid}-bar { position: absolute; left: 0; display: block; width: 24px; height: 2px; background: ${hamburgerColor}; transition: transform 0.2s ease, opacity 0.2s ease; }
-    .${uid}-toggle .${uid}-bar-top { transform: translateY(-8px); }
-    .${uid}-toggle .${uid}-bar-bottom { transform: translateY(8px); }
-    .${uid}-toggle.open .${uid}-bar-middle { opacity: 0; }
-    .${uid}-toggle.open .${uid}-bar-top { transform: rotate(45deg); }
-    .${uid}-toggle.open .${uid}-bar-bottom { transform: rotate(-45deg); }
+    .${uid}-toggle-icon { color: ${hamburgerColor}; font-size: 26px; line-height: 1; }
+    .${uid}-toggle-icon img, .${uid}-toggle-icon svg { width: 26px; height: 26px; }
+    .${uid}-close-item, .${uid}-close { display: none; }
     .${uid}-list { display: flex; gap: ${menuGap}px; justify-content: ${menuJustify}; align-items: center; flex-wrap: wrap; margin: 0; padding: 12px 0; list-style: none; width: 100%; }
     .${uid}-list > li { position: relative; }
     .${uid}-list > li > a {
@@ -460,49 +586,12 @@ const CanvasMenuWidget = ({
       white-space: nowrap;
     }
     .${uid}-submenu a:hover {
-      background: rgba(12, 47, 85, 0.08);
-      color: ${hoverColor};
+      background: ${mobileMenuHoverBgColor};
+      color: ${mobileMenuHoverColor};
     }
     .${uid}-submenu .${uid}-submenu { top: 0; left: 100%; }
 
-    @media (max-width: ${breakpoint}px) {
-      .${uid}-list {
-        display: ${menuOpen ? "flex" : "none"};
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0;
-        padding: 12px;
-        background: ${mobileMenuBg};
-        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-        border-radius: 8px;
-        z-index: 1000;
-        width: 100%;
-      }
-      .${uid}-list > li { width: 100%; }
-      .${uid}-list > li > a {
-        width: 100%;
-        padding: 12px 0;
-        border-bottom: 1px solid rgba(0,0,0,0.08);
-        font-size: 15px;
-        justify-content: space-between;
-      }
-      .${uid}-submenu {
-        position: static;
-        opacity: 1;
-        visibility: visible;
-        transform: none;
-        box-shadow: none;
-        padding: 0 0 0 16px;
-        display: none;
-        background: transparent;
-      }
-      .${uid}-submenu.open { display: block; }
-      .${uid}-submenu a { padding: 10px 0; font-size: 14px; }
-    }
+    ${mobileMenuCss}
   `;
 
   const renderMenuItem = (item: any, depth: number = 0): React.ReactNode => {
@@ -563,7 +652,7 @@ const CanvasMenuWidget = ({
             setMenuOpen((v) => !v);
           }}
           style={{
-            display: forceShowHamburger ? "flex" : "none",
+            display: forceShowHamburger && !menuOpen ? "flex" : "none",
             alignItems: "center",
             justifyContent: "center",
             width: 44,
@@ -576,18 +665,39 @@ const CanvasMenuWidget = ({
             position: "relative",
           }}
         >
-          <span aria-hidden="true" className={`${uid}-bar ${uid}-bar-top`} />
-          <span aria-hidden="true" className={`${uid}-bar ${uid}-bar-middle`} />
-          <span aria-hidden="true" className={`${uid}-bar ${uid}-bar-bottom`} />
+          <span aria-hidden="true" className={`${uid}-toggle-icon`}>
+            {menuIconImage ? (
+              <img src={menuIconImage} alt="" />
+            ) : (
+              <BuilderIcon name={menuIconName} />
+            )}
+          </span>
         </button>
 
         <ul
           id={`${uid}-list`}
-          className={`${uid}-list`}
-          style={{
-            display: menuOpen || !forceShowHamburger ? "flex" : "none",
-          }}
+          className={`${uid}-list${menuOpen ? " open" : ""}`}
+          style={{ display: "flex" }}
         >
+          {forceShowHamburger && (
+            <li className={`${uid}-close-item`}>
+              <button
+                type="button"
+                className={`${uid}-close`}
+                aria-label="Close menu"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setMenuOpen(false);
+                }}
+              >
+                {closeIconImage ? (
+                  <img src={closeIconImage} alt="" />
+                ) : (
+                  <BuilderIcon name={closeIconName} />
+                )}
+              </button>
+            </li>
+          )}
           {items.map((item) => renderMenuItem(item, 0))}
         </ul>
       </div>

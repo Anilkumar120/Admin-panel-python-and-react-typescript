@@ -226,6 +226,25 @@ export interface ResponsiveStyle {
   gridRowGap?: number;
   textAlign?: TextAlignment;
   elementAlign?: string;
+  hoverColor?: string;
+  hamburgerColor?: string;
+  closeIconColor?: string;
+  mobileMenuBgColor?: string;
+  mobileMenuPadding?: BoxSpacing;
+  mobileMenuMargin?: BoxSpacing;
+  mobileMenuHoverColor?: string;
+  mobileMenuHoverBgColor?: string;
+  mobileMenuIcon?: string;
+  mobileMenuIconImage?: string;
+  mobileCloseIcon?: string;
+  mobileCloseIconImage?: string;
+  mobileCloseIconPosition?:
+    | "top-left"
+    | "top-right"
+    | "bottom-left"
+    | "bottom-right";
+  mobileCloseIconOffsetX?: number;
+  mobileCloseIconOffsetY?: number;
   backgroundColor?: string;
   backgroundType?: "classic" | "gradient" | "video" | "slideshow";
   backgroundGradient?: string;
@@ -433,7 +452,23 @@ export interface WidgetStyle {
   mobileBreakpoint?: "tablet" | "mobile";
   mobileMenuStyle?: "dropdown" | "slide" | "fullscreen";
   mobileMenuBgColor?: string;
+  mobileMenuPadding?: BoxSpacing;
+  mobileMenuMargin?: BoxSpacing;
   hamburgerColor?: string;
+  closeIconColor?: string;
+  mobileMenuHoverColor?: string;
+  mobileMenuHoverBgColor?: string;
+  mobileMenuIcon?: string;
+  mobileMenuIconImage?: string;
+  mobileCloseIcon?: string;
+  mobileCloseIconImage?: string;
+  mobileCloseIconPosition?:
+    | "top-left"
+    | "top-right"
+    | "bottom-left"
+    | "bottom-right";
+  mobileCloseIconOffsetX?: number;
+  mobileCloseIconOffsetY?: number;
   menuAnimation?: "slide" | "fade" | "scale";
   activeColor?: string;
   hoverUnderline?: boolean;

@@ -2014,8 +2014,54 @@ const MenuRenderer = ({
   const menuJustify = (rs.justifyContent ||
     s.justifyContent ||
     "center") as any;
-  const hamburgerColor = s.hamburgerColor || color || "#0c2f55";
-  const mobileMenuBg = s.mobileMenuBgColor || "#ffffff";
+  const hamburgerColor =
+    rs.hamburgerColor || s.hamburgerColor || color || "#0c2f55";
+  const closeIconColor = rs.closeIconColor || s.closeIconColor || hamburgerColor;
+  const mobileMenuBg = rs.mobileMenuBgColor || s.mobileMenuBgColor || "#ffffff";
+  const mobileMenuHoverColor =
+    rs.mobileMenuHoverColor ||
+    s.mobileMenuHoverColor ||
+    rs.hoverColor ||
+    s.hoverColor ||
+    "#f0b429";
+  const mobileMenuHoverBgColor =
+    rs.mobileMenuHoverBgColor ||
+    s.mobileMenuHoverBgColor ||
+    "rgba(12, 47, 85, 0.08)";
+  const menuIcon = rs.mobileMenuIcon || s.mobileMenuIcon || "hamburger";
+  const closeIcon = rs.mobileCloseIcon || s.mobileCloseIcon || "x";
+  const menuIconImage = rs.mobileMenuIconImage || s.mobileMenuIconImage;
+  const closeIconImage = rs.mobileCloseIconImage || s.mobileCloseIconImage;
+  const menuIconName =
+    menuIcon === "hamburger"
+      ? "☰"
+      : menuIcon === "dots"
+        ? "⋮"
+        : menuIcon === "plus"
+          ? "+"
+          : menuIcon;
+  const closeIconName =
+    closeIcon === "x"
+      ? "×"
+      : closeIcon === "plus"
+        ? "+"
+        : closeIcon === "minus"
+          ? "−"
+          : closeIcon;
+  const closeIconPosition = rs.mobileCloseIconPosition || s.mobileCloseIconPosition || "top-right";
+  const closeIconOffsetX = rs.mobileCloseIconOffsetX ?? s.mobileCloseIconOffsetX ?? 16;
+  const closeIconOffsetY = rs.mobileCloseIconOffsetY ?? s.mobileCloseIconOffsetY ?? 16;
+  const closeIconPositionCss = `${
+    closeIconPosition.startsWith("top") ? `top: ${closeIconOffsetY}px;` : `bottom: ${closeIconOffsetY}px;`
+  } ${
+    closeIconPosition.endsWith("left") ? `left: ${closeIconOffsetX}px;` : `right: ${closeIconOffsetX}px;`
+  }`;
+  const menuPadding = rs.mobileMenuPadding || s.mobileMenuPadding;
+  const menuPaddingUnit = menuPadding?.unit || "px";
+  const mobileMenuPadding = `${menuPadding?.top ?? 80}${menuPaddingUnit} ${menuPadding?.right ?? 24}${menuPaddingUnit} ${menuPadding?.bottom ?? 24}${menuPaddingUnit} ${menuPadding?.left ?? 24}${menuPaddingUnit}`;
+  const menuMargin = rs.mobileMenuMargin || s.mobileMenuMargin;
+  const menuMarginUnit = menuMargin?.unit || "px";
+  const mobileMenuMargin = `${menuMargin?.top ?? 0}${menuMarginUnit} ${menuMargin?.right ?? 0}${menuMarginUnit} ${menuMargin?.bottom ?? 0}${menuMarginUnit} ${menuMargin?.left ?? 0}${menuMarginUnit}`;
   const breakpoint = s.mobileBreakpoint === "tablet" ? 1024 : 768;
   const uid = `nav-${widget.id.replace(/[^a-z0-9]/gi, "")}`;
   const menuFontSize = s.fontSize || fontSize || 15;
@@ -2024,8 +2070,30 @@ const MenuRenderer = ({
 
   const cssText = `
     .${uid}-wrapper { display: flex; align-items: center; justify-content: space-between; width: 100%; position: relative; }
-    .${uid}-toggle { display: none; }
-    .${uid}-list { display: flex; gap: ${menuGap}px; justify-content: ${menuJustify}; align-items: center; flex-wrap: wrap; margin: 0; padding: 0; list-style: none; }
+    .${uid}-toggle { display: none; color: ${hamburgerColor}; }
+    .${uid}-toggle span { font-size: 26px; line-height: 1; }
+    .${uid}-close {
+      display: none;
+      position: absolute;
+      ${closeIconPositionCss}
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: ${closeIconColor};
+      font-size: 28px;
+      line-height: 1;
+      cursor: pointer;
+      z-index: 1;
+    }
+    .${uid}-close-item { display: none; }
+    .${uid}-list.open > .${uid}-close-item > .${uid}-close { display: flex; }
+    .${uid}-close-item { position: static; width: auto; }
+    .${uid}-wrapper > .${uid}-list { display: flex; gap: ${menuGap}px; justify-content: ${menuJustify}; align-items: center; flex-wrap: wrap; margin: 0; padding: 0; list-style: none; }
     .${uid}-list > li { position: relative; }
     .${uid}-list > li > a {
       color: ${color || "#1a1a2e"};
@@ -2056,7 +2124,7 @@ const MenuRenderer = ({
       font-size: ${Math.max(menuFontSize - 1, 12)}px; font-weight: 400;
       white-space: nowrap; text-decoration: none; cursor: pointer;
     }
-    .${uid}-submenu a:hover { background: rgba(12, 47, 85, 0.08); color: ${hoverColor}; }
+    .${uid}-submenu a:hover { background: ${mobileMenuHoverBgColor}; color: ${mobileMenuHoverColor}; }
     .${uid}-submenu .${uid}-submenu { top: 0; left: 100%; transform: translateX(8px); }
     .${uid}-submenu li:hover > .${uid}-submenu { opacity: 1; visibility: visible; transform: translateX(0); }
     .${uid}-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; }
@@ -2065,31 +2133,33 @@ const MenuRenderer = ({
         display: flex; align-items: center; justify-content: center;
         width: 44px; height: 44px; background: transparent; border: none;
         cursor: pointer; padding: 0; z-index: 1001; margin-left: auto;
+        color: ${hamburgerColor};
       }
-      .${uid}-toggle span, .${uid}-toggle span::before, .${uid}-toggle span::after {
-        display: block; width: 24px; height: 2px; background: ${hamburgerColor};
-        transition: all 0.3s; position: relative;
-      }
-      .${uid}-toggle span::before, .${uid}-toggle span::after { content: ""; position: absolute; left: 0; }
-      .${uid}-toggle span::before { top: -8px; }
-      .${uid}-toggle span::after { top: 8px; }
-      .${uid}-toggle.open span { background: transparent; }
-      .${uid}-toggle.open span::before { top: 0; transform: rotate(45deg); }
-      .${uid}-toggle.open span::after { top: 0; transform: rotate(-45deg); }
-      .${uid}-list {
+      .${uid}-toggle.open { display: none; }
+      .${uid}-toggle img, .${uid}-toggle svg { width: 26px; height: 26px; }
+      .${uid}-wrapper > .${uid}-list {
         display: flex; position: fixed; top: 0; right: 0; width: 300px;
         max-width: 85vw; height: 100vh; flex-direction: column;
         justify-content: flex-start; align-items: flex-start; gap: 0;
-        padding: 80px 24px 24px; background: ${mobileMenuBg};
+        padding: ${mobileMenuPadding}; margin: ${mobileMenuMargin};
+        box-sizing: border-box; background: ${mobileMenuBg};
         box-shadow: -4px 0 24px rgba(0,0,0,0.15); z-index: 1000;
         transform: translateX(100%); transition: transform 0.3s ease-out;
         overflow-y: auto; flex-wrap: nowrap;
       }
       .${uid}-list.open { transform: translateX(0); }
+      .${uid}-list.open > .${uid}-close-item { display: block; }
+      .${uid}-list.open > .${uid}-close-item > .${uid}-close { display: flex; }
+      .${uid}-close-item { position: static; width: auto; }
+      .${uid}-close img, .${uid}-close svg { width: 24px; height: 24px; }
       .${uid}-list > li { width: 100%; }
       .${uid}-list > li > a {
         width: 100%; padding: 14px 0; border-bottom: 1px solid rgba(0,0,0,0.08);
         font-size: 16px; display: flex; justify-content: space-between; white-space: normal;
+      }
+      .${uid}-list > li > a:hover {
+        color: ${mobileMenuHoverColor};
+        background: ${mobileMenuHoverBgColor};
       }
       .${uid}-submenu {
         position: static; opacity: 1; visibility: visible; transform: none;
@@ -2098,6 +2168,10 @@ const MenuRenderer = ({
       }
       .${uid}-submenu.open { display: block; }
       .${uid}-submenu a { color: ${color || "#1a1a2e"}; font-size: 14px; padding: 10px 0; }
+      .${uid}-submenu a:hover {
+        color: ${mobileMenuHoverColor};
+        background: ${mobileMenuHoverBgColor};
+      }
       .${uid}-backdrop.open { display: block; }
     }
   `;
@@ -2170,12 +2244,35 @@ const MenuRenderer = ({
             setMenuOpen((open) => !open);
           }}
         >
-          <span aria-hidden="true" />
+          <span aria-hidden="true">
+            {menuIconImage ? (
+              <img src={menuIconImage} alt="" />
+            ) : (
+              <BuilderIcon name={menuIconName} />
+            )}
+          </span>
         </button>
         <ul
           id={`${uid}-list`}
           className={`${uid}-list nav-menu-widget${menuOpen ? " open" : ""}`}
         >
+          <li className={`${uid}-close-item`}>
+            <button
+              type="button"
+              className={`${uid}-close`}
+              aria-label="Close menu"
+              onClick={(event) => {
+                event.stopPropagation();
+                setMenuOpen(false);
+              }}
+            >
+                {closeIconImage ? (
+                  <img src={closeIconImage} alt="" />
+                ) : (
+                  <BuilderIcon name={closeIconName} />
+                )}
+            </button>
+          </li>
           {items.map((item) => renderMenuItem(item, 0))}
         </ul>
         <div

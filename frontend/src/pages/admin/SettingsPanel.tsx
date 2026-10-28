@@ -541,6 +541,9 @@ const SettingsPanel = ({
   const [iconBoxPickerOpen, setIconBoxPickerOpen] = useState(false);
   const [iconListPickerOpen, setIconListPickerOpen] = useState(false);
   const [iconWidgetPickerOpen, setIconWidgetPickerOpen] = useState(false);
+  const [menuIconPickerTarget, setMenuIconPickerTarget] = useState<
+    "menu" | "close" | null
+  >(null);
   const [formFieldDragIndex, setFormFieldDragIndex] = useState<number | null>(null);
   const [iconListItemIndex, setIconListItemIndex] = useState<number | null>(
     null,
@@ -6977,7 +6980,7 @@ const SettingsPanel = ({
                           <span>Hamburger Icon Color</span>
                           <div className="color-input-group">
                             <HexColorInput
-                              value={s.hamburgerColor || "#0c2f55"}
+                              value={currentStyle.hamburgerColor || "#0c2f55"}
                               fallbackColor="#0c2f55"
                               onChange={(color) =>
                                 updateStyle({ hamburgerColor: color })
@@ -6985,7 +6988,7 @@ const SettingsPanel = ({
                             />
                             <input
                               type="text"
-                              value={s.hamburgerColor || "#0c2f55"}
+                              value={currentStyle.hamburgerColor || "#0c2f55"}
                               onChange={(e) =>
                                 updateStyle({ hamburgerColor: e.target.value })
                               }
@@ -6997,7 +7000,7 @@ const SettingsPanel = ({
                           <span>Mobile Menu Background</span>
                           <div className="color-input-group">
                             <HexColorInput
-                              value={s.mobileMenuBgColor || "#ffffff"}
+                              value={currentStyle.mobileMenuBgColor || "#ffffff"}
                               fallbackColor="#ffffff"
                               onChange={(color) =>
                                 updateStyle({
@@ -7007,7 +7010,7 @@ const SettingsPanel = ({
                             />
                             <input
                               type="text"
-                              value={s.mobileMenuBgColor || "#ffffff"}
+                              value={currentStyle.mobileMenuBgColor || "#ffffff"}
                               onChange={(e) =>
                                 updateStyle({
                                   mobileMenuBgColor: e.target.value,
@@ -7016,6 +7019,246 @@ const SettingsPanel = ({
                             />
                           </div>
                         </label>
+                        <SpacingEditor
+                          label="Mobile Menu Padding"
+                          spacing={
+                            currentStyle.mobileMenuPadding || {
+                              top: 80,
+                              right: 24,
+                              bottom: 24,
+                              left: 24,
+                              unit: "px",
+                            }
+                          }
+                          linked={linkedPadding}
+                          onToggleLinked={() =>
+                            setLinkedPadding((value) => !value)
+                          }
+                          onChangeSide={(side, value) => {
+                            const spacing = currentStyle.mobileMenuPadding || {
+                              top: 80,
+                              right: 24,
+                              bottom: 24,
+                              left: 24,
+                              unit: "px",
+                            };
+                            const next = linkedPadding
+                              ? {
+                                  ...spacing,
+                                  top: value,
+                                  right: value,
+                                  bottom: value,
+                                  left: value,
+                                }
+                              : { ...spacing, [side]: value };
+                            updateStyle({ mobileMenuPadding: next });
+                          }}
+                          onChangeUnit={(unit) =>
+                            updateStyle({
+                              mobileMenuPadding: {
+                                ...(currentStyle.mobileMenuPadding || {
+                                  top: 80,
+                                  right: 24,
+                                  bottom: 24,
+                                  left: 24,
+                                }),
+                                unit,
+                              },
+                            })
+                          }
+                        />
+                        <SpacingEditor
+                          label="Mobile Menu Margin"
+                          spacing={
+                            currentStyle.mobileMenuMargin || {
+                              top: 0,
+                              right: 0,
+                              bottom: 0,
+                              left: 0,
+                              unit: "px",
+                            }
+                          }
+                          linked={linkedMargin}
+                          onToggleLinked={() =>
+                            setLinkedMargin((value) => !value)
+                          }
+                          onChangeSide={(side, value) => {
+                            const spacing = currentStyle.mobileMenuMargin || {
+                              top: 0,
+                              right: 0,
+                              bottom: 0,
+                              left: 0,
+                              unit: "px",
+                            };
+                            const next = linkedMargin
+                              ? {
+                                  ...spacing,
+                                  top: value,
+                                  right: value,
+                                  bottom: value,
+                                  left: value,
+                                }
+                              : { ...spacing, [side]: value };
+                            updateStyle({ mobileMenuMargin: next });
+                          }}
+                          onChangeUnit={(unit) =>
+                            updateStyle({
+                              mobileMenuMargin: {
+                                ...(currentStyle.mobileMenuMargin || {
+                                  top: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  left: 0,
+                                }),
+                                unit,
+                              },
+                            })
+                          }
+                        />
+                        <label className="setting-field">
+                          <span>Close Icon Color</span>
+                          <HexColorInput
+                            value={currentStyle.closeIconColor || "#0c2f55"}
+                            fallbackColor="#0c2f55"
+                            onChange={(color) =>
+                              updateStyle({ closeIconColor: color })
+                            }
+                          />
+                        </label>
+                        <label className="setting-field">
+                          <span>Mobile Menu Item Hover Color</span>
+                          <HexColorInput
+                            value={
+                              currentStyle.mobileMenuHoverColor ||
+                              currentStyle.hoverColor ||
+                              "#f0b429"
+                            }
+                            fallbackColor="#f0b429"
+                            onChange={(color) =>
+                              updateStyle({ mobileMenuHoverColor: color })
+                            }
+                          />
+                        </label>
+                        <label className="setting-field">
+                          <span>Mobile Menu Item Hover Background</span>
+                          <HexColorInput
+                            value={
+                              currentStyle.mobileMenuHoverBgColor ||
+                              "#eef2f7"
+                            }
+                            fallbackColor="#eef2f7"
+                            onChange={(color) =>
+                              updateStyle({ mobileMenuHoverBgColor: color })
+                            }
+                          />
+                        </label>
+                        <div className="field-row">
+                          {(
+                            [
+                              {
+                                target: "menu",
+                                title: "Menu Icon",
+                                icon: currentStyle.mobileMenuIcon || "hamburger",
+                                image: currentStyle.mobileMenuIconImage,
+                              },
+                              {
+                                target: "close",
+                                title: "Close Icon",
+                                icon: currentStyle.mobileCloseIcon || "x",
+                                image: currentStyle.mobileCloseIconImage,
+                              },
+                            ] as const
+                          ).map(({ target, title, icon, image }) => (
+                            <div className="setting-field" key={target}>
+                              <span>{title}</span>
+                              <div className="icon-list-selection-preview">
+                                {image ? (
+                                  <img
+                                    src={image}
+                                    alt=""
+                                    className="icon-list-image-preview"
+                                  />
+                                ) : (
+                                  <BuilderIcon
+                                    name={
+                                      icon === "hamburger"
+                                        ? "☰"
+                                        : icon === "dots"
+                                          ? "⋮"
+                                          : icon === "x"
+                                            ? "×"
+                                            : icon
+                                    }
+                                  />
+                                )}
+                                <span>
+                                  {image ? "Custom image" : icon}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                className="change-media-btn"
+                                onClick={() =>
+                                  setMenuIconPickerTarget(target)
+                                }
+                              >
+                                Choose Icon or Upload SVG / PNG
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <label className="setting-field">
+                          <span>Close Icon Position</span>
+                          <select
+                            value={
+                              currentStyle.mobileCloseIconPosition || "top-right"
+                            }
+                            onChange={(event) =>
+                              updateStyle({
+                                mobileCloseIconPosition: event.target.value as
+                                  | "top-left"
+                                  | "top-right"
+                                  | "bottom-left"
+                                  | "bottom-right",
+                              })
+                            }
+                          >
+                            <option value="top-left">Top left</option>
+                            <option value="top-right">Top right</option>
+                            <option value="bottom-left">Bottom left</option>
+                            <option value="bottom-right">Bottom right</option>
+                          </select>
+                        </label>
+                        <div className="field-row">
+                          <label className="setting-field">
+                            <span>Horizontal Offset (px)</span>
+                            <input
+                              type="number"
+                              value={currentStyle.mobileCloseIconOffsetX ?? 16}
+                              onChange={(event) =>
+                                updateStyle({
+                                  mobileCloseIconOffsetX: Number(
+                                    event.target.value,
+                                  ),
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="setting-field">
+                            <span>Vertical Offset (px)</span>
+                            <input
+                              type="number"
+                              value={currentStyle.mobileCloseIconOffsetY ?? 16}
+                              onChange={(event) =>
+                                updateStyle({
+                                  mobileCloseIconOffsetY: Number(
+                                    event.target.value,
+                                  ),
+                                })
+                              }
+                            />
+                          </label>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -8231,28 +8474,52 @@ const SettingsPanel = ({
         fileType={mediaPickerTarget === "video" ? "video" : "image"}
       />
       <IconPickerPopup
-        isOpen={iconListPickerOpen || iconBoxPickerOpen || iconWidgetPickerOpen}
+        isOpen={
+          iconListPickerOpen ||
+          iconBoxPickerOpen ||
+          iconWidgetPickerOpen ||
+          menuIconPickerTarget !== null
+        }
         currentIcon={
-          iconListPickerOpen
-            ? iconListItemIndex === null
-              ? undefined
-              : widget.items?.[iconListItemIndex]?.icon
-            : widget.type === "icon"
-              ? widget.settings?.customIcon || widget.content
-              : widget.content
+          menuIconPickerTarget === "menu"
+            ? currentStyle.mobileMenuIcon || "hamburger"
+            : menuIconPickerTarget === "close"
+              ? currentStyle.mobileCloseIcon || "x"
+              : iconListPickerOpen
+                ? iconListItemIndex === null
+                  ? undefined
+                  : widget.items?.[iconListItemIndex]?.icon
+                : widget.type === "icon"
+                  ? widget.settings?.customIcon || widget.content
+                  : widget.content
         }
         currentImage={
-          iconListPickerOpen && iconListItemIndex !== null
-            ? widget.items?.[iconListItemIndex]?.image
-            : widget.url
+          menuIconPickerTarget === "menu"
+            ? currentStyle.mobileMenuIconImage
+            : menuIconPickerTarget === "close"
+              ? currentStyle.mobileCloseIconImage
+              : iconListPickerOpen && iconListItemIndex !== null
+                ? widget.items?.[iconListItemIndex]?.image
+                : widget.url
         }
         onClose={() => {
           setIconListPickerOpen(false);
           setIconBoxPickerOpen(false);
           setIconWidgetPickerOpen(false);
+          setMenuIconPickerTarget(null);
         }}
         onSelectIcon={(icon) => {
-          if (iconListPickerOpen) {
+          if (menuIconPickerTarget === "menu") {
+            updateStyle({
+              mobileMenuIcon: icon,
+              mobileMenuIconImage: "",
+            });
+          } else if (menuIconPickerTarget === "close") {
+            updateStyle({
+              mobileCloseIcon: icon,
+              mobileCloseIconImage: "",
+            });
+          } else if (iconListPickerOpen) {
             if (iconListItemIndex === null) return;
             const items = [...(widget.items || [])];
             const item = items[iconListItemIndex];
@@ -8275,7 +8542,11 @@ const SettingsPanel = ({
           }
         }}
         onSelectImage={(image) => {
-          if (iconListPickerOpen) {
+          if (menuIconPickerTarget === "menu") {
+            updateStyle({ mobileMenuIconImage: image });
+          } else if (menuIconPickerTarget === "close") {
+            updateStyle({ mobileCloseIconImage: image });
+          } else if (iconListPickerOpen) {
             if (iconListItemIndex === null) return;
             const items = [...(widget.items || [])];
             const item = items[iconListItemIndex];
@@ -8289,7 +8560,17 @@ const SettingsPanel = ({
           }
         }}
         onClear={() => {
-          if (iconListPickerOpen) {
+          if (menuIconPickerTarget === "menu") {
+            updateStyle({
+              mobileMenuIcon: "hamburger",
+              mobileMenuIconImage: "",
+            });
+          } else if (menuIconPickerTarget === "close") {
+            updateStyle({
+              mobileCloseIcon: "x",
+              mobileCloseIconImage: "",
+            });
+          } else if (iconListPickerOpen) {
             if (iconListItemIndex === null) return;
             const items = [...(widget.items || [])];
             const item = items[iconListItemIndex];
