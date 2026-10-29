@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from "react";
 
+import { Eye, EyeOff } from "lucide-react";
+
 import { useNavigate } from "react-router-dom";
 
 import { createUser } from "../../api/users";
@@ -12,6 +14,8 @@ const CreateUser = () => {
   const [email, setEmail] = useState("");
 
   const [password, setPassword] = useState("");
+
+  const [showPassword, setShowPassword] = useState(false);
 
   const [role, setRole] = useState("subscriber");
 
@@ -77,13 +81,26 @@ const CreateUser = () => {
             <div className="form-group">
               <label>Password</label>
 
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Enter password"
-                required
-              />
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Enter password"
+                  autoComplete="new-password"
+                  style={{ width: "100%", paddingRight: "44px" }}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  title={showPassword ? "Hide password" : "Show password"}
+                  style={{ position: "absolute", right: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "6px", border: 0, background: "transparent", cursor: "pointer" }}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <div className="form-group">

@@ -54,6 +54,10 @@ def get_users(
                 "email",
                 ""
             ),
+            "first_name": user.get("first_name", ""),
+            "last_name": user.get("last_name", ""),
+            "profile_image": user.get("profile_image", ""),
+            "media_id": user.get("media_id", ""),
             "role": user.get(
                 "role",
                 "subscriber"

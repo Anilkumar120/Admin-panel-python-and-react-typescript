@@ -1,3 +1,4 @@
+import { Eye, EyeOff } from "lucide-react";
 
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -17,6 +18,8 @@ const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -161,16 +164,20 @@ const Register = () => {
           <div>
             <label htmlFor="register-password">Password</label>
 
-            <input
-              id="register-password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Enter password"
-              autoComplete="new-password"
-              minLength={6}
-              required
-            />
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+              <input
+                id="register-password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Enter password"
+                autoComplete="new-password"
+                minLength={6}
+                required
+                style={{ paddingRight: 48, width: "100%" }}
+              />
+              <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"} title={showPassword ? "Hide password" : "Show password"} style={{ position: "absolute", right: 8, border: 0, background: "transparent", cursor: "pointer", padding: 6, fontSize: 18, lineHeight: 1 }}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+            </div>
           </div>
 
           <div>
@@ -178,18 +185,20 @@ const Register = () => {
               Confirm Password
             </label>
 
-            <input
-              id="register-confirm-password"
-              type="password"
-              value={confirmPassword}
-              onChange={(event) =>
-                setConfirmPassword(event.target.value)
-              }
-              placeholder="Confirm password"
-              autoComplete="new-password"
-              minLength={6}
-              required
-            />
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+              <input
+                id="register-confirm-password"
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="Confirm password"
+                autoComplete="new-password"
+                minLength={6}
+                required
+                style={{ paddingRight: 48, width: "100%" }}
+              />
+              <button type="button" onClick={() => setShowConfirmPassword((visible) => !visible)} aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"} title={showConfirmPassword ? "Hide password" : "Show password"} style={{ position: "absolute", right: 8, border: 0, background: "transparent", cursor: "pointer", padding: 6, fontSize: 18, lineHeight: 1 }}>{showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+            </div>
           </div>
 
           {error && (

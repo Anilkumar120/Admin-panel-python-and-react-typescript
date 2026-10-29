@@ -122,7 +122,7 @@ def login_user(
         )
 
     access_token = create_access_token({
-        "sub": email
+        "sub": str(user["_id"])
     })
 
     refresh_token, refresh_token_hash, refresh_token_expiry = create_refresh_token()
@@ -165,7 +165,7 @@ def refresh_access_token(
         )
 
     access_token = create_access_token({
-        "sub": user.get("email", "")
+        "sub": str(user["_id"])
     })
 
     return {

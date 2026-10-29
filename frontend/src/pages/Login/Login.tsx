@@ -1,3 +1,4 @@
+import { Eye, EyeOff } from "lucide-react";
 import {
     useState,
     type FormEvent
@@ -28,6 +29,7 @@ const Login = () => {
     const [email, setEmail] = useState("");
 
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
 
     const [error, setError] = useState("");
 
@@ -131,17 +133,24 @@ const Login = () => {
                             Password
                         </label>
 
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(event) =>
-                                setPassword(
-                                    event.target.value
-                                )
-                            }
-                            placeholder="Enter password"
-                            required
-                        />
+                        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                            <input
+                                type={showPassword ? "text" : "password"}
+                                value={password}
+                                onChange={(event) => setPassword(event.target.value)}
+                                placeholder="Enter password"
+                                autoComplete="current-password"
+                                required
+                                style={{ paddingRight: 48, width: "100%" }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword((visible) => !visible)}
+                                aria-label={showPassword ? "Hide password" : "Show password"}
+                                title={showPassword ? "Hide password" : "Show password"}
+                                style={{ position: "absolute", right: 8, border: 0, background: "transparent", cursor: "pointer", padding: 6, fontSize: 18, lineHeight: 1 }}
+                            >{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+                        </div>
 
                     </div>
 

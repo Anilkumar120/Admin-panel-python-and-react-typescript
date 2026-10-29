@@ -9,6 +9,7 @@ from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
+from bson import ObjectId
 from backend.database.connection import users_collection
 load_dotenv()
 
@@ -209,12 +210,16 @@ def get_current_user(
 
         raise credentials_exception
 
-    user = users_collection.find_one({
-        "email": user_id
-    })
+    # New tokens use the stable MongoDB user ID so changing an email address
+    # never invalidates the active session. Continue accepting legacy email-based tokens.
+    if ObjectId.is_valid(str(user_id)):
+        user = users_collection.find_one({"_id": ObjectId(str(user_id))})
+    else:
+        user = users_collection.find_one({"email": user_id})
+        if user is None:
+            user = users_collection.find_one({"previous_emails": user_id})
 
     if user is None:
-
         raise credentials_exception
 
     if user.get(

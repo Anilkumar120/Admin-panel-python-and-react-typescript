@@ -7,6 +7,10 @@ import hmac
 import json
 import logging
 import smtplib
+import html
+import os
+from urllib.parse import urlencode
+from urllib.parse import urljoin
 from email.message import EmailMessage
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -42,6 +46,11 @@ class RazorpayVerification(BaseModel):
     razorpay_order_id: str
     razorpay_payment_id: str
     razorpay_signature: str
+
+
+class RefundPayload(BaseModel):
+    amount: float | None = Field(default=None, gt=0)
+    reason: str = Field(default="Customer refund", max_length=250)
 
 
 class CustomerDetailsUpdate(BaseModel):
@@ -105,48 +114,112 @@ def _razorpay_request(path: str, key_id: str, key_secret: str, payload: dict):
         raise HTTPException(status_code=502, detail="Razorpay is temporarily unavailable") from error
 
 
-def _send_order_notifications(order: dict):
-    try:
-        settings = settings_collection.find_one({"type": "payments"}) or {}
-        if not settings.get("smtp_host") or not settings.get("smtp_from_email"):
-            return
-        customer_email = order.get("email", "")
-        admin_email = settings.get("admin_notification_email", "")
-        recipients = list(dict.fromkeys(email for email in [customer_email, admin_email] if email))
-        if not recipients:
-            return
+def _send_order_notifications(order: dict, event: str = "order_received"):
+    """Send order status email and optional Twilio SMS/WhatsApp notifications.
 
-        message = EmailMessage()
-        message["Subject"] = f"Order {order.get('order_number', '')} received"
-        message["From"] = settings["smtp_from_email"]
-        message["To"] = customer_email or admin_email
-        if admin_email and admin_email != customer_email:
-            message["Bcc"] = admin_email
-        message.set_content(
-            f"Order {order.get('order_number', '')} has been received.\n"
-            f"Customer: {order.get('customer_name', '')}\n"
-            f"Email: {order.get('email', '')}\n"
-            f"Phone: {order.get('phone', '')}\n"
-            f"Address: {order.get('address', '')}\n"
-            f"Total: INR {order.get('total', 0):.2f}\n"
-            f"Payment: {order.get('payment_method', '')} ({order.get('payment_status', '')})"
-        )
-        with smtplib.SMTP(settings["smtp_host"], int(settings.get("smtp_port", 587)), timeout=15) as smtp:
-            smtp.starttls()
-            username = settings.get("smtp_username", "")
-            encrypted_password = settings.get("smtp_password_encrypted")
-            if username and encrypted_password:
-                smtp.login(username, decrypt_secret(encrypted_password))
-            smtp.send_message(message)
-    except (
-        OSError,
-        smtplib.SMTPException,
-        RuntimeError,
-        ValueError,
-        TypeError,
-        PyMongoError,
-    ):
+    Payment credentials are never returned to the frontend. Notifications are best-effort:
+    provider outages do not roll back a valid order/payment update.
+    """
+    settings = settings_collection.find_one({"type": "payments"}) or {}
+    order_number = str(order.get("order_number", ""))
+    status_labels = {
+        "order_received": "Order received",
+        "payment_success": "Payment successful",
+        "payment_failed": "Payment failed",
+        "order_cancelled": "Order cancelled",
+        "order_refunded": "Order marked refunded",
+    }
+    subject = f"{status_labels.get(event, 'Order update')}: {order_number}"
+    items = order.get("items", [])
+    lines = "\n".join(
+        f"- {item.get('name', 'Product')} x {item.get('quantity', 1)} — INR {float(item.get('subtotal', 0) or 0):.2f}"
+        for item in items
+    ) or "No item details available"
+    plain = (
+        f"{status_labels.get(event, 'Order update')}\n\n"
+        f"Order: {order_number}\nCustomer: {order.get('customer_name', '')}\n"
+        f"Email: {order.get('email', '')}\nPhone: {order.get('phone', '')}\n"
+        f"Address: {order.get('address', '')}\n\nItems:\n{lines}\n\n"
+        f"Total: INR {float(order.get('total', 0) or 0):.2f}\n"
+        f"Order status: {order.get('status', 'pending')}\n"
+        f"Payment method: {order.get('payment_method', '')}\n"
+        f"Payment status: {order.get('payment_status', 'pending')}"
+    )
+
+    # Email to customer and admin using one message with Bcc to avoid leaking addresses.
+    try:
+        if settings.get("smtp_host") and settings.get("smtp_from_email"):
+            customer_email = str(order.get("email", "")).strip()
+            admin_email = str(settings.get("admin_notification_email", "")).strip()
+            if customer_email or admin_email:
+                message = EmailMessage()
+                message["Subject"] = subject
+                message["From"] = settings["smtp_from_email"]
+                message["To"] = customer_email or admin_email
+                if admin_email and admin_email.lower() != customer_email.lower():
+                    message["Bcc"] = admin_email
+                message.set_content(plain)
+                public_base = os.getenv("PUBLIC_BASE_URL", os.getenv("FRONTEND_URL", "")).strip().rstrip("/")
+                raw_logo_url = str(settings.get("store_logo_url", "")).strip()
+                if raw_logo_url and not raw_logo_url.lower().startswith(("http://", "https://")) and public_base:
+                    raw_logo_url = urljoin(public_base + "/", raw_logo_url.lstrip("/"))
+                logo_url = html.escape(raw_logo_url, quote=True)
+                store_name = html.escape(str(settings.get("store_name", "Store")))
+                safe_order = html.escape(order_number)
+                item_html = "".join(
+                    "<tr>"
+                    + (f'<td style="padding:8px;border-bottom:1px solid #eee"><img src="{html.escape((str(item.get("image", "")).strip() if str(item.get("image", "")).lower().startswith(("http://", "https://")) else urljoin(public_base + "/", str(item.get("image", "")).lstrip("/")) if public_base else str(item.get("image", ""))), quote=True)}" alt="" width="56" style="object-fit:contain;max-height:56px"></td>' if item.get("image") else '<td style="padding:8px;border-bottom:1px solid #eee"></td>')
+                    + f'<td style="padding:8px;border-bottom:1px solid #eee">{html.escape(str(item.get("name", "Product")))} × {int(item.get("quantity", 1) or 1)}</td>'
+                    + f'<td style="padding:8px;border-bottom:1px solid #eee;text-align:right">₹{float(item.get("subtotal", 0) or 0):.2f}</td></tr>'
+                    for item in items
+                )
+                logo_html = f'<img src="{logo_url}" alt="{store_name}" style="max-width:180px;max-height:70px">' if logo_url else f'<h2>{store_name}</h2>'
+                html_body = f"""<!doctype html><html><body style="font-family:Arial,sans-serif;color:#222;line-height:1.5"><div style="max-width:680px;margin:auto;padding:20px">{logo_html}<h2>{html.escape(status_labels.get(event, "Order update"))}</h2><p>Order <strong>{safe_order}</strong></p><table style="width:100%;border-collapse:collapse"><thead><tr><th></th><th style="text-align:left">Product</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>{item_html}</tbody></table><h3 style="text-align:right">Total: ₹{float(order.get("total", 0) or 0):.2f}</h3><p><strong>Payment:</strong> {html.escape(str(order.get("payment_method", "")))} — {html.escape(str(order.get("payment_status", "pending")))}</p><p><strong>Order status:</strong> {html.escape(str(order.get("status", "pending")))}</p><p><strong>Customer:</strong> {html.escape(str(order.get("customer_name", "")))}<br><strong>Phone:</strong> {html.escape(str(order.get("phone", "")))}<br><strong>Address:</strong> {html.escape(str(order.get("address", "")))}</p></div></body></html>"""
+                message.add_alternative(html_body, subtype="html")
+                with smtplib.SMTP(settings["smtp_host"], int(settings.get("smtp_port", 587)), timeout=15) as smtp:
+                    smtp.starttls()
+                    username = settings.get("smtp_username", "")
+                    encrypted_password = settings.get("smtp_password_encrypted")
+                    if username and encrypted_password:
+                        smtp.login(username, decrypt_secret(encrypted_password))
+                    smtp.send_message(message)
+    except (OSError, smtplib.SMTPException, RuntimeError, ValueError, TypeError, PyMongoError):
         logging.exception("Order notification email could not be sent")
+
+    # Twilio SMS and WhatsApp are optional; configure account SID/token and sender in admin settings.
+    try:
+        sms_enabled = bool(settings.get("sms_enabled"))
+        whatsapp_enabled = bool(settings.get("whatsapp_enabled"))
+        sid = str(settings.get("twilio_account_sid", "")).strip()
+        token_encrypted = settings.get("twilio_auth_token_encrypted")
+        phone = str(order.get("phone", "")).strip()
+        if phone and sid and token_encrypted and (sms_enabled or whatsapp_enabled):
+            token = decrypt_secret(token_encrypted)
+            from urllib.request import Request, urlopen
+            import base64
+            auth = base64.b64encode(f"{sid}:{token}".encode()).decode("ascii")
+            body_text = f"{status_labels.get(event, 'Order update')}: {order_number}. Total INR {float(order.get('total', 0) or 0):.2f}. Order: {order.get('status', 'pending')}; payment: {order.get('payment_status', 'pending')}."
+            targets = []
+            if sms_enabled and settings.get("twilio_from_number"):
+                targets.append((phone, str(settings["twilio_from_number"])))
+            if whatsapp_enabled and settings.get("twilio_whatsapp_from"):
+                to_number = phone if phone.startswith("whatsapp:") else f"whatsapp:{phone}"
+                from_number = str(settings["twilio_whatsapp_from"])
+                if not from_number.startswith("whatsapp:"):
+                    from_number = f"whatsapp:{from_number}"
+                targets.append((to_number, from_number))
+            for to_number, from_number in targets:
+                payload = urlencode({"To": to_number, "From": from_number, "Body": body_text}).encode()
+                request = Request(
+                    f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
+                    data=payload,
+                    headers={"Authorization": f"Basic {auth}", "Content-Type": "application/x-www-form-urlencoded"},
+                    method="POST",
+                )
+                with urlopen(request, timeout=12) as response:
+                    response.read()
+    except Exception:
+        logging.exception("SMS/WhatsApp order notification could not be sent")
 
 
 def _release_order_stock(order: dict):
@@ -192,7 +265,7 @@ def _mark_payment_paid(order: dict, payment_id: str):
         order["payment_status"] = "paid"
         order["status"] = "processing"
         order["razorpay_payment_id"] = payment_id
-        _send_order_notifications(order)
+        _send_order_notifications(order, "payment_success")
     return result.modified_count > 0
 
 
@@ -417,7 +490,10 @@ def fail_razorpay_payment(order_id: str):
             {"$set": {"payment_status": "failed", "status": "failed"}},
         )
         if result.modified_count:
+            order["payment_status"] = "failed"
+            order["status"] = "failed"
             _release_order_stock(order)
+            _send_order_notifications(order, "payment_failed")
     return {"message": "Payment failure recorded"}
 
 
@@ -457,8 +533,49 @@ async def razorpay_webhook(request: FastAPIRequest):
             {"$set": {"payment_status": "failed", "status": "failed"}},
         )
         if result.modified_count:
+            order["payment_status"] = "failed"
+            order["status"] = "failed"
             _release_order_stock(order)
+            _send_order_notifications(order, "payment_failed")
     return {"received": True}
+
+
+@router.post("/orders/{order_id}/refund")
+def refund_order(
+    order_id: str,
+    payload: RefundPayload,
+    current_user=Depends(require_permission("orders.edit")),
+):
+    """Issue a real Razorpay refund, then update order state and notify recipients."""
+    if not ObjectId.is_valid(order_id):
+        raise HTTPException(status_code=400, detail="Invalid order ID")
+    order = orders_collection.find_one({"_id": ObjectId(order_id), "is_deleted": {"$ne": True}})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.get("payment_method") != "razorpay" or not order.get("razorpay_payment_id"):
+        raise HTTPException(status_code=400, detail="Only captured Razorpay payments can be refunded through this endpoint")
+    if order.get("payment_status") == "refunded":
+        raise HTTPException(status_code=409, detail="This order is already marked refunded")
+    _, _, key_id, key_secret = _payment_credentials()
+    refund_payload = {"notes": {"order_number": str(order.get("order_number", "")), "reason": payload.reason}}
+    if payload.amount is not None:
+        if payload.amount > float(order.get("total", 0) or 0):
+            raise HTTPException(status_code=400, detail="Refund amount cannot exceed the order total")
+        refund_payload["amount"] = int(round(payload.amount * 100))
+    gateway_refund = _razorpay_request(f"payments/{order['razorpay_payment_id']}/refund", key_id, key_secret, refund_payload)
+    now = datetime.now(timezone.utc)
+    full_refund = payload.amount is None or round(payload.amount, 2) >= round(float(order.get("total", 0) or 0), 2)
+    update = {
+        "refund_id": gateway_refund.get("id", ""),
+        "refund_amount": round(float(gateway_refund.get("amount", 0) or 0) / 100, 2),
+        "updated_at": now,
+        "status": "refunded" if full_refund else order.get("status", "processing"),
+        "payment_status": "refunded" if full_refund else "partially_refunded",
+    }
+    orders_collection.update_one({"_id": order["_id"]}, {"$set": update})
+    order.update(update)
+    _send_order_notifications(order, "order_refunded")
+    return {"message": "Refund request accepted by Razorpay", "refund_id": update["refund_id"], "refund_amount": update["refund_amount"], "payment_status": update["payment_status"]}
 
 
 @router.get("/orders")
@@ -537,10 +654,19 @@ def update_order_status(
                     "$set": {"stock_status": "in_stock"},
                 },
             )
-    orders_collection.update_one(
-        {"_id": order["_id"]},
-        {"$set": {"status": status, "updated_at": datetime.now(timezone.utc)}},
-    )
+    update_values = {"status": status, "updated_at": datetime.now(timezone.utc)}
+    if status == "refunded":
+        update_values["payment_status"] = "refunded"
+    elif status == "cancelled" and order.get("payment_status") == "pending":
+        update_values["payment_status"] = "failed"
+    orders_collection.update_one({"_id": order["_id"]}, {"$set": update_values})
+    order.update(update_values)
+    if status == "cancelled":
+        _send_order_notifications(order, "order_cancelled")
+    elif status == "refunded":
+        _send_order_notifications(order, "order_refunded")
+    elif status == "failed":
+        _send_order_notifications(order, "payment_failed")
     return {"message": "Order status updated"}
 
 

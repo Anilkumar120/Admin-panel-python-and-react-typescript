@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, HttpUrl
 
 from backend.database.connection import media_collection
+from backend.utils.auth import get_current_user
 from backend.utils.permissions import require_permission
 
 
@@ -239,7 +240,10 @@ def detect_image_extension(content: bytes) -> str | None:
     "/upload",
     dependencies=[Depends(require_permission("media.upload"))],
 )
-async def upload_media(files: list[UploadFile] = File(...)):
+async def upload_media(
+    files: list[UploadFile] = File(...),
+    current_user=Depends(get_current_user),
+):
     uploaded = []
 
     for file in files:
@@ -305,6 +309,10 @@ async def upload_media(files: list[UploadFile] = File(...)):
                 "gridfs_id": gridfs_id,
                 "url": f"/api/media/file/{gridfs_id}",
                 "is_deleted": False,
+                **({} if current_user.get("role") == "administrator" else {
+                    "owner_user_id": str(current_user["_id"]),
+                    "created_by_user_id": str(current_user["_id"]),
+                }),
                 "created_at": now,
                 "updated_at": now,
             }
@@ -604,6 +612,7 @@ async def get_media(
     file_type: str = "",
     page: int = 1,
     limit: int = 50,
+    current_user=Depends(get_current_user),
 ):
     if page < 1 or limit < 1:
         raise HTTPException(
@@ -615,12 +624,23 @@ async def get_media(
     skip = (page - 1) * limit
 
     query = {"is_deleted": False}
+    # Administrators can see the full media library; other roles only see
+    # globally shared items and files they uploaded themselves.
+    if current_user.get("role") != "administrator":
+        query["$or"] = [
+            {"owner_user_id": str(current_user["_id"])},
+            {"owner_user_id": {"$exists": False}},
+        ]
 
     if search:
-        query["$or"] = [
+        search_query = {"$or": [
             {"original_name": {"$regex": search, "$options": "i"}},
             {"title": {"$regex": search, "$options": "i"}},
-        ]
+        ]}
+        if "$or" in query:
+            query = {"$and": [query, search_query]}
+        else:
+            query.update(search_query)
 
     if file_type:
         query["file_type"] = file_type

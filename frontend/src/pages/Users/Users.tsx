@@ -12,6 +12,7 @@ import {
   deleteUser,
   type UsersResponse,
 } from "../../api/users";
+import { getImageUrl } from "../../api/profile";
 
 const Users = () => {
   const navigate = useNavigate();
@@ -50,7 +51,9 @@ const Users = () => {
   const filteredUsers = users.filter(
     (user) =>
       user.name.toLowerCase().includes(search.toLowerCase()) ||
-      user.email.toLowerCase().includes(search.toLowerCase()),
+      user.email.toLowerCase().includes(search.toLowerCase()) ||
+      (user.first_name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (user.last_name || "").toLowerCase().includes(search.toLowerCase()),
   );
 
   const handleRoleChange = async (userId: string, role: string) => {
@@ -194,7 +197,19 @@ const Users = () => {
               ) : (
                 filteredUsers.map((user) => (
                   <tr key={user.id}>
-                    <td>{user.name}</td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        {user.profile_image ? (
+                          <img src={getImageUrl(user.profile_image)} alt={`${user.name} profile`} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
+                        ) : (
+                          <span aria-hidden="true" style={{ width: 36, height: 36, borderRadius: "50%", display: "grid", placeItems: "center", background: "#eaf0f6", color: "#0c2f55", fontWeight: 700 }}>{(user.name || user.email || "U").charAt(0).toUpperCase()}</span>
+                        )}
+                        <span>
+                          <strong>{user.name}</strong>
+                          {(user.first_name || user.last_name) && <small style={{ display: "block", color: "#667085" }}>{[user.first_name, user.last_name].filter(Boolean).join(" ")}</small>}
+                        </span>
+                      </div>
+                    </td>
 
                     <td>{user.email}</td>
 

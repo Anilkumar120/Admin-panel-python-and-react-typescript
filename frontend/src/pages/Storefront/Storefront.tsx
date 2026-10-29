@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import axios from "axios";
+import { Eye, EyeOff } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { API_URL } from "../../api/config";
 import {
@@ -14,6 +15,8 @@ import type { ProductData } from "../../components/ContentRenderer/BuilderRender
 import BuilderRenderer from "../../components/ContentRenderer/BuilderRenderer";
 import { fetchActiveTemplate, type TemplateType } from "../../api/templates";
 import type { WidgetSettings } from "../../types/pageBuilder";
+import { useAuth } from "../../context/AuthContext";
+import { getProfile, updateProfile, changePassword, uploadProfileImage } from "../../api/profile";
 
 export type StorefrontPage =
   | "shop"
@@ -40,6 +43,34 @@ interface OrderLookupResult extends OrderReceipt {
   status: string;
   payment_status: string;
   items: { name: string; quantity: number; unit_price: number }[];
+}
+
+interface PublicBankUpiSettings {
+  upi_enabled?: boolean;
+  upi_id?: string;
+  upi_account_name?: string;
+  bank_transfer_enabled?: boolean;
+  account_holder_name?: string;
+  bank_name?: string;
+  account_number?: string;
+  ifsc_code?: string;
+  branch_name?: string;
+  payment_instructions?: string;
+}
+
+interface PublicPaymentSettings {
+  enabled?: boolean;
+  bank_upi?: PublicBankUpiSettings;
+  upi_enabled?: boolean;
+  upi_id?: string;
+  upi_account_name?: string;
+  bank_transfer_enabled?: boolean;
+  account_holder_name?: string;
+  bank_name?: string;
+  account_number?: string;
+  ifsc_code?: string;
+  branch_name?: string;
+  payment_instructions?: string;
 }
 
 interface CheckoutResponse extends OrderReceipt {
@@ -167,6 +198,11 @@ const Storefront = ({
     "cash_on_delivery" | "bank_transfer" | "razorpay"
   >("cash_on_delivery");
   const [razorpayEnabled, setRazorpayEnabled] = useState(false);
+  const [publicBankUpiSettings, setPublicBankUpiSettings] =
+    useState<PublicBankUpiSettings>({});
+  const [publicPaymentSettingsLoaded, setPublicPaymentSettingsLoaded] =
+    useState(false);
+  const [hasPublicBankUpiConfig, setHasPublicBankUpiConfig] = useState(false);
   const [activeTemplate, setActiveTemplate] = useState<{
     path: string;
     type: TemplateType;
@@ -182,6 +218,21 @@ const Storefront = ({
   const [submitting, setSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [cartError, setCartError] = useState("");
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [accountFirstName, setAccountFirstName] = useState("");
+  const [accountLastName, setAccountLastName] = useState("");
+  const [accountDisplayName, setAccountDisplayName] = useState("");
+  const [accountEmail, setAccountEmail] = useState("");
+  const [accountCurrentPassword, setAccountCurrentPassword] = useState("");
+  const [accountNewPassword, setAccountNewPassword] = useState("");
+  const [accountConfirmPassword, setAccountConfirmPassword] = useState("");
+  const [showAccountCurrentPassword, setShowAccountCurrentPassword] = useState(false);
+  const [showAccountNewPassword, setShowAccountNewPassword] = useState(false);
+  const [showAccountConfirmPassword, setShowAccountConfirmPassword] = useState(false);
+  const [accountProfileImage, setAccountProfileImage] = useState("");
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [accountMessage, setAccountMessage] = useState("");
+  const [accountError, setAccountError] = useState("");
 
   // 🆕 My Account active tab
   const [activeAccountTab, setActiveAccountTab] =
@@ -219,6 +270,7 @@ const Storefront = ({
   const [shippingPhone, setShippingPhone] = useState("");
   const [shippingEmail, setShippingEmail] = useState("");
 
+  const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const receipt = location.state as OrderReceipt | null;
@@ -319,6 +371,141 @@ const Storefront = ({
   // Mark cartLayout as used
   void cartLayout;
 
+  // Use the authenticated customer's profile instead of a hard-coded name.
+  // Only fill empty checkout/account fields so existing user edits are preserved.
+  useEffect(() => {
+    if (!user) return;
+
+    if (user.name) {
+      setCustomerName((current) => current || user.name);
+      setAccountDisplayName((current) => current || user.name);
+    }
+    setAccountEmail((current) => current || user.email || "");
+    setAccountProfileImage((current) => current || user.profile_image || "");
+
+    if (user.email) {
+      setEmail((current) => current || user.email);
+      setAddressEmail((current) => current || user.email);
+      setBillingEmail((current) => current || user.email);
+      setShippingEmail((current) => current || user.email);
+    }
+  }, [user?.id, user?.name, user?.email]);
+
+  const handleAccountLogout = async () => {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setLoggingOut(false);
+      navigate("/admin/login", { replace: true });
+    }
+  };
+
+  const handleAccountDetailsSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAccountError("");
+    setAccountMessage("");
+    if (!user) {
+      setAccountError("Please log in to update your account details.");
+      return;
+    }
+    const displayName = accountDisplayName.trim();
+    const firstName = accountFirstName.trim();
+    const lastName = accountLastName.trim();
+    const emailValue = accountEmail.trim().toLowerCase();
+    if (!displayName || !emailValue) {
+      setAccountError("Display name and email address are required.");
+      return;
+    }
+    if (accountNewPassword && accountNewPassword.length < 6) {
+      setAccountError("New password must be at least 6 characters.");
+      return;
+    }
+    const passwordFieldsStarted = Boolean(accountCurrentPassword || accountNewPassword || accountConfirmPassword);
+    if (passwordFieldsStarted && (!accountCurrentPassword || !accountNewPassword || !accountConfirmPassword)) {
+      setAccountError("To change your password, complete all three password fields.");
+      return;
+    }
+    if (accountNewPassword !== accountConfirmPassword) {
+      setAccountError("New password and confirmation do not match.");
+      return;
+    }
+    setAccountSaving(true);
+    try {
+      const updated = await updateProfile(displayName, undefined, emailValue, firstName, lastName);
+      updateUser({ name: updated.name || displayName, email: updated.email || emailValue });
+      setCustomerName(updated.name || displayName);
+      if (accountNewPassword) {
+        await changePassword(accountCurrentPassword, accountNewPassword);
+        setAccountCurrentPassword("");
+        setAccountNewPassword("");
+        setAccountConfirmPassword("");
+        setAccountMessage("Account details updated. Password changed; an email notification is sent when SMTP is configured.");
+      } else {
+        setAccountMessage("Account details updated successfully.");
+      }
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const detail = error.response?.data?.detail;
+        setAccountError(typeof detail === "string" ? detail : "Unable to update account details. Please try again.");
+      } else {
+        setAccountError("Unable to update account details. Please try again.");
+      }
+    } finally {
+      setAccountSaving(false);
+    }
+  };
+
+  const handleAccountImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setAccountError("");
+    setAccountMessage("");
+    if (!file.type.startsWith("image/")) {
+      setAccountError("Please select an image file.");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setAccountError("Profile image must be 5 MB or smaller.");
+      event.target.value = "";
+      return;
+    }
+    try {
+      const result = await uploadProfileImage(file);
+      setAccountProfileImage(result.profile_image || result.url);
+      updateUser({ profile_image: result.profile_image || result.url });
+      setAccountMessage("Profile image uploaded and saved to the media library.");
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const detail = error.response?.data?.detail;
+        setAccountError(typeof detail === "string" ? detail : "Unable to upload profile image.");
+      } else {
+        setAccountError("Unable to upload profile image.");
+      }
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  useEffect(() => {
+    if (page !== "account" || !user) return;
+    let active = true;
+    getProfile().then((profile) => {
+      if (!active) return;
+      setAccountFirstName(profile.first_name || "");
+      setAccountLastName(profile.last_name || "");
+      setAccountDisplayName(profile.name || user.name || "");
+      setAccountEmail(profile.email || user.email || "");
+      setAccountProfileImage(profile.profile_image || user.profile_image || "");
+    }).catch((error) => {
+      console.error("Unable to load account details:", error);
+    });
+    return () => { active = false; };
+  }, [page, user?.id]);
+
   // Sync active tab with default when page changes
   useEffect(() => {
     if (page === "account") {
@@ -353,13 +540,50 @@ const Storefront = ({
 
   useEffect(() => {
     if (previewMode) return;
+    let active = true;
+
     axios
-      .get<{ enabled: boolean }>(`${API_URL}/api/settings/payments/public`)
-      .then(({ data }) => setRazorpayEnabled(Boolean(data.enabled)))
+      .get<PublicPaymentSettings>(`${API_URL}/api/settings/payments/public`)
+      .then(({ data }) => {
+        if (!active) return;
+
+        setRazorpayEnabled(Boolean(data.enabled));
+
+        // Supports the nested response and the flat shape used by older APIs.
+        const hasBankUpiConfig = Boolean(
+          data.bank_upi ||
+            "upi_enabled" in data ||
+            "bank_transfer_enabled" in data,
+        );
+        const bankUpi = data.bank_upi || data;
+        setHasPublicBankUpiConfig(hasBankUpiConfig);
+        setPublicBankUpiSettings({
+          upi_enabled: Boolean(bankUpi.upi_enabled),
+          upi_id: bankUpi.upi_id || "",
+          upi_account_name: bankUpi.upi_account_name || "",
+          bank_transfer_enabled: Boolean(bankUpi.bank_transfer_enabled),
+          account_holder_name: bankUpi.account_holder_name || "",
+          bank_name: bankUpi.bank_name || "",
+          account_number: bankUpi.account_number || "",
+          ifsc_code: bankUpi.ifsc_code || "",
+          branch_name: bankUpi.branch_name || "",
+          payment_instructions: bankUpi.payment_instructions || "",
+        });
+        setPublicPaymentSettingsLoaded(true);
+      })
       .catch((error) => {
         console.error("Unable to load payment methods:", error);
-        setRazorpayEnabled(false);
+        if (active) {
+          setRazorpayEnabled(false);
+          setPublicBankUpiSettings({});
+          setHasPublicBankUpiConfig(false);
+          setPublicPaymentSettingsLoaded(true);
+        }
       });
+
+    return () => {
+      active = false;
+    };
   }, [previewMode]);
 
   useEffect(() => {
@@ -1503,11 +1727,19 @@ const Storefront = ({
                         {cashOnDeliveryLabel}
                       </option>
                     )}
-                    {showBankTransfer && (
-                      <option value="bank_transfer">
-                        {bankTransferLabel}
-                      </option>
-                    )}
+                    {showBankTransfer &&
+                      (!publicPaymentSettingsLoaded ||
+                        !hasPublicBankUpiConfig ||
+                        publicBankUpiSettings.bank_transfer_enabled ||
+                        publicBankUpiSettings.upi_enabled) && (
+                        <option value="bank_transfer">
+                          {publicBankUpiSettings.upi_enabled &&
+                          !publicBankUpiSettings.bank_transfer_enabled &&
+                          !settings.bankTransferLabel
+                            ? "UPI payment"
+                            : bankTransferLabel}
+                        </option>
+                      )}
                     {(razorpayEnabled || showRazorpayOpt) && (
                       <option value="razorpay">{razorpayLabel}</option>
                     )}
@@ -1515,18 +1747,71 @@ const Storefront = ({
                 </div>
 
                 {paymentMethod === "bank_transfer" && (
-                  <p
+                  <section
+                    aria-label="UPI and bank transfer details"
                     style={{
-                      fontSize: 13,
-                      color: "#6b7280",
-                      margin: 0,
-                      padding: 12,
-                      background: "#f9fafb",
-                      borderRadius: 8,
+                      display: "grid",
+                      gap: 12,
+                      padding: 16,
+                      border: "1px solid #dbe3ec",
+                      borderRadius: 10,
+                      background: "#f8fafc",
+                      color: "#344054",
+                      fontSize: 14,
                     }}
                   >
-                    {bankTransferInstructions}
-                  </p>
+                    <h3 style={{ margin: 0, color: "#0c2f55", fontSize: 16 }}>
+                      Manual payment details
+                    </h3>
+
+                    {publicBankUpiSettings.upi_enabled &&
+                      publicBankUpiSettings.upi_id && (
+                        <div style={{ display: "grid", gap: 4 }}>
+                          <strong>UPI payment</strong>
+                          {publicBankUpiSettings.upi_account_name && (
+                            <span>
+                              Account name: {publicBankUpiSettings.upi_account_name}
+                            </span>
+                          )}
+                          <span>
+                            UPI ID: <strong>{publicBankUpiSettings.upi_id}</strong>
+                          </span>
+                        </div>
+                      )}
+
+                    {publicBankUpiSettings.bank_transfer_enabled && (
+                      <div style={{ display: "grid", gap: 4 }}>
+                        <strong>Bank transfer</strong>
+                        {publicBankUpiSettings.account_holder_name && (
+                          <span>
+                            Account holder: {publicBankUpiSettings.account_holder_name}
+                          </span>
+                        )}
+                        {publicBankUpiSettings.bank_name && (
+                          <span>Bank name: {publicBankUpiSettings.bank_name}</span>
+                        )}
+                        {publicBankUpiSettings.account_number && (
+                          <span>
+                            Account number: {publicBankUpiSettings.account_number}
+                          </span>
+                        )}
+                        {publicBankUpiSettings.ifsc_code && (
+                          <span>IFSC code: {publicBankUpiSettings.ifsc_code}</span>
+                        )}
+                        {publicBankUpiSettings.branch_name && (
+                          <span>Branch: {publicBankUpiSettings.branch_name}</span>
+                        )}
+                      </div>
+                    )}
+
+                    <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                      {publicBankUpiSettings.payment_instructions ||
+                        bankTransferInstructions}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 12, color: "#667085" }}>
+                      Your order will be created as a pending/manual payment order. The store will confirm payment after receiving it.
+                    </p>
+                  </section>
                 )}
 
                 {showTerms && (
@@ -1791,9 +2076,12 @@ const Storefront = ({
         <>
           <h1 style={{ marginTop: 0 }}>My Account</h1>
 
-          {showWelcomeMessage && (
+          {showWelcomeMessage && (user?.name || customerName || user?.email) && (
             <p style={{ marginBottom: 24, fontSize: 15, color: "#555" }}>
-              {welcomeText.replace("{name}", "Customer")}
+              {welcomeText.replace(
+                "{name}",
+                user?.name || customerName || user?.email || "",
+              )}
             </p>
           )}
 
@@ -1968,6 +2256,9 @@ const Storefront = ({
                   {showLogoutLink && (
                     <button
                       type="button"
+                      onClick={() => void handleAccountLogout()}
+                      disabled={loggingOut}
+                      aria-busy={loggingOut}
                       style={{
                         textAlign: "left",
                         background: "transparent",
@@ -1983,7 +2274,7 @@ const Storefront = ({
                         borderTop: "1px solid #eef0f3",
                       }}
                     >
-                      {logoutText}
+                      {loggingOut ? (settings.logoutText || "Logging out...") : logoutText}
                     </button>
                   )}
                 </nav>
@@ -2691,97 +2982,24 @@ const Storefront = ({
                   <h2 style={{ marginTop: 0, fontSize: 20 }}>
                     Account details
                   </h2>
-                  <form
-                    onSubmit={(e) => e.preventDefault()}
-                    style={{
-                      display: "grid",
-                      gap: 14,
-                      maxWidth: 480,
-                      marginTop: 12,
-                    }}
-                  >
-                    <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>First name</label>
-                      <input
-                        className="sf-input"
-                        type="text"
-                        placeholder="First name"
-                        style={inputStyle}
-                      />
+                  <form onSubmit={(event) => void handleAccountDetailsSubmit(event)} style={{ display: "grid", gap: 14, maxWidth: 520, marginTop: 12 }}>
+                    {accountError && <div role="alert" style={{ color: "#b42318", background: "#fef3f2", padding: 10, borderRadius: 6 }}>{accountError}</div>}
+                    {accountMessage && <div role="status" style={{ color: "#067647", background: "#ecfdf3", padding: 10, borderRadius: 6 }}>{accountMessage}</div>}
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 4 }}>
+                      {accountProfileImage ? <img src={getImageUrl(accountProfileImage)} alt="Your profile" style={{ width: 76, height: 76, borderRadius: "50%", objectFit: "cover", border: "1px solid #d0d5dd" }} /> : <div aria-label="Profile image placeholder" style={{ width: 76, height: 76, borderRadius: "50%", display: "grid", placeItems: "center", background: "#eaf0f6", color: "#0c2f55", fontSize: 26, fontWeight: 700 }}>{(accountDisplayName || user?.email || "U").charAt(0).toUpperCase()}</div>}
+                      <div style={{ display: "grid", gap: 6 }}><strong>Profile image</strong><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => void handleAccountImageChange(event)} aria-label="Upload profile image" /><small style={{ color: "#667085" }}>JPG, PNG, WEBP or GIF. Maximum 5 MB.</small></div>
                     </div>
-                    <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>Last name</label>
-                      <input
-                        className="sf-input"
-                        type="text"
-                        placeholder="Last name"
-                        style={inputStyle}
-                      />
-                    </div>
-                    <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>Display name</label>
-                      <input
-                        className="sf-input"
-                        type="text"
-                        placeholder="Display name"
-                        style={inputStyle}
-                      />
-                    </div>
-                    <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>Email address</label>
-                      <input
-                        className="sf-input"
-                        type="email"
-                        placeholder="you@example.com"
-                        style={inputStyle}
-                      />
-                    </div>
-
-                    <h3
-                      style={{
-                        fontSize: 15,
-                        marginTop: 12,
-                        marginBottom: 0,
-                        color: "#0c2f55",
-                      }}
-                    >
-                      Password change
-                    </h3>
-                    <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>Current password</label>
-                      <input
-                        className="sf-input"
-                        type="password"
-                        placeholder="••••••••"
-                        style={inputStyle}
-                      />
-                    </div>
-                    <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>New password</label>
-                      <input
-                        className="sf-input"
-                        type="password"
-                        placeholder="••••••••"
-                        style={inputStyle}
-                      />
-                    </div>
-                    <div style={fieldWrapperStyle}>
-                      <label style={labelStyle}>Confirm new password</label>
-                      <input
-                        className="sf-input"
-                        type="password"
-                        placeholder="••••••••"
-                        style={inputStyle}
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="sf-button-primary"
-                      style={buttonPrimary}
-                    >
-                      Save changes
-                    </button>
+                    <div style={fieldWrapperStyle}><label style={labelStyle}>First name</label><input className="sf-input" type="text" value={accountFirstName} onChange={(event) => setAccountFirstName(event.target.value)} placeholder="First name" style={inputStyle} autoComplete="given-name" /></div>
+                    <div style={fieldWrapperStyle}><label style={labelStyle}>Last name</label><input className="sf-input" type="text" value={accountLastName} onChange={(event) => setAccountLastName(event.target.value)} placeholder="Last name" style={inputStyle} autoComplete="family-name" /></div>
+                    <div style={fieldWrapperStyle}><label style={labelStyle}>Display name *</label><input className="sf-input" type="text" value={accountDisplayName} onChange={(event) => setAccountDisplayName(event.target.value)} placeholder="Display name" style={inputStyle} required autoComplete="nickname" /></div>
+                    <div style={fieldWrapperStyle}><label style={labelStyle}>Email address *</label><input className="sf-input" type="email" value={accountEmail} onChange={(event) => setAccountEmail(event.target.value)} placeholder="you@example.com" style={inputStyle} required autoComplete="email" /></div>
+                    <h3 style={{ fontSize: 15, marginTop: 12, marginBottom: 0, color: "#0c2f55" }}>Password change</h3>
+                    {([
+                      { label: "Current password", value: accountCurrentPassword, setter: setAccountCurrentPassword, shown: showAccountCurrentPassword, toggle: setShowAccountCurrentPassword, autoComplete: "current-password" },
+                      { label: "New password", value: accountNewPassword, setter: setAccountNewPassword, shown: showAccountNewPassword, toggle: setShowAccountNewPassword, autoComplete: "new-password" },
+                      { label: "Confirm new password", value: accountConfirmPassword, setter: setAccountConfirmPassword, shown: showAccountConfirmPassword, toggle: setShowAccountConfirmPassword, autoComplete: "new-password" },
+                    ] as const).map((field) => <div key={field.label} style={fieldWrapperStyle}><label style={labelStyle}>{field.label}</label><div style={{ position: "relative", display: "flex", alignItems: "center" }}><input className="sf-input" type={field.shown ? "text" : "password"} value={field.value} onChange={(event) => field.setter(event.target.value)} placeholder="Leave blank to keep current password" style={{ ...inputStyle, paddingRight: 48 }} autoComplete={field.autoComplete} /><button type="button" onClick={() => field.toggle((visible) => !visible)} aria-label={field.shown ? `Hide ${field.label.toLowerCase()}` : `Show ${field.label.toLowerCase()}`} title={field.shown ? "Hide password" : "Show password"} style={{ position: "absolute", right: 8, border: 0, background: "transparent", cursor: "pointer", padding: 6, fontSize: 18, lineHeight: 1 }}>{field.shown ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></div>)}
+                    <button type="submit" className="sf-button-primary" style={buttonPrimary} disabled={accountSaving}>{accountSaving ? "Saving..." : "Save changes"}</button>
                   </form>
                 </div>
               )}

@@ -25,6 +25,11 @@ const normalizePostTypes = (response: unknown): PostType[] => {
 
 const AdminLayout = () => {
   const { user, logout } = useAuth();
+  const role = String(user?.role || "subscriber").toLowerCase();
+  const canManageProducts = role === "editor";
+  const canManageContent = ["editor", "author", "contributor", "seo_manager", "seo_editor", "web_designer"].includes(role);
+  const canManageMedia = ["editor", "author", "web_designer"].includes(role);
+  const canManageAppearance = role === "web_designer";
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -101,6 +106,32 @@ const AdminLayout = () => {
   const userInitial = user?.name?.trim()
     ? user.name.trim().charAt(0).toUpperCase()
     : "U";
+
+  // Staff roles get a trimmed navigation menu. Administrators retain the full existing menu.
+  if (role !== "administrator") {
+    return (
+      <div className="admin-layout">
+        <aside className="sidebar">
+          <div className="sidebar-logo"><h2>Workspace</h2></div>
+          <nav className="sidebar-nav">
+            <Link to="/admin/profile" className={location.pathname.startsWith("/admin/profile") ? "nav-link active" : "nav-link"}>👤 Profile</Link>
+            {canManageContent && <Link to="/admin/content" className={location.pathname.startsWith("/admin/content") ? "nav-link active" : "nav-link"}>📝 Content</Link>}
+            {canManageProducts && <Link to="/admin/products" className={location.pathname.startsWith("/admin/products") ? "nav-link active" : "nav-link"}>📦 Products</Link>}
+            {canManageProducts && <Link to="/admin/orders" className={location.pathname.startsWith("/admin/orders") ? "nav-link active" : "nav-link"}>🧾 Orders</Link>}
+            {canManageMedia && <Link to="/admin/media" className={location.pathname.startsWith("/admin/media") ? "nav-link active" : "nav-link"}>🖼️ Media</Link>}
+            {canManageAppearance && <Link to="/admin/appearance/page-builder" className={location.pathname.startsWith("/admin/appearance") ? "nav-link active" : "nav-link"}>🎨 Appearance</Link>}
+            <button type="button" className="nav-link" onClick={handleLogout}>↪ Log out</button>
+          </nav>
+        </aside>
+        <main className="admin-main">
+          <header className="admin-header">
+            <div><h3>{role.replaceAll("_", " ")} Workspace</h3></div>
+          </header>
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div

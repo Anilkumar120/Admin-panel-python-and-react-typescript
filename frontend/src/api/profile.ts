@@ -17,6 +17,10 @@ export interface Profile {
 
   name: string;
 
+  first_name?: string;
+
+  last_name?: string;
+
   email: string;
 
   role: string;
@@ -48,20 +52,28 @@ export const getProfile = async (): Promise<Profile> => {
   return response.data;
 };
 
-export const updateProfile = async (name: string, mediaId?: string) => {
+export const updateProfile = async (
+  name: string,
+  mediaId?: string,
+  email?: string,
+  firstName?: string,
+  lastName?: string,
+) => {
   const formData = new FormData();
-
   formData.append("name", name);
-
-  if (mediaId) {
-    formData.append("media_id", mediaId);
-  }
-
-  const response = await axios.put(`${PROFILE_URL}/`, formData, {
-    headers: getHeaders(),
-  });
-
+  if (email !== undefined) formData.append("email", email);
+  if (firstName !== undefined) formData.append("first_name", firstName);
+  if (lastName !== undefined) formData.append("last_name", lastName);
+  if (mediaId) formData.append("media_id", mediaId);
+  const response = await axios.put(`${PROFILE_URL}/`, formData, { headers: getHeaders() });
   return response.data;
+};
+
+export const uploadProfileImage = async (file: File) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await axios.post(`${PROFILE_URL}/image`, formData, { headers: getHeaders() });
+  return response.data as { profile_image: string; media_id: string; url: string };
 };
 
 export const changePassword = async (

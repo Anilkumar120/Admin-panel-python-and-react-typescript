@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 
+import { Eye, EyeOff } from "lucide-react";
+
 import { useNavigate, useParams } from "react-router-dom";
 
 import { getUser, updateUser } from "../../api/users";
@@ -14,6 +16,8 @@ const EditUser = () => {
   const [email, setEmail] = useState("");
 
   const [password, setPassword] = useState("");
+
+  const [showPassword, setShowPassword] = useState(false);
 
   const [role, setRole] = useState("subscriber");
 
@@ -127,12 +131,25 @@ const EditUser = () => {
             <div className="form-group">
               <label>New Password</label>
 
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Leave blank to keep current password"
-              />
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Leave blank to keep current password"
+                  autoComplete="new-password"
+                  style={{ width: "100%", paddingRight: "44px" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? "Hide new password" : "Show new password"}
+                  title={showPassword ? "Hide password" : "Show password"}
+                  style={{ position: "absolute", right: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "6px", border: 0, background: "transparent", cursor: "pointer" }}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <div className="form-group">

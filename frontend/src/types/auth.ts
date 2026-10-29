@@ -10,6 +10,9 @@ export interface User {
   is_active: boolean;
 
   profile_image?: string;
+  first_name?: string;
+  last_name?: string;
+  media_id?: string;
 }
 
 export interface LoginResponse {

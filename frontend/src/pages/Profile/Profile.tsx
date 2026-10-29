@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 import {
   getProfile,
@@ -28,6 +29,12 @@ const Profile = () => {
   const [newPassword, setNewPassword] = useState("");
 
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+
+  const [showNewPassword, setShowNewPassword] = useState(false);
+
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [loading, setLoading] = useState(true);
 
@@ -321,37 +328,76 @@ const Profile = () => {
             <div className="profile-form-group">
               <label>Current Password</label>
 
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-                placeholder="Enter current password"
-                required
-              />
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <input
+                  type={showCurrentPassword ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  placeholder="Enter current password"
+                  autoComplete="current-password"
+                  style={{ width: "100%", paddingRight: "44px" }}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword((visible) => !visible)}
+                  aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
+                  title={showCurrentPassword ? "Hide password" : "Show password"}
+                  style={{ position: "absolute", right: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "6px", border: 0, background: "transparent", cursor: "pointer" }}
+                >
+                  {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <div className="profile-form-group">
               <label>New Password</label>
 
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                placeholder="Enter new password"
-                required
-              />
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  placeholder="Enter new password"
+                  autoComplete="new-password"
+                  style={{ width: "100%", paddingRight: "44px" }}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword((visible) => !visible)}
+                  aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                  title={showNewPassword ? "Hide password" : "Show password"}
+                  style={{ position: "absolute", right: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "6px", border: 0, background: "transparent", cursor: "pointer" }}
+                >
+                  {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <div className="profile-form-group">
               <label>Confirm New Password</label>
 
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                placeholder="Confirm new password"
-                required
-              />
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  placeholder="Confirm new password"
+                  autoComplete="new-password"
+                  style={{ width: "100%", paddingRight: "44px" }}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((visible) => !visible)}
+                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                  title={showConfirmPassword ? "Hide password" : "Show password"}
+                  style={{ position: "absolute", right: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "6px", border: 0, background: "transparent", cursor: "pointer" }}
+                >
+                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <button type="submit" disabled={changingPassword}>

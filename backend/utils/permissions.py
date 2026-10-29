@@ -59,7 +59,8 @@ ROLE_PERMISSIONS = {
 
     "subscriber": [
         "profile.view",
-        "profile.edit"
+        "profile.edit",
+        "media.view"
     ]
 }
 
